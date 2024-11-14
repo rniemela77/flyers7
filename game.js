@@ -1,23 +1,43 @@
+// Configuration constants
+const JOYSTICK_BASE_RADIUS = 100;
+const JOYSTICK_THUMB_RADIUS = 70;
+const JOYSTICK_BASE_COLOR = 0x888888;
+const JOYSTICK_THUMB_COLOR = 0xcccccc;
+
+const SPRITE1_COLOR = 0x1F7CFF;
+const SPRITE2_COLOR = 0xFF3535;
+
+const OBSTACLE_COLOR = 0x000000;
+const OBSTACLE_SPEED = 150;
+const PLAYER_SPEED = 0.2;
+
+const TRAIL_COLOR_SPRITE1 = SPRITE1_COLOR;
+const TRAIL_COLOR_SPRITE2 = SPRITE2_COLOR;
+const TRAIL_LINE_WIDTH = 2;
+const MAX_TRAIL_LENGTH = 100;
+
+const SCORE_TEXT_STYLE = { font: '16px Courier', fill: '#000000' };
+
 class Example extends Phaser.Scene {
     constructor() {
         super({ key: 'Example' });
 
         // Joystick configurations
-        this.leftJoystick = { base: null, thumb: null, pointerId: null, x: 0, y: 0, radius: 50 };
-        this.rightJoystick = { base: null, thumb: null, pointerId: null, x: 0, y: 0, radius: 50 };
+        this.leftJoystick = { base: null, thumb: null, pointerId: null, x: 0, y: 0, radius: JOYSTICK_BASE_RADIUS, initialX: 0, initialY: 0 };
+        this.rightJoystick = { base: null, thumb: null, pointerId: null, x: 0, y: 0, radius: JOYSTICK_BASE_RADIUS, initialX: 0, initialY: 0 };
 
         // Game state
         this.score = 0;
         this.scoreText = null;
         this.obstacles = null;
 
-        this.obstacleSpeed = 150;
-        this.playerSpeed = 0.2;
+        this.obstacleSpeed = OBSTACLE_SPEED;
+        this.playerSpeed = PLAYER_SPEED;
 
         // Trail data
         this.sprite1Trail = [];
         this.sprite2Trail = [];
-        this.maxTrailLength = 50; // Maximum number of trail points
+        this.maxTrailLength = MAX_TRAIL_LENGTH; // Maximum number of trail points
     }
 
     preload() {
@@ -36,18 +56,18 @@ class Example extends Phaser.Scene {
         this.input.addPointer(2);
 
         // Create sprites (white triangles for now)
-        this.sprite1 = this.add.triangle(window.innerWidth * 0.25, window.innerHeight * 0.5, 0, 0, 0, 50, 50, 25, 0x1F7CFF);
-        this.sprite2 = this.add.triangle(window.innerWidth * 0.75, window.innerHeight * 0.5, 0, 0, 0, 50, 50, 25, 0xFF3535);
+        this.sprite1 = this.add.triangle(window.innerWidth * 0.25, window.innerHeight * 0.5, 0, 0, 0, 50, 50, 25, SPRITE1_COLOR);
+        this.sprite2 = this.add.triangle(window.innerWidth * 0.75, window.innerHeight * 0.5, 0, 0, 0, 50, 50, 25, SPRITE2_COLOR);
 
         // Draw joysticks
-        this.createJoystick(this.leftJoystick);
-        this.createJoystick(this.rightJoystick);
+        this.createJoystick(this.leftJoystick, window.innerWidth * 0.15, window.innerHeight * 0.85);
+        this.createJoystick(this.rightJoystick, window.innerWidth * 0.85, window.innerHeight * 0.85);
 
         // Graphics for visualization
         this.graphics = this.add.graphics();
 
         // Score display
-        this.scoreText = this.add.text(10, 10, 'Score: 0', { font: '16px Courier', fill: '#000000' });
+        this.scoreText = this.add.text(10, 10, 'Score: 0', SCORE_TEXT_STYLE);
 
         // Obstacle group
         this.obstacles = this.physics.add.group();
@@ -77,6 +97,10 @@ class Example extends Phaser.Scene {
 
         // Resize the game to fit the screen
         this.resize({ width: window.innerWidth, height: window.innerHeight });
+
+        // Add pointerdown and pointerup event listeners
+        this.input.on('pointerdown', this.onPointerDown, this);
+        this.input.on('pointerup', this.onPointerUp, this);
     }
 
     update() {
@@ -104,13 +128,17 @@ class Example extends Phaser.Scene {
         this.graphics.clear();
 
         // Draw trails
-        this.drawTrail(this.sprite1Trail, 0x1F7CFF);
-        this.drawTrail(this.sprite2Trail, 0xFF3535);
+        this.drawTrail(this.sprite1Trail, TRAIL_COLOR_SPRITE1);
+        this.drawTrail(this.sprite2Trail, TRAIL_COLOR_SPRITE2);
     }
 
-    createJoystick(joystick) {
-        joystick.base = this.add.circle(joystick.x, joystick.y, joystick.radius, 0x888888);
-        joystick.thumb = this.add.circle(joystick.x, joystick.y, 20, 0xcccccc);
+    createJoystick(joystick, x, y) {
+        joystick.x = x;
+        joystick.y = y;
+        joystick.initialX = x;
+        joystick.initialY = y;
+        joystick.base = this.add.circle(x, y, joystick.radius, JOYSTICK_BASE_COLOR);
+        joystick.thumb = this.add.circle(x, y, JOYSTICK_THUMB_RADIUS, JOYSTICK_THUMB_COLOR);
     }
 
     handleJoystick(pointer, joystick, sprite) {
@@ -138,9 +166,26 @@ class Example extends Phaser.Scene {
     resetJoystick(pointer, joystick) {
         if (pointer.id === joystick.pointerId) {
             joystick.pointerId = null;
-            joystick.thumb.x = joystick.x;
-            joystick.thumb.y = joystick.y;
+            joystick.thumb.x = joystick.initialX;
+            joystick.thumb.y = joystick.initialY;
+            joystick.x = joystick.initialX;
+            joystick.y = joystick.initialY;
+            joystick.base.setPosition(joystick.initialX, joystick.initialY);
+            joystick.thumb.setPosition(joystick.initialX, joystick.initialY);
         }
+    }
+
+    onPointerDown(pointer) {
+        if (pointer.x < this.scale.width / 2) {
+            this.updateJoystickPosition(this.leftJoystick, pointer.x, pointer.y);
+        } else {
+            this.updateJoystickPosition(this.rightJoystick, pointer.x, pointer.y);
+        }
+    }
+
+    onPointerUp(pointer) {
+        this.resetJoystick(pointer, this.leftJoystick);
+        this.resetJoystick(pointer, this.rightJoystick);
     }
 
     generateObstacle() {
@@ -182,7 +227,7 @@ class Example extends Phaser.Scene {
     }
 
     drawTrail(trail, color) {
-        this.graphics.lineStyle(2, color, 1);
+        this.graphics.lineStyle(TRAIL_LINE_WIDTH, color, 1);
         for (let i = 0; i < trail.length - 1; i++) {
             this.graphics.lineBetween(trail[i].x, trail[i].y, trail[i + 1].x, trail[i + 1].y);
         }
