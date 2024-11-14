@@ -12,8 +12,12 @@ class Example extends Phaser.Scene {
         this.obstacles = null;
 
         this.obstacleSpeed = 150;
-
         this.playerSpeed = 0.2;
+
+        // Trail data
+        this.sprite1Trail = [];
+        this.sprite2Trail = [];
+        this.maxTrailLength = 50; // Maximum number of trail points
     }
 
     preload() {
@@ -32,10 +36,8 @@ class Example extends Phaser.Scene {
         this.input.addPointer(2);
 
         // Create sprites (white triangles for now)
-        // width: window.innerWidth, height: window.innerHeight
         this.sprite1 = this.add.triangle(window.innerWidth * 0.25, window.innerHeight * 0.5, 0, 0, 0, 50, 50, 25, 0x1F7CFF);
         this.sprite2 = this.add.triangle(window.innerWidth * 0.75, window.innerHeight * 0.5, 0, 0, 0, 50, 50, 25, 0xFF3535);
-
 
         // Draw joysticks
         this.createJoystick(this.leftJoystick);
@@ -93,6 +95,17 @@ class Example extends Phaser.Scene {
         // Update score based on time survived
         this.score += 1;
         this.scoreText.setText('Score: ' + this.score);
+
+        // Update trails
+        this.updateTrail(this.sprite1, this.sprite1Trail);
+        this.updateTrail(this.sprite2, this.sprite2Trail);
+
+        // Clear graphics once per frame
+        this.graphics.clear();
+
+        // Draw trails
+        this.drawTrail(this.sprite1Trail, 0x1F7CFF);
+        this.drawTrail(this.sprite2Trail, 0xFF3535);
     }
 
     createJoystick(joystick) {
@@ -159,6 +172,20 @@ class Example extends Phaser.Scene {
         joystick.y = y;
         joystick.base.setPosition(x, y);
         joystick.thumb.setPosition(x, y);
+    }
+
+    updateTrail(sprite, trail) {
+        trail.push({ x: sprite.x, y: sprite.y });
+        if (trail.length > this.maxTrailLength) {
+            trail.shift();
+        }
+    }
+
+    drawTrail(trail, color) {
+        this.graphics.lineStyle(2, color, 1);
+        for (let i = 0; i < trail.length - 1; i++) {
+            this.graphics.lineBetween(trail[i].x, trail[i].y, trail[i + 1].x, trail[i + 1].y);
+        }
     }
 }
 
