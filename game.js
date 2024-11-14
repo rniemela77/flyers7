@@ -1,146 +1,168 @@
+class Example extends Phaser.Scene {
+    graphics;
+    leftJoystick = { base: null, thumb: null, pointerId: null, x: 100, y: 500, radius: 50 };
+    rightJoystick = { base: null, thumb: null, pointerId: null, x: 700, y: 500, radius: 50 };
+    score = 0;
+    scoreText;
+    obstacles;
+
+    preload() {
+        this.load.setBaseURL('https://cdn.phaserfiles.com/v385');
+        this.load.image('logo', 'assets/sprites/phaser3-logo.png');
+        this.load.image('obstacle', 'assets/sprites/block.png');
+    }
+
+    create() {
+        // Make the game responsive to resizing
+        this.scale.scaleMode = Phaser.Scale.RESIZE;
+        this.scale.on('resize', this.resize, this);
+
+        // We need 2 extra pointers, as we only get 1 by default
+        this.input.addPointer(2);
+
+        // Sprites to move
+        this.sprite1 = this.add.sprite(400, 100, 'logo');
+        this.sprite2 = this.add.sprite(400, 300, 'logo');
+
+        // Draw joysticks
+        this.leftJoystick.base = this.add.circle(this.leftJoystick.x, this.leftJoystick.y, this.leftJoystick.radius, 0x888888);
+        this.leftJoystick.thumb = this.add.circle(this.leftJoystick.x, this.leftJoystick.y, 20, 0xcccccc);
+
+        this.rightJoystick.base = this.add.circle(this.rightJoystick.x, this.rightJoystick.y, this.rightJoystick.radius, 0x888888);
+        this.rightJoystick.thumb = this.add.circle(this.rightJoystick.x, this.rightJoystick.y, 20, 0xcccccc);
+
+        // Graphics for visualization
+        this.graphics = this.add.graphics();
+
+        // Score display
+        this.scoreText = this.add.text(10, 10, 'Score: 0', { font: '16px Courier', fill: '#000000' });
+
+        // Obstacle group
+        this.obstacles = this.physics.add.group();
+
+        // Timer for obstacle generation
+        this.time.addEvent({
+            delay: 1000,  // 1 second delay
+            callback: this.generateObstacle,
+            callbackScope: this,
+            loop: true
+        });
+
+        // Collider to detect obstacle collision with sprites
+        this.physics.add.collider(this.sprite1, this.obstacles, this.gameOver, null, this);
+        this.physics.add.collider(this.sprite2, this.obstacles, this.gameOver, null, this);
+    }
+
+    update() {
+        const pointers = [this.input.pointer1, this.input.pointer2];
+
+        pointers.forEach(pointer => {
+            if (pointer && pointer.isDown) {
+                // Check if pointer is inside left joystick
+                if (this.leftJoystick.pointerId === null && Phaser.Math.Distance.Between(pointer.x, pointer.y, this.leftJoystick.x, this.leftJoystick.y) < this.leftJoystick.radius) {
+                    this.leftJoystick.pointerId = pointer.id;
+                }
+                // Check if pointer is inside right joystick
+                if (this.rightJoystick.pointerId === null && Phaser.Math.Distance.Between(pointer.x, pointer.y, this.rightJoystick.x, this.rightJoystick.y) < this.rightJoystick.radius) {
+                    this.rightJoystick.pointerId = pointer.id;
+                }
+
+                // Move left joystick thumb
+                if (pointer.id === this.leftJoystick.pointerId) {
+                    let deltaX = pointer.x - this.leftJoystick.x;
+                    let deltaY = pointer.y - this.leftJoystick.y;
+                    let distance = Phaser.Math.Clamp(Math.sqrt(deltaX * deltaX + deltaY * deltaY), 0, this.leftJoystick.radius);
+                    let angle = Math.atan2(deltaY, deltaX);
+                    this.leftJoystick.thumb.x = this.leftJoystick.x + Math.cos(angle) * distance;
+                    this.leftJoystick.thumb.y = this.leftJoystick.y + Math.sin(angle) * distance;
+
+                    // Move sprite1 using left joystick
+                    this.sprite1.x += Math.cos(angle) * distance * 0.01;
+                    this.sprite1.y += Math.sin(angle) * distance * 0.01;
+                }
+
+                // Move right joystick thumb
+                if (pointer.id === this.rightJoystick.pointerId) {
+                    let deltaX = pointer.x - this.rightJoystick.x;
+                    let deltaY = pointer.y - this.rightJoystick.y;
+                    let distance = Phaser.Math.Clamp(Math.sqrt(deltaX * deltaX + deltaY * deltaY), 0, this.rightJoystick.radius);
+                    let angle = Math.atan2(deltaY, deltaX);
+                    this.rightJoystick.thumb.x = this.rightJoystick.x + Math.cos(angle) * distance;
+                    this.rightJoystick.thumb.y = this.rightJoystick.y + Math.sin(angle) * distance;
+
+                    // Move sprite2 using right joystick
+                    this.sprite2.x += Math.cos(angle) * distance * 0.01;
+                    this.sprite2.y += Math.sin(angle) * distance * 0.01;
+                }
+            } else if (pointer) {
+                // Reset joystick if pointer is released
+                if (pointer.id === this.leftJoystick.pointerId) {
+                    this.leftJoystick.pointerId = null;
+                    this.leftJoystick.thumb.x = this.leftJoystick.x;
+                    this.leftJoystick.thumb.y = this.leftJoystick.y;
+                }
+                if (pointer.id === this.rightJoystick.pointerId) {
+                    this.rightJoystick.pointerId = null;
+                    this.rightJoystick.thumb.x = this.rightJoystick.x;
+                    this.rightJoystick.thumb.y = this.rightJoystick.y;
+                }
+            }
+        });
+
+        // Update score based on time survived
+        this.score += 1;
+        this.scoreText.setText('Score: ' + this.score);
+    }
+
+    generateObstacle() {
+        // Randomly generate obstacles on either the left or right side
+        let lane = Phaser.Math.Between(0, 1); // 0 for left, 1 for right
+        let xPosition = lane === 0 ? 200 : 600;
+
+        let obstacle = this.obstacles.create(xPosition, 0, 'obstacle');
+        obstacle.setVelocityY(150 + this.score * 0.1); // Increase speed based on score
+    }
+
+    gameOver(sprite, obstacle) {
+        this.scene.restart(); // Restart the scene on collision
+    }
+
+    resize(gameSize, baseSize, displaySize, resolution) {
+        const width = gameSize.width;
+        const height = gameSize.height;
+
+        this.cameras.resize(width, height);
+
+        // Adjust joystick positions based on new screen size
+        this.leftJoystick.x = width * 0.15;
+        this.leftJoystick.y = height * 0.85;
+        this.leftJoystick.base.setPosition(this.leftJoystick.x, this.leftJoystick.y);
+        this.leftJoystick.thumb.setPosition(this.leftJoystick.x, this.leftJoystick.y);
+
+        this.rightJoystick.x = width * 0.85;
+        this.rightJoystick.y = height * 0.85;
+        this.rightJoystick.base.setPosition(this.rightJoystick.x, this.rightJoystick.y);
+        this.rightJoystick.thumb.setPosition(this.rightJoystick.x, this.rightJoystick.y);
+    }
+}
+
 const config = {
     type: Phaser.AUTO,
+    parent: 'phaser-example',
     width: window.innerWidth,
     height: window.innerHeight,
+    backgroundColor: '#efefef',
+    scene: Example,
+    scale: {
+        mode: Phaser.Scale.RESIZE,
+        autoCenter: Phaser.Scale.CENTER_BOTH
+    },
     physics: {
         default: 'arcade',
         arcade: {
             debug: false
         }
-    },
-    scene: {
-        preload: preload,
-        create: create,
-        update: update
     }
 };
 
 const game = new Phaser.Game(config);
-let player;
-let buildings = [];
-let cursors;
-let joystick;
-let dragDistance = 0;
-let dragAngle = 0;
-let joystickPointerId = null;
-let camera;
-const MAX_SPEED = 200;
-let uiCamera;
-let directionIndicator;
-
-function preload() {
-    // No assets to load
-}
-
-function create() {
-    // Create player as a simple circle
-    player = this.add.circle(window.innerWidth / 2, window.innerHeight / 2, 15, 0x0000ff);
-    this.physics.add.existing(player);
-    player.body.setCollideWorldBounds(true);
-
-    // Create buildings
-    buildings.push(createBuilding(this, 200, 200, true));  // Building with an open door
-    buildings.push(createBuilding(this, 500, 400, false)); // Building without an open door
-
-    // Set up main camera to follow player and zoom in
-    camera = this.cameras.main;
-    camera.startFollow(player);
-    camera.setBounds(0, 0, window.innerWidth, window.innerHeight);
-    camera.setZoom(2); // Zoom in for a closer view of the player
-
-    // Create a virtual joystick (initially hidden)
-    joystick = this.add.circle(0, 0, 40, 0x888888).setAlpha(0.5).setVisible(false);
-    joystick.inner = this.add.circle(0, 0, 20, 0x444444).setAlpha(0.8).setVisible(false);
-
-    // Create a direction indicator attached to the player (initially hidden)
-    directionIndicator = this.add.line(0, 0, 0, 0, 0, -30, 0xff0000).setAlpha(0.8).setVisible(false);
-    directionIndicator.setOrigin(0.5, 0.5);
-    this.physics.add.existing(directionIndicator);
-
-    // Create a secondary camera layer for the joystick UI
-    uiCamera = this.cameras.add(0, 0, window.innerWidth, window.innerHeight);
-    uiCamera.ignore([player, ...buildings, directionIndicator]);
-
-    // Ignore joystick and inner joystick for the main camera
-    camera.ignore([joystick, joystick.inner]);
-
-    // Enable pointer events for both desktop and mobile
-    this.input.on('pointerdown', function (pointer) {
-        joystickPointerId = pointer.id;
-        joystick.setPosition(pointer.x, pointer.y).setVisible(true);
-        joystick.inner.setPosition(pointer.x, pointer.y).setVisible(true);
-        directionIndicator.setVisible(true);
-    }, this);
-
-    // Pointer move event to simulate joystick drag
-    this.input.on('pointermove', function (pointer) {
-        if (pointer.id === joystickPointerId && joystick.visible) {
-            dragDistance = Phaser.Math.Distance.Between(joystick.x, joystick.y, pointer.x, pointer.y);
-            dragAngle = Phaser.Math.Angle.Between(joystick.x, joystick.y, pointer.x, pointer.y);
-
-            // Restrict drag distance to joystick radius
-            if (dragDistance > 40) {
-                const limitedX = joystick.x + Math.cos(dragAngle) * 40;
-                const limitedY = joystick.y + Math.sin(dragAngle) * 40;
-                joystick.inner.setPosition(limitedX, limitedY);
-            } else {
-                joystick.inner.setPosition(pointer.x, pointer.y);
-            }
-
-            // Update direction indicator attached to the player
-            directionIndicator.setPosition(player.x, player.y);
-            directionIndicator.setRotation(dragAngle + Math.PI / 2); // Correcting angle offset by 90 degrees
-            directionIndicator.setVisible(true);
-        }
-    });
-
-    // Pointer up event to hide joystick
-    this.input.on('pointerup', function (pointer) {
-        if (pointer.id === joystickPointerId) {
-            dragDistance = 0;
-            dragAngle = 0;
-            joystickPointerId = null;
-            joystick.setVisible(false);
-            joystick.inner.setVisible(false);
-            directionIndicator.setVisible(false);
-        }
-    });
-}
-
-
-function createBuilding(scene, x, y, hasOpenDoor) {
-    const building = scene.add.rectangle(x, y, 100, 100, 0x8B4513);
-    scene.physics.add.existing(building, true);
-    
-    if (hasOpenDoor) {
-        // Add a door representation as a rectangle on the building
-        const door = scene.add.rectangle(x, y + 30, 20, 40, 0x00ff00);
-        scene.physics.add.existing(door, true);
-        scene.physics.add.overlap(player, door, enterBuilding, null, scene);
-    }
-
-    return building;
-}
-
-function enterBuilding(player, door) {
-    console.log("Entered a building with an open door!");
-}
-
-function update() {
-    // Update player velocity based on joystick drag, with a max speed limit
-    if (dragDistance > 0) {
-        let velocityX = Math.cos(dragAngle) * dragDistance * 5;
-        let velocityY = Math.sin(dragAngle) * dragDistance * 5;
-
-        // Cap velocity to max speed
-        if (velocityX > MAX_SPEED) velocityX = MAX_SPEED;
-        if (velocityX < -MAX_SPEED) velocityX = -MAX_SPEED;
-        if (velocityY > MAX_SPEED) velocityY = MAX_SPEED;
-        if (velocityY < -MAX_SPEED) velocityY = -MAX_SPEED;
-
-        player.body.setVelocity(velocityX, velocityY);
-        directionIndicator.setPosition(player.x, player.y);
-    } else {
-        player.body.setVelocity(0, 0);
-    }
-}
