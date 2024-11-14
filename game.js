@@ -31,9 +31,11 @@ class Example extends Phaser.Scene {
         // Add extra pointers for joystick control
         this.input.addPointer(2);
 
-        // Create sprites
-        this.sprite1 = this.add.sprite(400, 100, 'logo');
-        this.sprite2 = this.add.sprite(400, 300, 'logo');
+        // Create sprites (white triangles for now)
+        // width: window.innerWidth, height: window.innerHeight
+        this.sprite1 = this.add.triangle(window.innerWidth * 0.25, window.innerHeight * 0.5, 0, 0, 0, 50, 50, 25, 0x1F7CFF);
+        this.sprite2 = this.add.triangle(window.innerWidth * 0.75, window.innerHeight * 0.5, 0, 0, 0, 50, 50, 25, 0xFF3535);
+
 
         // Draw joysticks
         this.createJoystick(this.leftJoystick);
@@ -114,6 +116,9 @@ class Example extends Phaser.Scene {
             // Move sprite using joystick
             sprite.x += Math.cos(angle) * distance * this.playerSpeed;
             sprite.y += Math.sin(angle) * distance * this.playerSpeed;
+
+            // rotate sprite
+            sprite.rotation = angle;
         }
     }
 
