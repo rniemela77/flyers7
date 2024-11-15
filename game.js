@@ -17,14 +17,13 @@ const TRAIL_LINE_WIDTH = 2;
 const MAX_TRAIL_LENGTH = 100;
 
 const SCORE_TEXT_STYLE = { font: '16px Courier', fill: '#000000' };
-
 class Example extends Phaser.Scene {
     constructor() {
         super({ key: 'Example' });
 
         // Joystick configurations
-        this.leftJoystick = { base: null, thumb: null, pointerId: null, x: 0, y: 0, radius: JOYSTICK_BASE_RADIUS, initialX: 0, initialY: 0 };
-        this.rightJoystick = { base: null, thumb: null, pointerId: null, x: 0, y: 0, radius: JOYSTICK_BASE_RADIUS, initialX: 0, initialY: 0 };
+        this.leftJoystick = { base: null, thumb: null, pointerId: null, x: 0, y: 0, radius: JOYSTICK_BASE_RADIUS, initialX: 0, initialY: 0, holdTime: 0 };
+        this.rightJoystick = { base: null, thumb: null, pointerId: null, x: 0, y: 0, radius: JOYSTICK_BASE_RADIUS, initialX: 0, initialY: 0, holdTime: 0 };
 
         // Game state
         this.score = 0;
@@ -145,7 +144,7 @@ class Example extends Phaser.Scene {
         if (joystick.pointerId === null && Phaser.Math.Distance.Between(pointer.x, pointer.y, joystick.x, joystick.y) < joystick.radius) {
             joystick.pointerId = pointer.id;
         }
-
+    
         if (pointer.id === joystick.pointerId) {
             let deltaX = pointer.x - joystick.x;
             let deltaY = pointer.y - joystick.y;
@@ -153,11 +152,17 @@ class Example extends Phaser.Scene {
             let angle = Math.atan2(deltaY, deltaX);
             joystick.thumb.x = joystick.x + Math.cos(angle) * distance;
             joystick.thumb.y = joystick.y + Math.sin(angle) * distance;
-
+    
+            // Increase hold time
+            joystick.holdTime += this.game.loop.delta;
+    
+            // Calculate speed based on hold time and scale it down
+            let speed = (this.playerSpeed * (1 + joystick.holdTime / 1000)) * 0.1; // Adjust the 0.1 factor to control sensitivity
+    
             // Move sprite using joystick
-            sprite.x += Math.cos(angle) * distance * this.playerSpeed;
-            sprite.y += Math.sin(angle) * distance * this.playerSpeed;
-
+            sprite.x += Math.cos(angle) * distance * speed;
+            sprite.y += Math.sin(angle) * distance * speed;
+    
             // rotate sprite
             sprite.rotation = angle;
         }
@@ -172,6 +177,7 @@ class Example extends Phaser.Scene {
             joystick.y = joystick.initialY;
             joystick.base.setPosition(joystick.initialX, joystick.initialY);
             joystick.thumb.setPosition(joystick.initialX, joystick.initialY);
+            joystick.holdTime = 0; // Reset hold time
         }
     }
 
