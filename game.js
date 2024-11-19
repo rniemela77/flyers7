@@ -10,7 +10,6 @@ const config = {
 };
 
 const game = new Phaser.Game(config);
-
 let square,
   moveUpButton,
   moveDownButton,
@@ -20,8 +19,11 @@ let square,
   healthBar,
   healthBarBackground;
 let joystick = null,
+  initialPointerX = 0,
   initialPointerY = 0,
+  velocityX = 0,
   velocityY = 0,
+  targetVelocityX = 0,
   targetVelocityY = 0,
   circleHealth = 100;
 const moveDistance = 100;
@@ -68,13 +70,16 @@ function setupTimers() {
 }
 
 function createJoystick(pointer) {
+  initialPointerX = pointer.x;
   initialPointerY = pointer.y;
   joystick = this.add.circle(pointer.x, pointer.y, 30, 0x888888);
 }
 
 function moveJoystick(pointer) {
   if (joystick) {
+    const deltaX = pointer.x - initialPointerX;
     const deltaY = pointer.y - initialPointerY;
+    targetVelocityX = deltaX * 0.1; // Adjust the multiplier as needed
     targetVelocityY = deltaY * 0.1; // Adjust the multiplier as needed
   }
 }
@@ -83,6 +88,7 @@ function removeJoystick() {
   if (joystick) {
     joystick.destroy();
     joystick = null;
+    targetVelocityX = 0; // Reset target velocity when joystick is released
     targetVelocityY = 0; // Reset target velocity when joystick is released
   }
 }
@@ -148,6 +154,11 @@ function createHealthBar() {
 
 function updateJoystickVelocity() {
   const acceleration = 0.2; // Adjust the acceleration as needed
+  if (velocityX < targetVelocityX) {
+    velocityX = Math.min(velocityX + acceleration, targetVelocityX);
+  } else if (velocityX > targetVelocityX) {
+    velocityX = Math.max(velocityX - acceleration, targetVelocityX);
+  }
   if (velocityY < targetVelocityY) {
     velocityY = Math.min(velocityY + acceleration, targetVelocityY);
   } else if (velocityY > targetVelocityY) {
@@ -156,6 +167,7 @@ function updateJoystickVelocity() {
 }
 
 function applyJoystickVelocity() {
+  square.x += velocityX;
   square.y += velocityY;
 }
 
@@ -164,10 +176,15 @@ function moveCircleDownward() {
 }
 
 function updateUIPositions() {
-  yellowCircleOutline.y = square.y - 150;
-  healthBarBackground.setPosition(circle.x, circle.y - 35);
-  healthBar.setPosition(circle.x, circle.y - 35);
-}
+    const distanceFromSquare = 100; // Distance in pixels from the square
+    const angle = Phaser.Math.Angle.Between(square.x, square.y, circle.x, circle.y);
+    
+    yellowCircleOutline.x = square.x + distanceFromSquare * Math.cos(angle);
+    yellowCircleOutline.y = square.y + distanceFromSquare * Math.sin(angle);
+    
+    healthBarBackground.setPosition(circle.x, circle.y - 35);
+    healthBar.setPosition(circle.x, circle.y - 35);
+  }
 
 function checkCollisions() {
   if (
