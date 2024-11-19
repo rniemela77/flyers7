@@ -3,9 +3,9 @@ const config = {
   width: window.innerWidth,
   height: window.innerHeight,
   scene: {
-    preload: preload,
-    create: create,
-    update: update,
+    preload,
+    create,
+    update,
   },
 };
 
@@ -99,21 +99,27 @@ function createSquare() {
 }
 
 function createButtons() {
-  moveUpButton = this.add
-    .text(config.width / 2 - 100, config.height - 150, "Up", {
-      fontSize: "48px",
-      fill: "#fff",
-    })
-    .setInteractive()
-    .on("pointerdown", () => moveSquare("up"));
+  moveUpButton = createButton.call(
+    this,
+    config.width / 2 - 100,
+    config.height - 150,
+    "Up",
+    () => moveSquare("up")
+  );
+  moveDownButton = createButton.call(
+    this,
+    config.width / 2 + 50,
+    config.height - 150,
+    "Down",
+    () => moveSquare("down")
+  );
+}
 
-  moveDownButton = this.add
-    .text(config.width / 2 + 50, config.height - 150, "Down", {
-      fontSize: "48px",
-      fill: "#fff",
-    })
+function createButton(x, y, text, callback) {
+  return this.add
+    .text(x, y, text, { fontSize: "48px", fill: "#fff" })
     .setInteractive()
-    .on("pointerdown", () => moveSquare("down"));
+    .on("pointerdown", callback);
 }
 
 function createCircle() {
@@ -159,10 +165,8 @@ function moveCircleDownward() {
 
 function updateUIPositions() {
   yellowCircleOutline.y = square.y - 150;
-  healthBarBackground.x = circle.x;
-  healthBarBackground.y = circle.y - 35;
-  healthBar.x = circle.x;
-  healthBar.y = circle.y - 35;
+  healthBarBackground.setPosition(circle.x, circle.y - 35);
+  healthBar.setPosition(circle.x, circle.y - 35);
 }
 
 function checkCollisions() {
@@ -177,11 +181,8 @@ function checkCollisions() {
 }
 
 function moveSquare(direction) {
-  if (direction === "up") {
-    targetY = square.y - moveDistance;
-  } else if (direction === "down") {
-    targetY = square.y + moveDistance;
-  }
+  targetY =
+    direction === "up" ? square.y - moveDistance : square.y + moveDistance;
   moveUpButton.setAlpha(0.5);
   moveDownButton.setAlpha(0.5);
 }
@@ -201,10 +202,7 @@ function fillYellowCircle() {
 }
 
 function reduceCircleHealth() {
-  circleHealth -= 45;
-  if (circleHealth < 0) {
-    circleHealth = 0;
-  }
+  circleHealth = Math.max(circleHealth - 45, 0);
   healthBar.width = (circleHealth / 100) * 50;
 
   const changeCircleColor = () => {
@@ -220,10 +218,9 @@ function reduceCircleHealth() {
   }
 }
 
-
 function resetGame() {
-    this.scene.restart();
-    circleHealth = 100;
-    healthBar.width = (circleHealth / 100) * 50;
-    circle.setFillStyle(0x0000ff);
-  }
+  this.scene.restart();
+  circleHealth = 100;
+  healthBar.width = (circleHealth / 100) * 50;
+  circle.setFillStyle(0x0000ff);
+}
