@@ -17,7 +17,8 @@ let square,
   circle,
   yellowCircleOutline,
   healthBar,
-  healthBarBackground;
+  healthBarBackground,
+  grid;
 let joystick = null,
   initialPointerX = 0,
   initialPointerY = 0,
@@ -33,9 +34,25 @@ function preload() {
 }
 
 function create() {
+  createGrid.call(this);
   setupInputHandlers.call(this);
   createGameObjects.call(this);
   setupTimers.call(this);
+}
+
+function createGrid() {
+  const gridSize = 800; // Size of each grid square
+  const gridColor = 0x212121; // Grey color for the grid squares
+
+  grid = this.add.grid(
+    config.width / 2,
+    config.height / 2,
+    config.width,
+    config.height,
+    gridSize,
+    gridSize,
+    gridColor
+  );
 }
 
 function update() {
@@ -44,6 +61,7 @@ function update() {
   moveCircleDownward();
   updateUIPositions();
   checkCollisions.call(this);
+  updateGameObjects.call(this);
 }
 
 function setupInputHandlers() {
@@ -176,15 +194,20 @@ function moveCircleDownward() {
 }
 
 function updateUIPositions() {
-    const distanceFromSquare = 100; // Distance in pixels from the square
-    const angle = Phaser.Math.Angle.Between(square.x, square.y, circle.x, circle.y);
-    
-    yellowCircleOutline.x = square.x + distanceFromSquare * Math.cos(angle);
-    yellowCircleOutline.y = square.y + distanceFromSquare * Math.sin(angle);
-    
-    healthBarBackground.setPosition(circle.x, circle.y - 35);
-    healthBar.setPosition(circle.x, circle.y - 35);
-  }
+  const distanceFromSquare = 100; // Distance in pixels from the square
+  const angle = Phaser.Math.Angle.Between(
+    square.x,
+    square.y,
+    circle.x,
+    circle.y
+  );
+
+  yellowCircleOutline.x = square.x + distanceFromSquare * Math.cos(angle);
+  yellowCircleOutline.y = square.y + distanceFromSquare * Math.sin(angle);
+
+  healthBarBackground.setPosition(circle.x, circle.y - 35);
+  healthBar.setPosition(circle.x, circle.y - 35);
+}
 
 function checkCollisions() {
   if (
@@ -240,4 +263,25 @@ function resetGame() {
   circleHealth = 100;
   healthBar.width = (circleHealth / 100) * 50;
   circle.setFillStyle(0x0000ff);
+}
+
+function updateGameObjects() {
+  const offsetX = config.width / 2 - square.x;
+  const offsetY = config.height / 2 - square.y;
+
+  // Update positions of all game objects relative to the square
+  circle.x += offsetX;
+  circle.y += offsetY;
+  yellowCircleOutline.x += offsetX;
+  yellowCircleOutline.y += offsetY;
+  healthBarBackground.x += offsetX;
+  healthBarBackground.y += offsetY;
+  healthBar.x += offsetX;
+  healthBar.y += offsetY;
+  grid.x += offsetX / 3;
+  grid.y += offsetY / 3;
+
+  // Reset square position to center
+  square.x = config.width / 2;
+  square.y = config.height / 2;
 }
