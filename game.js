@@ -33,26 +33,28 @@ let joystick = null,
   circleHealth1 = 100,
   circleHealth2 = 100;
 
-const gridSize = 800;
-const gridColor = 0x212121;
-const joystickRadius = 30;
-const joystickColor = 0x888888;
-const squareSize = 50;
-const squareColor = 0xff0000;
-const circleRadius = 25;
-const circleColor = 0x0000ff;
-const yellowCircleOutlineColor = 0xffff00;
-const healthBarWidth = 50;
-const healthBarHeight = 10;
-const healthBarBackgroundColor = 0x000000;
-const healthBarColor = 0xff0000;
-const acceleration = 0.1;
-const deceleration = 0.05;
-const maxSpeed = 5;
-const fillYellowCircleDelay = 1000;
-const fillYellowCircleDuration = 250;
-const reduceHealthAmount = 45;
-const resetHealth = 100;
+const CONSTANTS = {
+  gridSize: 800,
+  gridColor: 0x212121,
+  joystickRadius: 30,
+  joystickColor: 0x888888,
+  squareSize: 50,
+  squareColor: 0xff0000,
+  circleRadius: 25,
+  circleColor: 0x0000ff,
+  yellowCircleOutlineColor: 0xffff00,
+  healthBarWidth: 50,
+  healthBarHeight: 10,
+  healthBarBackgroundColor: 0x000000,
+  healthBarColor: 0xff0000,
+  acceleration: 0.1,
+  deceleration: 0.05,
+  maxSpeed: 5,
+  fillYellowCircleDelay: 1000,
+  fillYellowCircleDuration: 250,
+  reduceHealthAmount: 45,
+  resetHealth: 100,
+};
 
 function preload() {
   // Load any assets if necessary
@@ -71,9 +73,9 @@ function createGrid() {
     config.height / 2,
     config.width,
     config.height,
-    gridSize,
-    gridSize,
-    gridColor
+    CONSTANTS.gridSize,
+    CONSTANTS.gridSize,
+    CONSTANTS.gridColor
   );
 }
 
@@ -104,7 +106,7 @@ function createGameObjects() {
 
 function setupTimers() {
   this.time.addEvent({
-    delay: fillYellowCircleDelay,
+    delay: CONSTANTS.fillYellowCircleDelay,
     callback: fillYellowCircle,
     callbackScope: this,
     loop: true,
@@ -117,8 +119,8 @@ function createJoystick(pointer) {
   joystick = this.add.circle(
     pointer.x,
     pointer.y,
-    joystickRadius,
-    joystickColor
+    CONSTANTS.joystickRadius,
+    CONSTANTS.joystickColor
   );
 }
 
@@ -126,12 +128,19 @@ function moveJoystick(pointer) {
   if (joystick) {
     const deltaX = pointer.x - initialPointerX;
     const deltaY = pointer.y - initialPointerY;
-    targetVelocityX = Phaser.Math.Clamp(deltaX * 0.1, -maxSpeed, maxSpeed);
-    targetVelocityY = Phaser.Math.Clamp(deltaY * 0.1, -maxSpeed, maxSpeed);
+    targetVelocityX = Phaser.Math.Clamp(
+      deltaX * 0.1,
+      -CONSTANTS.maxSpeed,
+      CONSTANTS.maxSpeed
+    );
+    targetVelocityY = Phaser.Math.Clamp(
+      deltaY * 0.1,
+      -CONSTANTS.maxSpeed,
+      CONSTANTS.maxSpeed
+    );
 
-    // Update the indicator line based on the pointer's position
     const angle = Math.atan2(deltaY, deltaX);
-    const lineLength = Math.sqrt(deltaX * deltaX + deltaY * deltaY) * 0.5; // Adjust the multiplier as needed
+    const lineLength = Math.sqrt(deltaX * deltaX + deltaY * deltaY) * 0.5;
 
     indicatorLine.setTo(
       square.x,
@@ -148,7 +157,7 @@ function removeJoystick() {
     joystick = null;
     targetVelocityX = 0;
     targetVelocityY = 0;
-    indicatorLine.setTo(0, 0, 0, 0); // Hide the indicator line
+    indicatorLine.setTo(0, 0, 0, 0);
   }
 }
 
@@ -156,19 +165,24 @@ function createSquare() {
   square = this.add.rectangle(
     config.width / 2,
     config.height / 2,
-    squareSize,
-    squareSize,
-    squareColor
+    CONSTANTS.squareSize,
+    CONSTANTS.squareSize,
+    CONSTANTS.squareColor
   );
 }
 
 function createCircles() {
-  circle1 = this.add.circle(config.width / 2, 0, circleRadius, circleColor);
+  circle1 = this.add.circle(
+    config.width / 2,
+    0,
+    CONSTANTS.circleRadius,
+    CONSTANTS.circleColor
+  );
   circle2 = this.add.circle(
     config.width / 2 + 100,
     0,
-    circleRadius,
-    circleColor
+    CONSTANTS.circleRadius,
+    CONSTANTS.circleColor
   );
 }
 
@@ -176,51 +190,53 @@ function createYellowCircleOutline() {
   yellowCircleOutline = this.add.circle(
     config.width / 2,
     config.height / 2 - 150,
-    circleRadius
+    CONSTANTS.circleRadius
   );
-  yellowCircleOutline.setStrokeStyle(2, yellowCircleOutlineColor);
+  yellowCircleOutline.setStrokeStyle(2, CONSTANTS.yellowCircleOutlineColor);
 }
 
 function createHealthBars() {
-  healthBarBackground1 = this.add.rectangle(
-    circle1.x,
-    circle1.y - 35,
-    healthBarWidth,
-    healthBarHeight,
-    healthBarBackgroundColor
-  );
-  healthBar1 = this.add.rectangle(
-    circle1.x,
-    circle1.y - 35,
-    healthBarWidth,
-    healthBarHeight,
-    healthBarColor
-  );
+  healthBarBackground1 = createHealthBarBackground.call(this, circle1);
+  healthBar1 = createHealthBar.call(this, circle1);
 
-  healthBarBackground2 = this.add.rectangle(
-    circle2.x,
-    circle2.y - 35,
-    healthBarWidth,
-    healthBarHeight,
-    healthBarBackgroundColor
+  healthBarBackground2 = createHealthBarBackground.call(this, circle2);
+  healthBar2 = createHealthBar.call(this, circle2);
+}
+
+function createHealthBarBackground(circle) {
+  return this.add.rectangle(
+    circle.x,
+    circle.y - 35,
+    CONSTANTS.healthBarWidth,
+    CONSTANTS.healthBarHeight,
+    CONSTANTS.healthBarBackgroundColor
   );
-  healthBar2 = this.add.rectangle(
-    circle2.x,
-    circle2.y - 35,
-    healthBarWidth,
-    healthBarHeight,
-    healthBarColor
+}
+
+function createHealthBar(circle) {
+  return this.add.rectangle(
+    circle.x,
+    circle.y - 35,
+    CONSTANTS.healthBarWidth,
+    CONSTANTS.healthBarHeight,
+    CONSTANTS.healthBarColor
   );
 }
 
 function createTargetingOutlines() {
-  targetingOutline1 = this.add.circle(circle1.x, circle1.y, circleRadius + 5);
-  targetingOutline1.setStrokeStyle(2, 0xffffff);
-  targetingOutline1.setVisible(false);
+  targetingOutline1 = createTargetingOutline.call(this, circle1);
+  targetingOutline2 = createTargetingOutline.call(this, circle2);
+}
 
-  targetingOutline2 = this.add.circle(circle2.x, circle2.y, circleRadius + 5);
-  targetingOutline2.setStrokeStyle(2, 0xffffff);
-  targetingOutline2.setVisible(false);
+function createTargetingOutline(circle) {
+  const outline = this.add.circle(
+    circle.x,
+    circle.y,
+    CONSTANTS.circleRadius + 5
+  );
+  outline.setStrokeStyle(2, 0xffffff);
+  outline.setVisible(false);
+  return outline;
 }
 
 function createIndicatorLine() {
@@ -229,8 +245,16 @@ function createIndicatorLine() {
 }
 
 function updateJoystickVelocity() {
-  velocityX = Phaser.Math.Linear(velocityX, targetVelocityX, acceleration);
-  velocityY = Phaser.Math.Linear(velocityY, targetVelocityY, acceleration);
+  velocityX = Phaser.Math.Linear(
+    velocityX,
+    targetVelocityX,
+    CONSTANTS.acceleration
+  );
+  velocityY = Phaser.Math.Linear(
+    velocityY,
+    targetVelocityY,
+    CONSTANTS.acceleration
+  );
 }
 
 function applyJoystickVelocity() {
@@ -255,14 +279,16 @@ function updateUIPositions() {
   yellowCircleOutline.x = square.x + distanceFromSquare * Math.cos(angle);
   yellowCircleOutline.y = square.y + distanceFromSquare * Math.sin(angle);
 
-  healthBarBackground1.setPosition(circle1.x, circle1.y - 35);
-  healthBar1.setPosition(circle1.x, circle1.y - 35);
-
-  healthBarBackground2.setPosition(circle2.x, circle2.y - 35);
-  healthBar2.setPosition(circle2.x, circle2.y - 35);
+  updateHealthBarPosition(healthBarBackground1, healthBar1, circle1);
+  updateHealthBarPosition(healthBarBackground2, healthBar2, circle2);
 
   targetingOutline1.setPosition(circle1.x, circle1.y);
   targetingOutline2.setPosition(circle2.x, circle2.y);
+}
+
+function updateHealthBarPosition(background, bar, circle) {
+  background.setPosition(circle.x, circle.y - 35);
+  bar.setPosition(circle.x, circle.y - 35);
 }
 
 function checkCollisions() {
@@ -284,10 +310,12 @@ function fillYellowCircle() {
   const yellowCircle = this.add.circle(
     yellowCircleOutline.x,
     yellowCircleOutline.y,
-    circleRadius,
-    yellowCircleOutlineColor
+    CONSTANTS.circleRadius,
+    CONSTANTS.yellowCircleOutlineColor
   );
-  this.time.delayedCall(fillYellowCircleDuration, () => yellowCircle.destroy());
+  this.time.delayedCall(CONSTANTS.fillYellowCircleDuration, () =>
+    yellowCircle.destroy()
+  );
 
   if (Phaser.Geom.Intersects.CircleToCircle(yellowCircle, circle1)) {
     reduceCircleHealth.call(this, 1);
@@ -298,24 +326,20 @@ function fillYellowCircle() {
 
 function reduceCircleHealth(circleNumber) {
   if (circleNumber === 1) {
-    circleHealth1 = Math.max(circleHealth1 - reduceHealthAmount, 0);
-    healthBar1.width = (circleHealth1 / resetHealth) * healthBarWidth;
+    circleHealth1 = Math.max(circleHealth1 - CONSTANTS.reduceHealthAmount, 0);
+    healthBar1.width =
+      (circleHealth1 / CONSTANTS.resetHealth) * CONSTANTS.healthBarWidth;
 
     if (circleHealth1 === 0) {
-      circle1.setVisible(false);
-      healthBar1.setVisible(false);
-      healthBarBackground1.setVisible(false);
-      targetingOutline1.setVisible(false);
+      hideCircle(circle1, healthBar1, healthBarBackground1, targetingOutline1);
     }
   } else if (circleNumber === 2) {
-    circleHealth2 = Math.max(circleHealth2 - reduceHealthAmount, 0);
-    healthBar2.width = (circleHealth2 / resetHealth) * healthBarWidth;
+    circleHealth2 = Math.max(circleHealth2 - CONSTANTS.reduceHealthAmount, 0);
+    healthBar2.width =
+      (circleHealth2 / CONSTANTS.resetHealth) * CONSTANTS.healthBarWidth;
 
     if (circleHealth2 === 0) {
-      circle2.setVisible(false);
-      healthBar2.setVisible(false);
-      healthBarBackground2.setVisible(false);
-      targetingOutline2.setVisible(false);
+      hideCircle(circle2, healthBar2, healthBarBackground2, targetingOutline2);
     }
   }
 
@@ -324,39 +348,45 @@ function reduceCircleHealth(circleNumber) {
   }
 }
 
+function hideCircle(circle, healthBar, healthBarBackground, targetingOutline) {
+  circle.setVisible(false);
+  healthBar.setVisible(false);
+  healthBarBackground.setVisible(false);
+  targetingOutline.setVisible(false);
+}
+
 function resetGame() {
   this.scene.restart();
-  circleHealth1 = resetHealth;
-  circleHealth2 = resetHealth;
-  healthBar1.width = (circleHealth1 / resetHealth) * healthBarWidth;
-  healthBar2.width = (circleHealth2 / resetHealth) * healthBarWidth;
-  circle1.setFillStyle(circleColor);
-  circle2.setFillStyle(circleColor);
+  circleHealth1 = CONSTANTS.resetHealth;
+  circleHealth2 = CONSTANTS.resetHealth;
+  healthBar1.width =
+    (circleHealth1 / CONSTANTS.resetHealth) * CONSTANTS.healthBarWidth;
+  healthBar2.width =
+    (circleHealth2 / CONSTANTS.resetHealth) * CONSTANTS.healthBarWidth;
+  circle1.setFillStyle(CONSTANTS.circleColor);
+  circle2.setFillStyle(CONSTANTS.circleColor);
 }
 
 function updateGameObjects() {
   const offsetX = config.width / 2 - square.x;
   const offsetY = config.height / 2 - square.y;
 
-  circle1.x += offsetX;
-  circle1.y += offsetY;
-  circle2.x += offsetX;
-  circle2.y += offsetY;
-  yellowCircleOutline.x += offsetX;
-  yellowCircleOutline.y += offsetY;
-  healthBarBackground1.x += offsetX;
-  healthBarBackground1.y += offsetY;
-  healthBar1.x += offsetX;
-  healthBar1.y += offsetY;
-  healthBarBackground2.x += offsetX;
-  healthBarBackground2.y += offsetY;
-  healthBar2.x += offsetX;
-  healthBar2.y += offsetY;
-  grid.x += offsetX;
-  grid.y += offsetY;
+  updateObjectPosition(circle1, offsetX, offsetY);
+  updateObjectPosition(circle2, offsetX, offsetY);
+  updateObjectPosition(yellowCircleOutline, offsetX, offsetY);
+  updateObjectPosition(healthBarBackground1, offsetX, offsetY);
+  updateObjectPosition(healthBar1, offsetX, offsetY);
+  updateObjectPosition(healthBarBackground2, offsetX, offsetY);
+  updateObjectPosition(healthBar2, offsetX, offsetY);
+  updateObjectPosition(grid, offsetX, offsetY);
 
   square.x = config.width / 2;
   square.y = config.height / 2;
+}
+
+function updateObjectPosition(object, offsetX, offsetY) {
+  object.x += offsetX;
+  object.y += offsetY;
 }
 
 function updateTargeting() {
