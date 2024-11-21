@@ -10,6 +10,7 @@ const config = {
 };
 
 const game = new Phaser.Game(config);
+
 let square,
   moveUpButton,
   moveDownButton,
@@ -27,7 +28,26 @@ let joystick = null,
   targetVelocityX = 0,
   targetVelocityY = 0,
   circleHealth = 100;
+
 const moveDistance = 100;
+const gridSize = 800;
+const gridColor = 0x212121;
+const joystickRadius = 30;
+const joystickColor = 0x888888;
+const squareSize = 50;
+const squareColor = 0xff0000;
+const circleRadius = 25;
+const circleColor = 0x0000ff;
+const yellowCircleOutlineColor = 0xffff00;
+const healthBarWidth = 50;
+const healthBarHeight = 10;
+const healthBarBackgroundColor = 0x000000;
+const healthBarColor = 0xff0000;
+const acceleration = 0.2;
+const fillYellowCircleDelay = 1000;
+const fillYellowCircleDuration = 250;
+const reduceHealthAmount = 45;
+const resetHealth = 100;
 
 function preload() {
   // Load any assets if necessary
@@ -41,9 +61,6 @@ function create() {
 }
 
 function createGrid() {
-  const gridSize = 800; // Size of each grid square
-  const gridColor = 0x212121; // Grey color for the grid squares
-
   grid = this.add.grid(
     config.width / 2,
     config.height / 2,
@@ -80,7 +97,7 @@ function createGameObjects() {
 
 function setupTimers() {
   this.time.addEvent({
-    delay: 1000,
+    delay: fillYellowCircleDelay,
     callback: fillYellowCircle,
     callbackScope: this,
     loop: true,
@@ -90,15 +107,20 @@ function setupTimers() {
 function createJoystick(pointer) {
   initialPointerX = pointer.x;
   initialPointerY = pointer.y;
-  joystick = this.add.circle(pointer.x, pointer.y, 30, 0x888888);
+  joystick = this.add.circle(
+    pointer.x,
+    pointer.y,
+    joystickRadius,
+    joystickColor
+  );
 }
 
 function moveJoystick(pointer) {
   if (joystick) {
     const deltaX = pointer.x - initialPointerX;
     const deltaY = pointer.y - initialPointerY;
-    targetVelocityX = deltaX * 0.1; // Adjust the multiplier as needed
-    targetVelocityY = deltaY * 0.1; // Adjust the multiplier as needed
+    targetVelocityX = deltaX * 0.1;
+    targetVelocityY = deltaY * 0.1;
   }
 }
 
@@ -106,8 +128,8 @@ function removeJoystick() {
   if (joystick) {
     joystick.destroy();
     joystick = null;
-    targetVelocityX = 0; // Reset target velocity when joystick is released
-    targetVelocityY = 0; // Reset target velocity when joystick is released
+    targetVelocityX = 0;
+    targetVelocityY = 0;
   }
 }
 
@@ -115,9 +137,9 @@ function createSquare() {
   square = this.add.rectangle(
     config.width / 2,
     config.height / 2,
-    50,
-    50,
-    0xff0000
+    squareSize,
+    squareSize,
+    squareColor
   );
   targetY = square.y;
 }
@@ -147,31 +169,36 @@ function createButton(x, y, text, callback) {
 }
 
 function createCircle() {
-  circle = this.add.circle(config.width / 2, 0, 25, 0x0000ff);
+  circle = this.add.circle(config.width / 2, 0, circleRadius, circleColor);
 }
 
 function createYellowCircleOutline() {
   yellowCircleOutline = this.add.circle(
     config.width / 2,
     config.height / 2 - 150,
-    25
+    circleRadius
   );
-  yellowCircleOutline.setStrokeStyle(2, 0xffff00);
+  yellowCircleOutline.setStrokeStyle(2, yellowCircleOutlineColor);
 }
 
 function createHealthBar() {
   healthBarBackground = this.add.rectangle(
     circle.x,
     circle.y - 35,
-    50,
-    10,
-    0x000000
+    healthBarWidth,
+    healthBarHeight,
+    healthBarBackgroundColor
   );
-  healthBar = this.add.rectangle(circle.x, circle.y - 35, 50, 10, 0xff0000);
+  healthBar = this.add.rectangle(
+    circle.x,
+    circle.y - 35,
+    healthBarWidth,
+    healthBarHeight,
+    healthBarColor
+  );
 }
 
 function updateJoystickVelocity() {
-  const acceleration = 0.2; // Adjust the acceleration as needed
   if (velocityX < targetVelocityX) {
     velocityX = Math.min(velocityX + acceleration, targetVelocityX);
   } else if (velocityX > targetVelocityX) {
@@ -194,7 +221,7 @@ function moveCircleDownward() {
 }
 
 function updateUIPositions() {
-  const distanceFromSquare = 100; // Distance in pixels from the square
+  const distanceFromSquare = 100;
   const angle = Phaser.Math.Angle.Between(
     square.x,
     square.y,
@@ -231,10 +258,10 @@ function fillYellowCircle() {
   const yellowCircle = this.add.circle(
     yellowCircleOutline.x,
     yellowCircleOutline.y,
-    25,
-    0xffff00
+    circleRadius,
+    yellowCircleOutlineColor
   );
-  this.time.delayedCall(250, () => yellowCircle.destroy());
+  this.time.delayedCall(fillYellowCircleDuration, () => yellowCircle.destroy());
 
   if (Phaser.Geom.Intersects.CircleToCircle(yellowCircle, circle)) {
     reduceCircleHealth.call(this);
@@ -242,11 +269,13 @@ function fillYellowCircle() {
 }
 
 function reduceCircleHealth() {
-  circleHealth = Math.max(circleHealth - 45, 0);
-  healthBar.width = (circleHealth / 100) * 50;
+  circleHealth = Math.max(circleHealth - reduceHealthAmount, 0);
+  healthBar.width = (circleHealth / resetHealth) * healthBarWidth;
 
   const changeCircleColor = () => {
-    circle.setFillStyle(circle.fillColor === 0x0000ff ? 0xffffff : 0x0000ff);
+    circle.setFillStyle(
+      circle.fillColor === circleColor ? 0xffffff : circleColor
+    );
   };
 
   for (let i = 50; i <= 200; i += 50) {
@@ -260,16 +289,15 @@ function reduceCircleHealth() {
 
 function resetGame() {
   this.scene.restart();
-  circleHealth = 100;
-  healthBar.width = (circleHealth / 100) * 50;
-  circle.setFillStyle(0x0000ff);
+  circleHealth = resetHealth;
+  healthBar.width = (circleHealth / resetHealth) * healthBarWidth;
+  circle.setFillStyle(circleColor);
 }
 
 function updateGameObjects() {
   const offsetX = config.width / 2 - square.x;
   const offsetY = config.height / 2 - square.y;
 
-  // Update positions of all game objects relative to the square
   circle.x += offsetX;
   circle.y += offsetY;
   yellowCircleOutline.x += offsetX;
@@ -278,10 +306,9 @@ function updateGameObjects() {
   healthBarBackground.y += offsetY;
   healthBar.x += offsetX;
   healthBar.y += offsetY;
-  grid.x += offsetX / 3;
-  grid.y += offsetY / 3;
+  grid.x += offsetX;
+  grid.y += offsetY;
 
-  // Reset square position to center
   square.x = config.width / 2;
   square.y = config.height / 2;
 }
