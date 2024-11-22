@@ -54,6 +54,8 @@ const CONSTANTS = {
   fillYellowCircleDuration: 250,
   reduceHealthAmount: 45,
   resetHealth: 100,
+  lineAttackDamage: 20,
+  lineAttackDuration: 100, // duration in milliseconds
 };
 
 function preload() {
@@ -108,6 +110,13 @@ function setupTimers() {
   this.time.addEvent({
     delay: CONSTANTS.fillYellowCircleDelay,
     callback: fillYellowCircle,
+    callbackScope: this,
+    loop: true,
+  });
+
+  this.time.addEvent({
+    delay: 500,
+    callback: lineAttack,
     callbackScope: this,
     loop: true,
   });
@@ -324,9 +333,52 @@ function fillYellowCircle() {
   }
 }
 
-function reduceCircleHealth(circleNumber) {
+function lineAttack() {
+  let targetCircle;
+  if (targetingOutline1.visible) {
+    targetCircle = circle1;
+  } else if (targetingOutline2.visible) {
+    targetCircle = circle2;
+  }
+
+  if (targetCircle) {
+    const attackLine = new Phaser.Geom.Line(
+      square.x,
+      square.y,
+      targetCircle.x,
+      targetCircle.y
+    );
+    const lineGraphic = this.add.graphics();
+    lineGraphic.lineStyle(2, 0xff0000);
+    lineGraphic.strokeLineShape(attackLine);
+
+    this.time.delayedCall(CONSTANTS.lineAttackDuration, () =>
+      lineGraphic.destroy()
+    );
+
+    // Ensure targetCircle is a Phaser.Geom.Circle object
+    const targetCircleGeom = new Phaser.Geom.Circle(
+      targetCircle.x,
+      targetCircle.y,
+      targetCircle.radius
+    );
+
+    if (Phaser.Geom.Intersects.LineToCircle(attackLine, targetCircleGeom)) {
+      reduceCircleHealth.call(
+        this,
+        targetCircle === circle1 ? 1 : 2,
+        CONSTANTS.lineAttackDamage
+      );
+    }
+  }
+}
+
+function reduceCircleHealth(
+  circleNumber,
+  damage = CONSTANTS.reduceHealthAmount
+) {
   if (circleNumber === 1) {
-    circleHealth1 = Math.max(circleHealth1 - CONSTANTS.reduceHealthAmount, 0);
+    circleHealth1 = Math.max(circleHealth1 - damage, 0);
     healthBar1.width =
       (circleHealth1 / CONSTANTS.resetHealth) * CONSTANTS.healthBarWidth;
 
@@ -334,7 +386,7 @@ function reduceCircleHealth(circleNumber) {
       hideCircle(circle1, healthBar1, healthBarBackground1, targetingOutline1);
     }
   } else if (circleNumber === 2) {
-    circleHealth2 = Math.max(circleHealth2 - CONSTANTS.reduceHealthAmount, 0);
+    circleHealth2 = Math.max(circleHealth2 - damage, 0);
     healthBar2.width =
       (circleHealth2 / CONSTANTS.resetHealth) * CONSTANTS.healthBarWidth;
 
