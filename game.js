@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { CONSTANTS } from "./src/constants";
+import Joystick from "./src/joystick";
 
 class GameScene extends Phaser.Scene {
   constructor() {
@@ -15,14 +16,7 @@ class GameScene extends Phaser.Scene {
     this.grid = null;
     this.targetingOutline1 = null;
     this.targetingOutline2 = null;
-    this.indicatorLine = null;
     this.joystick = null;
-    this.initialPointerX = 0;
-    this.initialPointerY = 0;
-    this.velocityX = 0;
-    this.velocityY = 0;
-    this.targetVelocityX = 0;
-    this.targetVelocityY = 0;
     this.circleHealth1 = 100;
     this.circleHealth2 = 100;
   }
@@ -33,14 +27,15 @@ class GameScene extends Phaser.Scene {
 
   create() {
     this.createGrid();
+    this.joystick = new Joystick(this);
     this.setupInputHandlers();
     this.createGameObjects();
     this.setupTimers();
   }
 
   update() {
-    this.updateJoystickVelocity();
-    this.applyJoystickVelocity();
+    this.joystick.updateJoystickVelocity();
+    this.joystick.applyJoystickVelocity();
     this.moveCircleDownward();
     this.updateUIPositions();
     this.checkCollisions();
@@ -61,9 +56,9 @@ class GameScene extends Phaser.Scene {
   }
 
   setupInputHandlers() {
-    this.input.on("pointerdown", this.createJoystick, this);
-    this.input.on("pointermove", this.moveJoystick, this);
-    this.input.on("pointerup", this.removeJoystick, this);
+    this.input.on("pointerdown", this.joystick.createJoystick, this.joystick);
+    this.input.on("pointermove", this.joystick.moveJoystick, this.joystick);
+    this.input.on("pointerup", this.joystick.removeJoystick, this.joystick);
   }
 
   createGameObjects() {
@@ -89,54 +84,6 @@ class GameScene extends Phaser.Scene {
       callbackScope: this,
       loop: true,
     });
-  }
-
-  createJoystick(pointer) {
-    this.initialPointerX = pointer.x;
-    this.initialPointerY = pointer.y;
-    this.joystick = this.add.circle(
-      pointer.x,
-      pointer.y,
-      CONSTANTS.joystickRadius,
-      CONSTANTS.joystickColor
-    );
-  }
-
-  moveJoystick(pointer) {
-    if (this.joystick) {
-      const deltaX = pointer.x - this.initialPointerX;
-      const deltaY = pointer.y - this.initialPointerY;
-      this.targetVelocityX = Phaser.Math.Clamp(
-        deltaX * 0.1,
-        -CONSTANTS.maxSpeed,
-        CONSTANTS.maxSpeed
-      );
-      this.targetVelocityY = Phaser.Math.Clamp(
-        deltaY * 0.1,
-        -CONSTANTS.maxSpeed,
-        CONSTANTS.maxSpeed
-      );
-
-      const angle = Math.atan2(deltaY, deltaX);
-      const lineLength = Math.sqrt(deltaX * deltaX + deltaY * deltaY) * 0.5;
-
-      this.indicatorLine.setTo(
-        this.square.x,
-        this.square.y,
-        this.square.x + lineLength * Math.cos(angle),
-        this.square.y + lineLength * Math.sin(angle)
-      );
-    }
-  }
-
-  removeJoystick() {
-    if (this.joystick) {
-      this.joystick.destroy();
-      this.joystick = null;
-      this.targetVelocityX = 0;
-      this.targetVelocityY = 0;
-      this.indicatorLine.setTo(0, 0, 0, 0);
-    }
   }
 
   createSquare() {
@@ -223,24 +170,6 @@ class GameScene extends Phaser.Scene {
   createIndicatorLine() {
     this.indicatorLine = this.add.line(0, 0, 0, 0, 0, 0, 0xffffff);
     this.indicatorLine.setOrigin(0, 0);
-  }
-
-  updateJoystickVelocity() {
-    this.velocityX = Phaser.Math.Linear(
-      this.velocityX,
-      this.targetVelocityX,
-      CONSTANTS.acceleration
-    );
-    this.velocityY = Phaser.Math.Linear(
-      this.velocityY,
-      this.targetVelocityY,
-      CONSTANTS.acceleration
-    );
-  }
-
-  applyJoystickVelocity() {
-    this.square.x += this.velocityX;
-    this.square.y += this.velocityY;
   }
 
   moveCircleDownward() {
