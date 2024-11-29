@@ -1,6 +1,4 @@
 export const CONSTANTS = {
-  gridSize: 800,
-  gridColor: 0x212121,
   joystickRadius: 30,
   joystickColor: 0x888888,
   squareSize: 50,

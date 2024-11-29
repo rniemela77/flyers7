@@ -13,7 +13,6 @@ class GameScene extends Phaser.Scene {
     this.healthBarBackground1 = null;
     this.healthBar2 = null;
     this.healthBarBackground2 = null;
-    this.grid = null;
     this.targetingOutline1 = null;
     this.targetingOutline2 = null;
     this.joystick = null;
@@ -26,7 +25,6 @@ class GameScene extends Phaser.Scene {
   }
 
   create() {
-    this.createGrid();
     this.joystick = new Joystick(this);
     this.setupInputHandlers();
     this.createGameObjects();
@@ -41,18 +39,6 @@ class GameScene extends Phaser.Scene {
     this.checkCollisions();
     this.updateGameObjects();
     this.updateTargeting();
-  }
-
-  createGrid() {
-    this.grid = this.add.grid(
-      this.scale.width / 2,
-      this.scale.height / 2,
-      this.scale.width,
-      this.scale.height,
-      CONSTANTS.gridSize,
-      CONSTANTS.gridSize,
-      CONSTANTS.gridColor
-    );
   }
 
   setupInputHandlers() {
@@ -352,7 +338,7 @@ class GameScene extends Phaser.Scene {
     this.updateObjectPosition(this.healthBar1, offsetX, offsetY);
     this.updateObjectPosition(this.healthBarBackground2, offsetX, offsetY);
     this.updateObjectPosition(this.healthBar2, offsetX, offsetY);
-    this.updateObjectPosition(this.grid, offsetX, offsetY);
+
 
     this.square.x = this.scale.width / 2;
     this.square.y = this.scale.height / 2;
