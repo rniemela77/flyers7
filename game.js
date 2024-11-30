@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { CONSTANTS } from "./src/constants";
 import Joystick from "./src/joystick";
+import Enemy from "./src/enemy";
 
 class GameScene extends Phaser.Scene {
   constructor() {
@@ -9,10 +10,6 @@ class GameScene extends Phaser.Scene {
     this.yellowCircleOutline = null;
     this.joystick = null;
     this.enemies = [];
-    this.enemyHealth = [];
-    this.healthBars = [];
-    this.healthBarBackgrounds = [];
-    this.targetingOutlines = [];
   }
 
   preload() {
@@ -33,7 +30,7 @@ class GameScene extends Phaser.Scene {
     this.updateUIPositions();
     this.checkCollisions();
     this.updateGameObjects();
-    this.updateTargeting();
+    // Note: updateTargeting() logic moved into updateUIPositions()
   }
 
   setupInputHandlers() {
@@ -102,61 +99,13 @@ class GameScene extends Phaser.Scene {
   createEnemy() {
     const x = Phaser.Math.Between(0, this.scale.width);
     const y = 0; // Start at the top of the screen
-    const enemy = this.add.circle(
-      x,
-      y,
-      CONSTANTS.circleRadius,
-      CONSTANTS.circleColor
-    );
+    const enemy = new Enemy(this, x, y);
     this.enemies.push(enemy);
-
-    const enemyHealth = CONSTANTS.resetHealth;
-    this.enemyHealth.push(enemyHealth);
-
-    const healthBarBackground = this.createHealthBarBackground(enemy);
-    this.healthBarBackgrounds.push(healthBarBackground);
-
-    const healthBar = this.createHealthBar(enemy);
-    this.healthBars.push(healthBar);
-
-    const targetingOutline = this.createTargetingOutline(enemy);
-    this.targetingOutlines.push(targetingOutline);
-  }
-
-  createHealthBarBackground(enemy) {
-    return this.add.rectangle(
-      enemy.x,
-      enemy.y - 35,
-      CONSTANTS.healthBarWidth,
-      CONSTANTS.healthBarHeight,
-      CONSTANTS.healthBarBackgroundColor
-    );
-  }
-
-  createHealthBar(enemy) {
-    return this.add.rectangle(
-      enemy.x,
-      enemy.y - 35,
-      CONSTANTS.healthBarWidth,
-      CONSTANTS.healthBarHeight,
-      CONSTANTS.healthBarColor
-    );
-  }
-
-  createTargetingOutline(enemy) {
-    const outline = this.add.circle(
-      enemy.x,
-      enemy.y,
-      CONSTANTS.circleRadius + 5
-    );
-    outline.setStrokeStyle(2, 0xffffff);
-    outline.setVisible(false);
-    return outline;
   }
 
   moveEnemiesDownward() {
     this.enemies.forEach((enemy) => {
-      enemy.y += 1;
+      enemy.moveDown();
     });
   }
 
@@ -165,25 +114,10 @@ class GameScene extends Phaser.Scene {
     let closestEnemy = null;
     let minDistance = Infinity;
 
-    this.enemies.forEach((enemy, index) => {
-      if (!enemy.visible) return;
+    this.enemies.forEach((enemy) => {
+      if (!enemy.isVisible()) return;
 
-      // Update health bar positions
-      this.updateHealthBarPosition(
-        this.healthBarBackgrounds[index],
-        this.healthBars[index],
-        enemy
-      );
-
-      // Update targeting outline positions
-      this.targetingOutlines[index].setPosition(enemy.x, enemy.y);
-
-      const distance = Phaser.Math.Distance.Between(
-        this.square.x,
-        this.square.y,
-        enemy.x,
-        enemy.y
-      );
+      const distance = enemy.getDistanceTo(this.square.x, this.square.y);
       if (distance < minDistance) {
         minDistance = distance;
         closestEnemy = enemy;
@@ -194,8 +128,8 @@ class GameScene extends Phaser.Scene {
       const angle = Phaser.Math.Angle.Between(
         this.square.x,
         this.square.y,
-        closestEnemy.x,
-        closestEnemy.y
+        closestEnemy.getPosition().x,
+        closestEnemy.getPosition().y
       );
 
       this.yellowCircleOutline.x =
@@ -205,18 +139,12 @@ class GameScene extends Phaser.Scene {
     }
 
     // Hide all targeting outlines
-    this.targetingOutlines.forEach((outline) => outline.setVisible(false));
+    this.enemies.forEach((enemy) => enemy.setTargetingVisible(false));
 
     // Show targeting outline for the closest enemy
     if (closestEnemy) {
-      const index = this.enemies.indexOf(closestEnemy);
-      this.targetingOutlines[index].setVisible(true);
+      closestEnemy.setTargetingVisible(true);
     }
-  }
-
-  updateHealthBarPosition(background, bar, enemy) {
-    background.setPosition(enemy.x, enemy.y - 35);
-    bar.setPosition(enemy.x, enemy.y - 35);
   }
 
   checkCollisions() {
@@ -244,21 +172,25 @@ class GameScene extends Phaser.Scene {
       yellowCircle.destroy()
     );
 
-    this.enemies.forEach((enemy, index) => {
+    this.enemies.forEach((enemy) => {
       if (
-        enemy &&
-        Phaser.Geom.Intersects.CircleToCircle(yellowCircle, enemy)
+        enemy.isVisible() &&
+        Phaser.Geom.Intersects.CircleToCircle(yellowCircle, enemy.sprite)
       ) {
-        this.reduceEnemyHealth(index);
+        const isDead = enemy.takeDamage(CONSTANTS.reduceHealthAmount);
+        if (isDead) {
+          // Remove dead enemy from the array
+          this.enemies = this.enemies.filter((e) => e !== enemy);
+        }
       }
     });
   }
 
   lineAttack() {
     let targetEnemy = null;
-    this.targetingOutlines.forEach((outline, index) => {
-      if (outline.visible) {
-        targetEnemy = this.enemies[index];
+    this.enemies.forEach((enemy) => {
+      if (enemy.isVisible() && enemy.targetingOutline.visible) {
+        targetEnemy = enemy;
       }
     });
 
@@ -266,8 +198,8 @@ class GameScene extends Phaser.Scene {
       const attackLine = new Phaser.Geom.Line(
         this.square.x,
         this.square.y,
-        targetEnemy.x,
-        targetEnemy.y
+        targetEnemy.getPosition().x,
+        targetEnemy.getPosition().y
       );
       const lineGraphic = this.add.graphics();
       lineGraphic.lineStyle(2, 0xff0000);
@@ -278,61 +210,18 @@ class GameScene extends Phaser.Scene {
       );
 
       const targetEnemyGeom = new Phaser.Geom.Circle(
-        targetEnemy.x,
-        targetEnemy.y,
-        targetEnemy.radius
+        targetEnemy.getPosition().x,
+        targetEnemy.getPosition().y,
+        targetEnemy.getRadius()
       );
 
-      if (
-        Phaser.Geom.Intersects.LineToCircle(attackLine, targetEnemyGeom)
-      ) {
-        this.reduceEnemyHealth(
-          this.enemies.indexOf(targetEnemy),
-          CONSTANTS.lineAttackDamage
-        );
+      if (Phaser.Geom.Intersects.LineToCircle(attackLine, targetEnemyGeom)) {
+        const isDead = targetEnemy.takeDamage(CONSTANTS.lineAttackDamage);
+        if (isDead) {
+          // Remove dead enemy from the array
+          this.enemies = this.enemies.filter((e) => e !== targetEnemy);
+        }
       }
-    }
-  }
-
-  reduceEnemyHealth(enemyIndex, damage = CONSTANTS.reduceHealthAmount) {
-    this.enemyHealth[enemyIndex] = Math.max(
-      this.enemyHealth[enemyIndex] - damage,
-      0
-    );
-    this.healthBars[enemyIndex].width =
-      (this.enemyHealth[enemyIndex] / CONSTANTS.resetHealth) *
-      CONSTANTS.healthBarWidth;
-
-    if (this.enemyHealth[enemyIndex] === 0) {
-      this.hideEnemy(
-        this.enemies[enemyIndex],
-        this.healthBars[enemyIndex],
-        this.healthBarBackgrounds[enemyIndex],
-        this.targetingOutlines[enemyIndex]
-      );
-    }
-
-    // Check if all enemies are defeated
-    if (this.enemies.length === 0) {
-      this.resetGame();
-    }
-  }
-
-  hideEnemy(enemy, healthBar, healthBarBackground, targetingOutline) {
-    const index = this.enemies.indexOf(enemy);
-    if (index > -1) {
-      // Destroy all related game objects
-      enemy.destroy();
-      healthBar.destroy();
-      healthBarBackground.destroy();
-      targetingOutline.destroy();
-
-      // Remove elements from arrays
-      this.enemies.splice(index, 1);
-      this.enemyHealth.splice(index, 1);
-      this.healthBars.splice(index, 1);
-      this.healthBarBackgrounds.splice(index, 1);
-      this.targetingOutlines.splice(index, 1);
     }
   }
 
@@ -345,16 +234,7 @@ class GameScene extends Phaser.Scene {
     const offsetY = this.scale.height / 2 - this.square.y;
 
     this.enemies.forEach((enemy) => {
-      this.updateObjectPosition(enemy, offsetX, offsetY);
-    });
-    this.healthBarBackgrounds.forEach((background) => {
-      this.updateObjectPosition(background, offsetX, offsetY);
-    });
-    this.healthBars.forEach((bar) => {
-      this.updateObjectPosition(bar, offsetX, offsetY);
-    });
-    this.targetingOutlines.forEach((outline) => {
-      this.updateObjectPosition(outline, offsetX, offsetY);
+      enemy.updatePosition(offsetX, offsetY);
     });
     this.updateObjectPosition(this.yellowCircleOutline, offsetX, offsetY);
 
@@ -365,35 +245,6 @@ class GameScene extends Phaser.Scene {
   updateObjectPosition(object, offsetX, offsetY) {
     object.x += offsetX;
     object.y += offsetY;
-  }
-
-  updateTargeting() {
-    let closestEnemy = null;
-    let minDistance = Infinity;
-
-    this.enemies.forEach((enemy, index) => {
-      if (!enemy.visible) return;
-
-      const distance = Phaser.Math.Distance.Between(
-        this.square.x,
-        this.square.y,
-        enemy.x,
-        enemy.y
-      );
-      if (distance < minDistance) {
-        minDistance = distance;
-        closestEnemy = enemy;
-      }
-    });
-
-    // Hide all targeting outlines
-    this.targetingOutlines.forEach((outline) => outline.setVisible(false));
-
-    // Show targeting outline for the closest enemy
-    if (closestEnemy) {
-      const index = this.enemies.indexOf(closestEnemy);
-      this.targetingOutlines[index].setVisible(true);
-    }
   }
 }
 
