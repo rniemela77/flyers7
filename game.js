@@ -1,7 +1,8 @@
 import Phaser from "phaser";
 import { CONSTANTS } from "./src/constants";
 import Joystick from "./src/joystick";
-import Enemy from "./src/enemy";
+import Enemy from "./src/Enemy";
+import Attack from "./src/Attack";
 
 class GameScene extends Phaser.Scene {
   constructor() {
@@ -10,6 +11,7 @@ class GameScene extends Phaser.Scene {
     this.yellowCircleOutline = null;
     this.joystick = null;
     this.enemies = [];
+    this.attack = null;
   }
 
   preload() {
@@ -18,6 +20,7 @@ class GameScene extends Phaser.Scene {
 
   create() {
     this.joystick = new Joystick(this);
+    this.attack = new Attack(this);
     this.setupInputHandlers();
     this.createGameObjects();
     this.setupTimers();
@@ -42,20 +45,19 @@ class GameScene extends Phaser.Scene {
   createGameObjects() {
     this.createSquare();
     this.createYellowCircleOutline();
-    this.createIndicatorLine();
   }
 
   setupTimers() {
     this.time.addEvent({
       delay: CONSTANTS.fillYellowCircleDelay,
-      callback: this.fillYellowCircle,
+      callback: this.performYellowCircleAttack,
       callbackScope: this,
       loop: true,
     });
 
     this.time.addEvent({
       delay: 500,
-      callback: this.lineAttack,
+      callback: this.performLineAttack,
       callbackScope: this,
       loop: true,
     });
@@ -89,11 +91,6 @@ class GameScene extends Phaser.Scene {
       2,
       CONSTANTS.yellowCircleOutlineColor
     );
-  }
-
-  createIndicatorLine() {
-    this.indicatorLine = this.add.line(0, 0, 0, 0, 0, 0, 0xffffff);
-    this.indicatorLine.setOrigin(0, 0);
   }
 
   createEnemy() {
@@ -159,34 +156,20 @@ class GameScene extends Phaser.Scene {
         this.resetGame();
       }
     });
+
+    // Check collisions between attacks and enemies
+    this.attack.checkCollisions(this.enemies);
   }
 
-  fillYellowCircle() {
-    const yellowCircle = this.add.circle(
-      this.yellowCircleOutline.x,
-      this.yellowCircleOutline.y,
-      CONSTANTS.circleRadius,
-      CONSTANTS.yellowCircleOutlineColor
-    );
-    this.time.delayedCall(CONSTANTS.fillYellowCircleDuration, () =>
-      yellowCircle.destroy()
-    );
-
-    this.enemies.forEach((enemy) => {
-      if (
-        enemy.isVisible() &&
-        Phaser.Geom.Intersects.CircleToCircle(yellowCircle, enemy.sprite)
-      ) {
-        const isDead = enemy.takeDamage(CONSTANTS.reduceHealthAmount);
-        if (isDead) {
-          // Remove dead enemy from the array
-          this.enemies = this.enemies.filter((e) => e !== enemy);
-        }
-      }
-    });
+  performYellowCircleAttack() {
+    const position = {
+      x: this.yellowCircleOutline.x,
+      y: this.yellowCircleOutline.y,
+    };
+    this.attack.yellowCircleAttack(position);
   }
 
-  lineAttack() {
+  performLineAttack() {
     let targetEnemy = null;
     this.enemies.forEach((enemy) => {
       if (enemy.isVisible() && enemy.targetingOutline.visible) {
@@ -195,32 +178,19 @@ class GameScene extends Phaser.Scene {
     });
 
     if (targetEnemy) {
-      const attackLine = new Phaser.Geom.Line(
-        this.square.x,
-        this.square.y,
-        targetEnemy.getPosition().x,
-        targetEnemy.getPosition().y
-      );
-      const lineGraphic = this.add.graphics();
-      lineGraphic.lineStyle(2, 0xff0000);
-      lineGraphic.strokeLineShape(attackLine);
+      const startPosition = { x: this.square.x, y: this.square.y };
+      const targetPosition = targetEnemy.getPosition();
 
-      this.time.delayedCall(CONSTANTS.lineAttackDuration, () =>
-        lineGraphic.destroy()
+      const attackLine = this.attack.lineAttack(startPosition, targetPosition);
+
+      const isDead = this.attack.checkLineAttackCollision(
+        attackLine,
+        targetEnemy
       );
 
-      const targetEnemyGeom = new Phaser.Geom.Circle(
-        targetEnemy.getPosition().x,
-        targetEnemy.getPosition().y,
-        targetEnemy.getRadius()
-      );
-
-      if (Phaser.Geom.Intersects.LineToCircle(attackLine, targetEnemyGeom)) {
-        const isDead = targetEnemy.takeDamage(CONSTANTS.lineAttackDamage);
-        if (isDead) {
-          // Remove dead enemy from the array
-          this.enemies = this.enemies.filter((e) => e !== targetEnemy);
-        }
+      if (isDead) {
+        // Remove dead enemy from the array
+        this.enemies = this.enemies.filter((e) => e !== targetEnemy);
       }
     }
   }
@@ -236,6 +206,7 @@ class GameScene extends Phaser.Scene {
     this.enemies.forEach((enemy) => {
       enemy.updatePosition(offsetX, offsetY);
     });
+    this.attack.updateAttacks(offsetX, offsetY);
     this.updateObjectPosition(this.yellowCircleOutline, offsetX, offsetY);
 
     this.square.x = this.scale.width / 2;
