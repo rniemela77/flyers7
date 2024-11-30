@@ -1,9 +1,12 @@
+// joystick.js
+
 import Phaser from "phaser";
 import { CONSTANTS } from "./constants";
 
 class Joystick {
-  constructor(scene) {
+  constructor(scene, player) {
     this.scene = scene;
+    this.player = player;
     this.joystick = null;
     this.initialPointerX = 0;
     this.initialPointerY = 0;
@@ -11,7 +14,18 @@ class Joystick {
     this.velocityY = 0;
     this.targetVelocityX = 0;
     this.targetVelocityY = 0;
-    this.indicatorLine = this.scene.add.line(0, 0, 0, 0, 0, 0, 0xffffff);
+
+    // Initialize the indicator line at the player's position
+    const playerPosition = this.player.getPosition();
+    this.indicatorLine = this.scene.add.line(
+      0,
+      0,
+      playerPosition.x,
+      playerPosition.y,
+      playerPosition.x,
+      playerPosition.y,
+      0xffffff
+    );
     this.indicatorLine.setOrigin(0, 0);
   }
 
@@ -44,11 +58,12 @@ class Joystick {
       const angle = Math.atan2(deltaY, deltaX);
       const lineLength = Math.sqrt(deltaX * deltaX + deltaY * deltaY) * 0.5;
 
+      const playerPosition = this.player.getPosition();
       this.indicatorLine.setTo(
-        this.scene.square.x,
-        this.scene.square.y,
-        this.scene.square.x + lineLength * Math.cos(angle),
-        this.scene.square.y + lineLength * Math.sin(angle)
+        playerPosition.x,
+        playerPosition.y,
+        playerPosition.x + lineLength * Math.cos(angle),
+        playerPosition.y + lineLength * Math.sin(angle)
       );
     }
   }
@@ -77,8 +92,9 @@ class Joystick {
   }
 
   applyJoystickVelocity() {
-    this.scene.square.x += this.velocityX;
-    this.scene.square.y += this.velocityY;
+    if (this.player) {
+      this.player.setVelocity(this.velocityX, this.velocityY);
+    }
   }
 }
 

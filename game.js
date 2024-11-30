@@ -2,12 +2,13 @@ import Phaser from "phaser";
 import { CONSTANTS } from "./src/constants";
 import Joystick from "./src/joystick";
 import Enemy from "./src/Enemy";
-import Attack from "./src/Attack";
+import Attack from "./src/attack";
+import Player from "./src/player";
 
 class GameScene extends Phaser.Scene {
   constructor() {
     super({ key: "GameScene" });
-    this.square = null;
+    this.player = null;
     this.yellowCircleOutline = null;
     this.joystick = null;
     this.enemies = [];
@@ -19,21 +20,25 @@ class GameScene extends Phaser.Scene {
   }
 
   create() {
-    this.joystick = new Joystick(this);
+    this.createPlayer(); // Initialize the player first
+    this.joystick = new Joystick(this, this.player); // Now this.player is not null
     this.attack = new Attack(this);
+    this.createYellowCircleOutline();
     this.setupInputHandlers();
-    this.createGameObjects();
     this.setupTimers();
   }
 
   update() {
     this.joystick.updateJoystickVelocity();
     this.joystick.applyJoystickVelocity();
+
+    // Update player movement
+    this.player.update();
+
     this.moveEnemiesDownward();
     this.updateUIPositions();
     this.checkCollisions();
     this.updateGameObjects();
-    // Note: updateTargeting() logic moved into updateUIPositions()
   }
 
   setupInputHandlers() {
@@ -42,8 +47,14 @@ class GameScene extends Phaser.Scene {
     this.input.on("pointerup", this.joystick.removeJoystick, this.joystick);
   }
 
+  createPlayer() {
+    const x = this.scale.width / 2;
+    const y = this.scale.height / 2;
+    this.player = new Player(this, x, y);
+  }
+
   createGameObjects() {
-    this.createSquare();
+    this.createPlayer();
     this.createYellowCircleOutline();
   }
 
@@ -71,20 +82,16 @@ class GameScene extends Phaser.Scene {
     });
   }
 
-  createSquare() {
-    this.square = this.add.rectangle(
-      this.scale.width / 2,
-      this.scale.height / 2,
-      CONSTANTS.squareSize,
-      CONSTANTS.squareSize,
-      CONSTANTS.squareColor
-    );
+  createPlayer() {
+    const x = this.scale.width / 2;
+    const y = this.scale.height / 2;
+    this.player = new Player(this, x, y);
   }
 
   createYellowCircleOutline() {
     this.yellowCircleOutline = this.add.circle(
-      this.scale.width / 2,
-      this.scale.height / 2 - 150,
+      this.player.getPosition().x,
+      this.player.getPosition().y - 150,
       CONSTANTS.circleRadius
     );
     this.yellowCircleOutline.setStrokeStyle(
@@ -107,14 +114,17 @@ class GameScene extends Phaser.Scene {
   }
 
   updateUIPositions() {
-    const distanceFromSquare = 100;
+    const distanceFromPlayer = 100;
     let closestEnemy = null;
     let minDistance = Infinity;
 
     this.enemies.forEach((enemy) => {
       if (!enemy.isVisible()) return;
 
-      const distance = enemy.getDistanceTo(this.square.x, this.square.y);
+      const distance = enemy.getDistanceTo(
+        this.player.getPosition().x,
+        this.player.getPosition().y
+      );
       if (distance < minDistance) {
         minDistance = distance;
         closestEnemy = enemy;
@@ -123,16 +133,16 @@ class GameScene extends Phaser.Scene {
 
     if (closestEnemy) {
       const angle = Phaser.Math.Angle.Between(
-        this.square.x,
-        this.square.y,
+        this.player.getPosition().x,
+        this.player.getPosition().y,
         closestEnemy.getPosition().x,
         closestEnemy.getPosition().y
       );
 
       this.yellowCircleOutline.x =
-        this.square.x + distanceFromSquare * Math.cos(angle);
+        this.player.getPosition().x + distanceFromPlayer * Math.cos(angle);
       this.yellowCircleOutline.y =
-        this.square.y + distanceFromSquare * Math.sin(angle);
+        this.player.getPosition().y + distanceFromPlayer * Math.sin(angle);
     }
 
     // Hide all targeting outlines
@@ -145,12 +155,12 @@ class GameScene extends Phaser.Scene {
   }
 
   checkCollisions() {
-    const squareBounds = this.square.getBounds();
+    const playerBounds = this.player.getBounds();
     this.enemies.forEach((enemy) => {
       if (
         Phaser.Geom.Intersects.RectangleToRectangle(
           enemy.getBounds(),
-          squareBounds
+          playerBounds
         )
       ) {
         this.resetGame();
@@ -178,7 +188,7 @@ class GameScene extends Phaser.Scene {
     });
 
     if (targetEnemy) {
-      const startPosition = { x: this.square.x, y: this.square.y };
+      const startPosition = this.player.getPosition();
       const targetPosition = targetEnemy.getPosition();
 
       const attackLine = this.attack.lineAttack(startPosition, targetPosition);
@@ -200,8 +210,8 @@ class GameScene extends Phaser.Scene {
   }
 
   updateGameObjects() {
-    const offsetX = this.scale.width / 2 - this.square.x;
-    const offsetY = this.scale.height / 2 - this.square.y;
+    const offsetX = this.scale.width / 2 - this.player.getPosition().x;
+    const offsetY = this.scale.height / 2 - this.player.getPosition().y;
 
     this.enemies.forEach((enemy) => {
       enemy.updatePosition(offsetX, offsetY);
@@ -209,8 +219,7 @@ class GameScene extends Phaser.Scene {
     this.attack.updateAttacks(offsetX, offsetY);
     this.updateObjectPosition(this.yellowCircleOutline, offsetX, offsetY);
 
-    this.square.x = this.scale.width / 2;
-    this.square.y = this.scale.height / 2;
+    this.player.updatePosition(offsetX, offsetY);
   }
 
   updateObjectPosition(object, offsetX, offsetY) {
