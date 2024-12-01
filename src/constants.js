@@ -31,4 +31,12 @@ export const CONSTANTS = {
   purpleAttackDuration: 250, // Attack lasts 250ms
   purpleAttackCooldown: 2000, // 2 seconds between attacks
   purpleAttackDamage: 30,
+  stickAttackDamage: 10,
+  stickRotationLerp: 0.02,  // Increased from 0.01 for faster rotation
+  stickLength: 300,
+  stickWidth: 20,    // Width of the stick
+  stickColor: 0x00ff00,
+  stickTelegraphDuration: 1000,  // Time for growing animation
+  stickAttackDuration: 250,      // How long the attack lasts
+  stickAttackCooldown: 2000,     // Time between attacks
 };

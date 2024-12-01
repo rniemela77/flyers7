@@ -3,6 +3,7 @@ import { CONSTANTS } from "./constants";
 import Phaser from "phaser";
 import AttackController from "./attacks/AttackController";
 import PurpleAttack from "./attacks/PurpleAttack";
+import StickAttack from "./attacks/StickAttack";
 
 export default class Enemy {
   constructor(scene, x, y) {
@@ -58,6 +59,7 @@ export default class Enemy {
     };
 
     this.purpleAttack = new PurpleAttack(scene, this);
+    this.stickAttack = new StickAttack(scene, this);
   }
 
   setupAttackTimer() {
@@ -96,6 +98,7 @@ export default class Enemy {
     this.targetingOutline.x += offsetX;
     this.targetingOutline.y += offsetY;
     this.purpleAttack.updatePosition(offsetX, offsetY);
+    this.stickAttack.updatePosition(offsetX, offsetY);
   }
 
   setTargetingVisible(visible) {
@@ -127,6 +130,7 @@ export default class Enemy {
     this.healthBarBackground.destroy();
     this.targetingOutline.destroy();
     this.purpleAttack.destroy();
+    this.stickAttack.destroy();
   }
 
   isVisible() {
@@ -160,6 +164,9 @@ export default class Enemy {
       
       // Update UI elements
       this.updateUIPositions();
+      
+      // Update stick attack
+      this.stickAttack.update();
     }
   }
 
