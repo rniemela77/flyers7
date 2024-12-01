@@ -46,6 +46,15 @@ export default class StickAttack {
     this.isAttacking = true;
     this.stickOutline.setVisible(true);
 
+    // Initially point at player
+    const player = this.scene.player;
+    if (player) {
+      const dx = player.getPosition().x - this.owner.getPosition().x;
+      const dy = player.getPosition().y - this.owner.getPosition().y;
+      this.targetRotation = Math.atan2(dy, dx);
+      this.stickOutline.rotation = this.targetRotation;
+    }
+
     // Create growing stick animation
     const position = this.owner.getPosition();
     this.growingStick = this.scene.add.rectangle(
