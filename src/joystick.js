@@ -7,26 +7,22 @@ class Joystick {
   constructor(scene, player) {
     this.scene = scene;
     this.player = player;
-    this.joystick = null;
-    this.initialPointerX = 0;
-    this.initialPointerY = 0;
+    
+    // Create the indicator line
+    this.indicatorLine = scene.add.line(0, 0, 0, 0, 0, 0, 0xffffff);
+    
+    // Initialize velocities
     this.velocityX = 0;
     this.velocityY = 0;
     this.targetVelocityX = 0;
     this.targetVelocityY = 0;
-
-    // Initialize the indicator line at the player's position
-    const playerPosition = this.player.getPosition();
-    this.indicatorLine = this.scene.add.line(
-      0,
-      0,
-      playerPosition.x,
-      playerPosition.y,
-      playerPosition.x,
-      playerPosition.y,
-      0xffffff
-    );
-    this.indicatorLine.setOrigin(0, 0);
+    
+    // Initialize joystick as null (will be created on pointer down)
+    this.joystick = null;
+    
+    // Store initial position based on player's current position
+    this.initialX = player.getPosition().x;
+    this.initialY = player.getPosition().y;
   }
 
   createJoystick(pointer) {
