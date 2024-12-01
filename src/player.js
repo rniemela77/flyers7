@@ -16,6 +16,24 @@ export default class Player {
       CONSTANTS.squareColor
     );
 
+    // Create health bar background
+    this.healthBarBackground = scene.add.rectangle(
+      x,
+      y - CONSTANTS.squareSize - CONSTANTS.healthBarOffset,
+      CONSTANTS.healthBarWidth,
+      CONSTANTS.healthBarHeight,
+      CONSTANTS.healthBarBackgroundColor
+    );
+
+    // Create health bar
+    this.healthBar = scene.add.rectangle(
+      x,
+      y - CONSTANTS.squareSize - CONSTANTS.healthBarOffset,
+      CONSTANTS.healthBarWidth,
+      CONSTANTS.healthBarHeight,
+      CONSTANTS.healthBarColor
+    );
+
     // Initialize player properties
     this.velocity = { x: 0, y: 0 };
   }
@@ -24,6 +42,12 @@ export default class Player {
   update() {
     this.sprite.x += this.velocity.x;
     this.sprite.y += this.velocity.y;
+
+    // Update health bar position
+    this.healthBarBackground.x = this.sprite.x;
+    this.healthBarBackground.y = this.sprite.y - CONSTANTS.squareSize - CONSTANTS.healthBarOffset;
+    this.healthBar.x = this.sprite.x;
+    this.healthBar.y = this.sprite.y - CONSTANTS.squareSize - CONSTANTS.healthBarOffset;
   }
 
   // Method to set the player's velocity
@@ -45,8 +69,12 @@ export default class Player {
   // Method to handle player taking damage
   takeDamage(damage) {
     this.health = Math.max(this.health - damage, 0);
+    // Update health bar width based on current health
+    this.healthBar.width = (this.health / CONSTANTS.playerHealth) * CONSTANTS.healthBarWidth;
+    
     if (this.health === 0) {
       this.destroy();
+      this.scene.resetGame();
       return true; // Player is dead
     }
     return false;
@@ -55,6 +83,8 @@ export default class Player {
   // Method to destroy the player
   destroy() {
     this.sprite.destroy();
+    this.healthBar.destroy();
+    this.healthBarBackground.destroy();
   }
 
   // Method to reset player position (optional)
@@ -67,5 +97,9 @@ export default class Player {
   updatePosition(offsetX, offsetY) {
     this.sprite.x += offsetX;
     this.sprite.y += offsetY;
+    this.healthBarBackground.x += offsetX;
+    this.healthBarBackground.y += offsetY;
+    this.healthBar.x += offsetX;
+    this.healthBar.y += offsetY;
   }
 }

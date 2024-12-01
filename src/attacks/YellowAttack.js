@@ -85,9 +85,9 @@ export default class YellowAttack {
       if (attack instanceof Phaser.GameObjects.Arc) {
         targets.forEach((target) => {
           if (target && target.getBounds && 
-              Phaser.Geom.Intersects.CircleToRectangle(attack, target.getBounds())) {
-            const isDead = target.takeDamage(CONSTANTS.reduceHealthAmount);
-            if (isDead && Array.isArray(this.scene.enemies)) {
+              Phaser.Geom.Intersects.CircleToCircle(attack, target.sprite)) {
+            const isDead = target.takeDamage(CONSTANTS.yellowCircleAttackDamage);
+            if (isDead) {
               this.scene.enemies = this.scene.enemies.filter(e => e !== target);
             }
           }

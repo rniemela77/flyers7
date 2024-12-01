@@ -52,7 +52,7 @@ class YellowAttack {
             enemy.isVisible() &&
             Phaser.Geom.Intersects.CircleToCircle(attack, enemy.sprite)
           ) {
-            const isDead = enemy.takeDamage(CONSTANTS.reduceHealthAmount);
+            const isDead = enemy.takeDamage(CONSTANTS.yellowCircleAttackDamage);
             if (isDead) {
               enemies.splice(enemies.indexOf(enemy), 1);
             }
