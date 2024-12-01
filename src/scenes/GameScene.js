@@ -87,9 +87,19 @@ export default class GameScene extends Phaser.Scene {
   checkCollisions() {
     const playerBounds = this.player.getBounds();
     this.enemies.forEach((enemy) => {
+      // Check for body collisions
       if (Phaser.Geom.Intersects.RectangleToRectangle(enemy.getBounds(), playerBounds)) {
         this.resetGame();
       }
+
+      // Check enemy's line attacks
+      enemy.attackController.activeAttacks.forEach(lineGraphic => {
+        if (lineGraphic?.attackLine) {
+          enemy.attackController.checkLineAttackCollision(lineGraphic.attackLine, this.player, lineGraphic);
+        }
+      });
+
+      // Check other attacks
       enemy.purpleAttack.checkCollisions([this.player]);
       enemy.stickAttack.checkCollisions([this.player]);
     });
@@ -108,10 +118,6 @@ export default class GameScene extends Phaser.Scene {
       const startPosition = this.player.getPosition();
       const targetPosition = targetEnemy.getPosition();
       const attackLine = this.attack.lineAttack(startPosition, targetPosition);
-      const isDead = this.attack.checkLineAttackCollision(attackLine, targetEnemy);
-      if (isDead) {
-        this.enemies = this.enemies.filter((e) => e !== targetEnemy);
-      }
     }
   }
 

@@ -107,6 +107,7 @@ export default class StickAttack {
     attackStick.setOrigin(0, 0.5);
     attackStick.setDepth(1);
     attackStick.rotation = this.stickOutline.rotation;
+    attackStick.hasHit = false;  // Add flag to track if this attack has hit
 
     this.activeAttacks.push(attackStick);
 
@@ -196,10 +197,11 @@ export default class StickAttack {
     if (!this.owner.sprite?.active) return;
 
     this.activeAttacks.forEach((attack) => {
-      if (attack?.active) {
+      if (attack?.active && !attack.hasHit) {  // Only check if hasn't hit yet
         targets.forEach((target) => {
           if (target?.getBounds && 
               Phaser.Geom.Intersects.RectangleToRectangle(attack.getBounds(), target.getBounds())) {
+            attack.hasHit = true;  // Mark as having hit
             const isDead = target.takeDamage(CONSTANTS.stickAttackDamage);
             if (isDead && Array.isArray(this.scene.enemies)) {
               this.scene.enemies = this.scene.enemies.filter(e => e !== target);

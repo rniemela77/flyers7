@@ -73,8 +73,8 @@ export default class Enemy {
 
   attackPlayer() {
     const player = this.scene.player;
-    if (player && this.getDistanceTo(player.getPosition().x, player.getPosition().y) < 300) {
-      this.attackController.lineAttack(player);
+    if (player && this.getDistanceTo(player.getPosition().x, player.getPosition().y) < CONSTANTS.enemyAttackRange) {
+      const attackLine = this.attackController.lineAttack(player);
     }
   }
 

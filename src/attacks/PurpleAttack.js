@@ -90,6 +90,7 @@ export default class PurpleAttack {
     
     // Set the depth to be above the owner
     purpleCircle.setDepth(1);
+    purpleCircle.hasHit = false;  // Add flag to track if this attack has hit
 
     this.activeAttacks.push(purpleCircle);
 
@@ -129,10 +130,11 @@ export default class PurpleAttack {
     if (!this.owner.sprite?.active) return;
 
     this.activeAttacks.forEach((attack) => {
-      if (attack?.active) {
+      if (attack?.active && !attack.hasHit) {  // Only check if hasn't hit yet
         targets.forEach((target) => {
           if (target?.getBounds && 
               Phaser.Geom.Intersects.CircleToRectangle(attack, target.getBounds())) {
+            attack.hasHit = true;  // Mark as having hit
             const isDead = target.takeDamage(CONSTANTS.purpleAttackDamage);
             if (isDead && Array.isArray(this.scene.enemies)) {
               this.scene.enemies = this.scene.enemies.filter(e => e !== target);
