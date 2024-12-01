@@ -23,6 +23,20 @@ class YellowAttack {
   }
 
   performYellowCircleAttack() {
+    // Check if there's a valid target first
+    let hasValidTarget = false;
+    const enemies = this.scene.enemies;
+    if (enemies) {
+      enemies.forEach((enemy) => {
+        if (enemy.isVisible() && enemy.targetingOutline.visible) {
+          hasValidTarget = true;
+        }
+      });
+    }
+
+    // Don't perform attack if there's no valid target
+    if (!hasValidTarget) return;
+
     const position = {
       x: this.yellowCircleOutline.x,
       y: this.yellowCircleOutline.y,
@@ -82,19 +96,23 @@ class YellowAttack {
       }
     });
 
-    if (closestEnemy) {
-      const angle = Phaser.Math.Angle.Between(
-        this.player.getPosition().x,
-        this.player.getPosition().y,
-        closestEnemy.getPosition().x,
-        closestEnemy.getPosition().y
-      );
-
-      this.yellowCircleOutline.x =
-        this.player.getPosition().x + distanceFromPlayer * Math.cos(angle);
-      this.yellowCircleOutline.y =
-        this.player.getPosition().y + distanceFromPlayer * Math.sin(angle);
+    if (!closestEnemy) {
+      this.yellowCircleOutline.setVisible(false);
+      return;
     }
+
+    this.yellowCircleOutline.setVisible(true);
+    const angle = Phaser.Math.Angle.Between(
+      this.player.getPosition().x,
+      this.player.getPosition().y,
+      closestEnemy.getPosition().x,
+      closestEnemy.getPosition().y
+    );
+
+    this.yellowCircleOutline.x =
+      this.player.getPosition().x + distanceFromPlayer * Math.cos(angle);
+    this.yellowCircleOutline.y =
+      this.player.getPosition().y + distanceFromPlayer * Math.sin(angle);
 
     enemies.forEach((enemy) => enemy.setTargetingVisible(false));
     if (closestEnemy) {
