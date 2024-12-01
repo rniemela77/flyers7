@@ -90,6 +90,7 @@ export default class GameScene extends Phaser.Scene {
       if (Phaser.Geom.Intersects.RectangleToRectangle(enemy.getBounds(), playerBounds)) {
         this.resetGame();
       }
+      enemy.yellowAttack.checkCollisions([this.player]);
     });
     this.yellowAttack.checkCollisions(this.enemies);
   }

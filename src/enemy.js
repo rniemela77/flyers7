@@ -2,6 +2,7 @@
 import { CONSTANTS } from "./constants";
 import Phaser from "phaser";
 import AttackController from "./attacks/AttackController";
+import YellowAttack from "./attacks/YellowAttack";
 
 export default class Enemy {
   constructor(scene, x, y) {
@@ -52,6 +53,8 @@ export default class Enemy {
       x: 0,
       y: 0
     };
+
+    this.yellowAttack = new YellowAttack(scene, this);
   }
 
   setupAttackTimer() {
@@ -89,6 +92,7 @@ export default class Enemy {
     this.healthBar.y += offsetY;
     this.targetingOutline.x += offsetX;
     this.targetingOutline.y += offsetY;
+    this.yellowAttack.updatePosition(offsetX, offsetY);
   }
 
   setTargetingVisible(visible) {
@@ -119,6 +123,7 @@ export default class Enemy {
     this.healthBar.destroy();
     this.healthBarBackground.destroy();
     this.targetingOutline.destroy();
+    this.yellowAttack.destroy();
   }
 
   isVisible() {
@@ -141,25 +146,30 @@ export default class Enemy {
     const dx = player.getPosition().x - this.sprite.x;
     const dy = player.getPosition().y - this.sprite.y;
     
-    // Normalize the direction and apply speed
+    // Normalize the direction and move
     const distance = Math.sqrt(dx * dx + dy * dy);
     if (distance > 0) {
       this.velocity.x = (dx / distance) * CONSTANTS.enemySpeed;
       this.velocity.y = (dy / distance) * CONSTANTS.enemySpeed;
       
-      // Update positions
-      this.x += this.velocity.x;
-      this.y += this.velocity.y;
       this.sprite.x += this.velocity.x;
       this.sprite.y += this.velocity.y;
       
-      // Update UI elements positions
-      this.healthBarBackground.x = this.sprite.x;
-      this.healthBarBackground.y = this.sprite.y - 35;
-      this.healthBar.x = this.sprite.x;
-      this.healthBar.y = this.sprite.y - 35;
-      this.targetingOutline.x = this.sprite.x;
-      this.targetingOutline.y = this.sprite.y;
+      // Update UI elements
+      this.updateUIPositions();
     }
+
+    // Update yellow attack targeting
+    this.yellowAttack.updateUIPositions([player]);
+  }
+
+  updateUIPositions() {
+    // Update UI elements positions
+    this.healthBarBackground.x = this.sprite.x;
+    this.healthBarBackground.y = this.sprite.y - 35;
+    this.healthBar.x = this.sprite.x;
+    this.healthBar.y = this.sprite.y - 35;
+    this.targetingOutline.x = this.sprite.x;
+    this.targetingOutline.y = this.sprite.y;
   }
 }
