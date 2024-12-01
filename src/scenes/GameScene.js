@@ -14,6 +14,7 @@ export default class GameScene extends Phaser.Scene {
     this.enemies = [];
     this.attack = null;
     this.yellowAttack = null;
+    this.grid = null;
   }
 
   preload() {
@@ -21,6 +22,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   create() {
+    this.createBackground();
     this.createPlayer();
     this.joystick = new Joystick(this, this.player);
     this.attack = new Attack(this);
@@ -63,9 +65,9 @@ export default class GameScene extends Phaser.Scene {
     this.joystick.updateJoystickVelocity();
     this.joystick.applyJoystickVelocity();
     this.player.update();
-    
-    this.enemies.forEach(enemy => enemy.update());
-    
+
+    this.enemies.forEach((enemy) => enemy.update());
+
     this.yellowAttack.updateUIPositions(this.enemies);
     this.checkCollisions();
     this.updateGameObjects();
@@ -88,14 +90,23 @@ export default class GameScene extends Phaser.Scene {
     const playerBounds = this.player.getBounds();
     this.enemies.forEach((enemy) => {
       // Check for body collisions
-      if (Phaser.Geom.Intersects.RectangleToRectangle(enemy.getBounds(), playerBounds)) {
+      if (
+        Phaser.Geom.Intersects.RectangleToRectangle(
+          enemy.getBounds(),
+          playerBounds
+        )
+      ) {
         this.resetGame();
       }
 
       // Check enemy's line attacks
-      enemy.attackController.activeAttacks.forEach(lineGraphic => {
+      enemy.attackController.activeAttacks.forEach((lineGraphic) => {
         if (lineGraphic?.attackLine) {
-          enemy.attackController.checkLineAttackCollision(lineGraphic.attackLine, this.player, lineGraphic);
+          enemy.attackController.checkLineAttackCollision(
+            lineGraphic.attackLine,
+            this.player,
+            lineGraphic
+          );
         }
       });
 
@@ -126,26 +137,36 @@ export default class GameScene extends Phaser.Scene {
     if (this.yellowAttackTimer) this.yellowAttackTimer.remove();
     if (this.lineAttackTimer) this.lineAttackTimer.remove();
     if (this.enemySpawnTimer) this.enemySpawnTimer.remove();
-    
+
     if (this.joystick) {
-      this.input.off("pointerdown", this.joystick.createJoystick, this.joystick);
+      this.input.off(
+        "pointerdown",
+        this.joystick.createJoystick,
+        this.joystick
+      );
       this.input.off("pointermove", this.joystick.moveJoystick, this.joystick);
       this.input.off("pointerup", this.joystick.removeJoystick, this.joystick);
       this.joystick.removeJoystick();
     }
-    
+
     if (this.yellowAttack) this.yellowAttack.destroy();
     if (this.attack) this.attack.destroy();
-    
-    this.enemies.forEach(enemy => enemy.destroy());
+
+    this.enemies.forEach((enemy) => enemy.destroy());
     this.enemies = [];
-    
+
     this.scene.restart();
   }
 
   updateGameObjects() {
     const offsetX = this.scale.width / 2 - this.player.getPosition().x;
     const offsetY = this.scale.height / 2 - this.player.getPosition().y;
+
+    // Update grid position
+    if (this.grid) {
+      this.grid.x += offsetX;
+      this.grid.y += offsetY;
+    }
 
     this.enemies.forEach((enemy) => {
       enemy.updatePosition(offsetX, offsetY);
@@ -155,4 +176,30 @@ export default class GameScene extends Phaser.Scene {
     this.yellowAttack.updateObjectPosition(offsetX, offsetY);
     this.player.updatePosition(offsetX, offsetY);
   }
-} 
+
+  createBackground() {
+    // Create a graphics object for the grid
+    this.grid = this.add.graphics();
+    this.grid.lineStyle(1, 0x3573C0, 1); // Thicker, darker lines with higher opacity
+
+    // Make the grid much larger than the screen to handle camera movement
+    const width = this.scale.width * 4;
+    const height = this.scale.height * 4;
+    const cellSize = 50; // Slightly larger cells
+
+    // Draw vertical lines
+    for (let x = 0; x <= width; x += cellSize) {
+      this.grid.moveTo(x - width / 2, -height / 2);
+      this.grid.lineTo(x - width / 2, height / 2);
+    }
+
+    // Draw horizontal lines
+    for (let y = 0; y <= height; y += cellSize) {
+      this.grid.moveTo(-width / 2, y - height / 2);
+      this.grid.lineTo(width / 2, y - height / 2);
+    }
+
+    this.grid.strokePath();
+    this.grid.setDepth(0);
+  }
+}
