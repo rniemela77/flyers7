@@ -5,6 +5,13 @@ const config = {
   type: Phaser.AUTO,
   width: window.innerWidth,
   height: window.innerHeight,
+  physics: {
+    default: 'arcade',
+    arcade: {
+      debug: true,
+      gravity: { y: 0 }
+    }
+  },
   scene: GameScene,
 };
 
