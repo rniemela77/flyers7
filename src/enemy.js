@@ -2,7 +2,6 @@
 import { CONSTANTS } from "./constants";
 import Phaser from "phaser";
 import AttackController from "./attacks/AttackController";
-import YellowAttack from "./attacks/YellowAttack";
 import PurpleAttack from "./attacks/PurpleAttack";
 
 export default class Enemy {
@@ -58,7 +57,6 @@ export default class Enemy {
       y: 0
     };
 
-    this.yellowAttack = new YellowAttack(scene, this);
     this.purpleAttack = new PurpleAttack(scene, this);
   }
 
@@ -97,7 +95,6 @@ export default class Enemy {
     this.healthBar.y += offsetY;
     this.targetingOutline.x += offsetX;
     this.targetingOutline.y += offsetY;
-    this.yellowAttack.updatePosition(offsetX, offsetY);
     this.purpleAttack.updatePosition(offsetX, offsetY);
   }
 
@@ -129,7 +126,6 @@ export default class Enemy {
     this.healthBar.destroy();
     this.healthBarBackground.destroy();
     this.targetingOutline.destroy();
-    this.yellowAttack.destroy();
     this.purpleAttack.destroy();
   }
 
@@ -165,9 +161,6 @@ export default class Enemy {
       // Update UI elements
       this.updateUIPositions();
     }
-
-    // Update yellow attack targeting
-    this.yellowAttack.updateUIPositions([player]);
   }
 
   updateUIPositions() {
