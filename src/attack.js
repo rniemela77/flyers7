@@ -55,4 +55,11 @@ export default class Attack {
       }
     });
   }
+
+  destroy() {
+    this.activeAttacks.forEach(attack => {
+      if (attack?.destroy) attack.destroy();
+    });
+    this.activeAttacks = [];
+  }
 }

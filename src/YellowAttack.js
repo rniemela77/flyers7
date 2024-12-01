@@ -113,6 +113,16 @@ class YellowAttack {
       }
     });
   }
+
+  destroy() {
+    if (this.yellowCircleOutline) {
+      this.yellowCircleOutline.destroy();
+    }
+    this.activeAttacks.forEach(attack => {
+      if (attack?.destroy) attack.destroy();
+    });
+    this.activeAttacks = [];
+  }
 }
 
 export default YellowAttack;

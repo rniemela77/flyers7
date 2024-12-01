@@ -37,21 +37,21 @@ export default class GameScene extends Phaser.Scene {
   }
 
   setupTimers() {
-    this.time.addEvent({
+    this.yellowAttackTimer = this.time.addEvent({
       delay: CONSTANTS.fillYellowCircleDelay,
       callback: this.yellowAttack.performYellowCircleAttack,
       callbackScope: this.yellowAttack,
       loop: true,
     });
 
-    this.time.addEvent({
+    this.lineAttackTimer = this.time.addEvent({
       delay: 500,
       callback: this.performLineAttack,
       callbackScope: this,
       loop: true,
     });
 
-    this.time.addEvent({
+    this.enemySpawnTimer = this.time.addEvent({
       delay: 3000,
       callback: this.createEnemy,
       callbackScope: this,
@@ -115,6 +115,24 @@ export default class GameScene extends Phaser.Scene {
   }
 
   resetGame() {
+    // Clean up timers and objects before restarting
+    if (this.yellowAttackTimer) this.yellowAttackTimer.remove();
+    if (this.lineAttackTimer) this.lineAttackTimer.remove();
+    if (this.enemySpawnTimer) this.enemySpawnTimer.remove();
+    
+    if (this.joystick) {
+      this.input.off("pointerdown", this.joystick.createJoystick, this.joystick);
+      this.input.off("pointermove", this.joystick.moveJoystick, this.joystick);
+      this.input.off("pointerup", this.joystick.removeJoystick, this.joystick);
+      this.joystick.removeJoystick();
+    }
+    
+    if (this.yellowAttack) this.yellowAttack.destroy();
+    if (this.attack) this.attack.destroy();
+    
+    this.enemies.forEach(enemy => enemy.destroy());
+    this.enemies = [];
+    
     this.scene.restart();
   }
 
