@@ -4,15 +4,16 @@ import Joystick from "./src/joystick";
 import Enemy from "./src/Enemy";
 import Attack from "./src/attack";
 import Player from "./src/player";
+import YellowAttack from "./src/YellowAttack";
 
 class GameScene extends Phaser.Scene {
   constructor() {
     super({ key: "GameScene" });
     this.player = null;
-    this.yellowCircleOutline = null;
     this.joystick = null;
     this.enemies = [];
     this.attack = null;
+    this.yellowAttack = null;
   }
 
   preload() {
@@ -23,7 +24,8 @@ class GameScene extends Phaser.Scene {
     this.createPlayer(); // Initialize the player first
     this.joystick = new Joystick(this, this.player); // Now this.player is not null
     this.attack = new Attack(this);
-    this.createYellowCircleOutline();
+    this.yellowAttack = new YellowAttack(this, this.player);
+    this.yellowAttack.createYellowCircleOutline();
     this.setupInputHandlers();
     this.setupTimers();
   }
@@ -36,7 +38,7 @@ class GameScene extends Phaser.Scene {
     this.player.update();
 
     this.moveEnemiesDownward();
-    this.updateUIPositions();
+    this.yellowAttack.updateUIPositions(this.enemies);
     this.checkCollisions();
     this.updateGameObjects();
   }
@@ -53,16 +55,11 @@ class GameScene extends Phaser.Scene {
     this.player = new Player(this, x, y);
   }
 
-  createGameObjects() {
-    this.createPlayer();
-    this.createYellowCircleOutline();
-  }
-
   setupTimers() {
     this.time.addEvent({
       delay: CONSTANTS.fillYellowCircleDelay,
-      callback: this.performYellowCircleAttack,
-      callbackScope: this,
+      callback: this.yellowAttack.performYellowCircleAttack,
+      callbackScope: this.yellowAttack,
       loop: true,
     });
 
@@ -82,24 +79,6 @@ class GameScene extends Phaser.Scene {
     });
   }
 
-  createPlayer() {
-    const x = this.scale.width / 2;
-    const y = this.scale.height / 2;
-    this.player = new Player(this, x, y);
-  }
-
-  createYellowCircleOutline() {
-    this.yellowCircleOutline = this.add.circle(
-      this.player.getPosition().x,
-      this.player.getPosition().y - 150,
-      CONSTANTS.circleRadius
-    );
-    this.yellowCircleOutline.setStrokeStyle(
-      2,
-      CONSTANTS.yellowCircleOutlineColor
-    );
-  }
-
   createEnemy() {
     const x = Phaser.Math.Between(0, this.scale.width);
     const y = 0; // Start at the top of the screen
@@ -111,47 +90,6 @@ class GameScene extends Phaser.Scene {
     this.enemies.forEach((enemy) => {
       enemy.moveDown();
     });
-  }
-
-  updateUIPositions() {
-    const distanceFromPlayer = 100;
-    let closestEnemy = null;
-    let minDistance = Infinity;
-
-    this.enemies.forEach((enemy) => {
-      if (!enemy.isVisible()) return;
-
-      const distance = enemy.getDistanceTo(
-        this.player.getPosition().x,
-        this.player.getPosition().y
-      );
-      if (distance < minDistance) {
-        minDistance = distance;
-        closestEnemy = enemy;
-      }
-    });
-
-    if (closestEnemy) {
-      const angle = Phaser.Math.Angle.Between(
-        this.player.getPosition().x,
-        this.player.getPosition().y,
-        closestEnemy.getPosition().x,
-        closestEnemy.getPosition().y
-      );
-
-      this.yellowCircleOutline.x =
-        this.player.getPosition().x + distanceFromPlayer * Math.cos(angle);
-      this.yellowCircleOutline.y =
-        this.player.getPosition().y + distanceFromPlayer * Math.sin(angle);
-    }
-
-    // Hide all targeting outlines
-    this.enemies.forEach((enemy) => enemy.setTargetingVisible(false));
-
-    // Show targeting outline for the closest enemy
-    if (closestEnemy) {
-      closestEnemy.setTargetingVisible(true);
-    }
   }
 
   checkCollisions() {
@@ -169,14 +107,6 @@ class GameScene extends Phaser.Scene {
 
     // Check collisions between attacks and enemies
     this.attack.checkCollisions(this.enemies);
-  }
-
-  performYellowCircleAttack() {
-    const position = {
-      x: this.yellowCircleOutline.x,
-      y: this.yellowCircleOutline.y,
-    };
-    this.attack.yellowCircleAttack(position);
   }
 
   performLineAttack() {
@@ -217,14 +147,9 @@ class GameScene extends Phaser.Scene {
       enemy.updatePosition(offsetX, offsetY);
     });
     this.attack.updateAttacks(offsetX, offsetY);
-    this.updateObjectPosition(this.yellowCircleOutline, offsetX, offsetY);
+    this.yellowAttack.updateObjectPosition(offsetX, offsetY);
 
     this.player.updatePosition(offsetX, offsetY);
-  }
-
-  updateObjectPosition(object, offsetX, offsetY) {
-    object.x += offsetX;
-    object.y += offsetY;
   }
 }
 
