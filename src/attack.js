@@ -20,6 +20,10 @@ export default class Attack {
     lineGraphic.strokeLineShape(attackLine);
     lineGraphic.setDepth(1);
 
+    this.scene.enemies.forEach(enemy => {
+      this.checkLineAttackCollision(attackLine, enemy);
+    });
+
     this.activeAttacks.push(lineGraphic);
 
     this.scene.time.delayedCall(CONSTANTS.lineAttackDuration, () => {
