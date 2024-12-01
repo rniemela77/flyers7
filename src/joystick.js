@@ -10,6 +10,7 @@ class Joystick {
     
     // Create the indicator line
     this.indicatorLine = scene.add.line(0, 0, 0, 0, 0, 0, 0xffffff);
+    this.indicatorLine.setDepth(12);
     
     // Initialize velocities
     this.velocityX = 0;
