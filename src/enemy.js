@@ -8,7 +8,7 @@ import StickAttack from "./attacks/StickAttack";
 export default class Enemy {
   constructor(scene, x, y) {
     this.scene = scene;
-    this.health = CONSTANTS.resetHealth;
+    this.health = CONSTANTS.enemyMaxHealth;
     this.x = x;
     this.y = y;
 
@@ -115,7 +115,7 @@ export default class Enemy {
 
   takeDamage(damage) {
     this.health = Math.max(this.health - damage, 0);
-    this.healthBar.width = (this.health / CONSTANTS.resetHealth) * CONSTANTS.healthBarWidth;
+    this.healthBar.width = (this.health / CONSTANTS.enemyMaxHealth) * CONSTANTS.healthBarWidth;
 
     if (this.health === 0) {
       this.destroy();

@@ -5,7 +5,7 @@ import { CONSTANTS } from "./constants";
 export default class Player {
   constructor(scene, x, y) {
     this.scene = scene;
-    this.health = CONSTANTS.playerHealth || 100;
+    this.health = CONSTANTS.playerMaxHealth;
 
     // Create player sprite (square)
     this.sprite = scene.add.rectangle(
@@ -73,7 +73,7 @@ export default class Player {
   takeDamage(damage) {
     this.health = Math.max(this.health - damage, 0);
     // Update health bar width based on current health
-    this.healthBar.width = (this.health / CONSTANTS.playerHealth) * CONSTANTS.healthBarWidth;
+    this.healthBar.width = (this.health / CONSTANTS.playerMaxHealth) * CONSTANTS.healthBarWidth;
     
     if (this.health === 0) {
       this.destroy();
