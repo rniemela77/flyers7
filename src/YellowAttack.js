@@ -6,6 +6,7 @@ class YellowAttack {
     this.scene = scene;
     this.player = player;
     this.yellowCircleOutline = null;
+    this.activeAttacks = [];
   }
 
   createYellowCircleOutline() {
@@ -25,7 +26,40 @@ class YellowAttack {
       x: this.yellowCircleOutline.x,
       y: this.yellowCircleOutline.y,
     };
-    this.scene.attack.yellowCircleAttack(position);
+    
+    const yellowCircle = this.scene.add.circle(
+      position.x,
+      position.y,
+      CONSTANTS.circleRadius,
+      CONSTANTS.yellowCircleOutlineColor
+    );
+
+    this.activeAttacks.push(yellowCircle);
+
+    this.scene.time.delayedCall(CONSTANTS.fillYellowCircleDuration, () => {
+      yellowCircle.destroy();
+      this.activeAttacks = this.activeAttacks.filter(
+        (attack) => attack !== yellowCircle
+      );
+    });
+  }
+
+  checkCollisions(enemies) {
+    this.activeAttacks.forEach((attack) => {
+      if (attack instanceof Phaser.GameObjects.Arc) {
+        enemies.forEach((enemy) => {
+          if (
+            enemy.isVisible() &&
+            Phaser.Geom.Intersects.CircleToCircle(attack, enemy.sprite)
+          ) {
+            const isDead = enemy.takeDamage(CONSTANTS.reduceHealthAmount);
+            if (isDead) {
+              enemies.splice(enemies.indexOf(enemy), 1);
+            }
+          }
+        });
+      }
+    });
   }
 
   updateUIPositions(enemies) {
@@ -60,10 +94,7 @@ class YellowAttack {
         this.player.getPosition().y + distanceFromPlayer * Math.sin(angle);
     }
 
-    // Hide all targeting outlines
     enemies.forEach((enemy) => enemy.setTargetingVisible(false));
-
-    // Show targeting outline for the closest enemy
     if (closestEnemy) {
       closestEnemy.setTargetingVisible(true);
     }
@@ -72,6 +103,13 @@ class YellowAttack {
   updateObjectPosition(offsetX, offsetY) {
     this.yellowCircleOutline.x += offsetX;
     this.yellowCircleOutline.y += offsetY;
+    
+    this.activeAttacks.forEach((attack) => {
+      if (attack instanceof Phaser.GameObjects.Arc) {
+        attack.x += offsetX;
+        attack.y += offsetY;
+      }
+    });
   }
 }
 

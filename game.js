@@ -105,8 +105,8 @@ class GameScene extends Phaser.Scene {
       }
     });
 
-    // Check collisions between attacks and enemies
-    this.attack.checkCollisions(this.enemies);
+    // Check yellow attack collisions
+    this.yellowAttack.checkCollisions(this.enemies);
   }
 
   performLineAttack() {
