@@ -6,6 +6,8 @@ export default class PurpleAttack {
     this.scene = scene;
     this.owner = owner;
     this.activeAttacks = [];
+    this.growingCircle = null;
+    this.growingTween = null;
     
     // Create the outline that will be used for telegraphing
     this.purpleCircleOutline = scene.add.circle(
@@ -34,16 +36,44 @@ export default class PurpleAttack {
     // Don't perform attack if owner is destroyed
     if (!this.owner.sprite?.active) return;
 
-    // Hide the outline
-    this.purpleCircleOutline.setVisible(false);
-    
-    // Perform the attack
-    this.performPurpleCircleAttack();
+    // Create growing circle animation
+    const position = this.owner.getPosition();
+    this.growingCircle = this.scene.add.circle(
+      position.x,
+      position.y,
+      1,  // Start with 1px radius
+      CONSTANTS.purpleCircleColor
+    );
+    this.growingCircle.setAlpha(0.3);  // Set low opacity
+    this.growingCircle.setDepth(1);
 
-    // After attack duration + 1 second, show the outline again
-    this.scene.time.delayedCall(CONSTANTS.purpleAttackDuration + 1000, () => {
-      if (this.owner.sprite?.active) {
-        this.purpleCircleOutline.setVisible(true);
+    // Animate the circle growing
+    this.growingTween = this.scene.tweens.add({
+      targets: this.growingCircle,
+      radius: CONSTANTS.purpleCircleRadius,
+      duration: 1000,  // 1 second growth
+      ease: 'Linear',
+      onComplete: () => {
+        // Stop and remove the tween
+        if (this.growingTween) {
+          this.growingTween.stop();
+          this.growingTween = null;
+        }
+        // Destroy growing circle and perform attack
+        if (this.growingCircle) {
+          this.growingCircle.destroy();
+          this.growingCircle = null;
+        }
+        // Hide the outline when the attack actually fires
+        this.purpleCircleOutline.setVisible(false);
+        this.performPurpleCircleAttack();
+        
+        // After attack duration + 1 second, show the outline again
+        this.scene.time.delayedCall(CONSTANTS.purpleAttackDuration + 1000, () => {
+          if (this.owner.sprite?.active) {
+            this.purpleCircleOutline.setVisible(true);
+          }
+        });
       }
     });
   }
@@ -79,6 +109,12 @@ export default class PurpleAttack {
       const position = this.owner.getPosition();
       this.purpleCircleOutline.x = position.x;
       this.purpleCircleOutline.y = position.y;
+
+      // Update growing circle position if it exists
+      if (this.growingCircle?.active) {
+        this.growingCircle.x = position.x;
+        this.growingCircle.y = position.y;
+      }
     }
     
     this.activeAttacks.forEach((attack) => {
@@ -110,6 +146,15 @@ export default class PurpleAttack {
   destroy() {
     if (this.purpleCircleOutline) {
       this.purpleCircleOutline.destroy();
+    }
+    // Clean up growing circle and its tween
+    if (this.growingTween) {
+      this.growingTween.stop();
+      this.growingTween = null;
+    }
+    if (this.growingCircle?.active) {
+      this.growingCircle.destroy();
+      this.growingCircle = null;
     }
     this.activeAttacks.forEach(attack => {
       if (attack?.active) {
