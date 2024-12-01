@@ -19,4 +19,10 @@ export const CONSTANTS = {
   resetHealth: 100,
   lineAttackDamage: 20,
   lineAttackDuration: 100, // duration in milliseconds
+  enemyAttackRange: 300,
+  enemyAttackInterval: 2000,
+  enemyAttackDamage: 15,
+  playerHealth: 100,
+  healthBarOffset: 10,
+  enemySpeed: 2,
 };

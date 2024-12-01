@@ -63,7 +63,9 @@ export default class GameScene extends Phaser.Scene {
     this.joystick.updateJoystickVelocity();
     this.joystick.applyJoystickVelocity();
     this.player.update();
-    this.moveEnemiesDownward();
+    
+    this.enemies.forEach(enemy => enemy.update());
+    
     this.yellowAttack.updateUIPositions(this.enemies);
     this.checkCollisions();
     this.updateGameObjects();
@@ -80,12 +82,6 @@ export default class GameScene extends Phaser.Scene {
     const y = 0;
     const enemy = new Enemy(this, x, y);
     this.enemies.push(enemy);
-  }
-
-  moveEnemiesDownward() {
-    this.enemies.forEach((enemy) => {
-      enemy.moveDown();
-    });
   }
 
   checkCollisions() {
@@ -127,6 +123,7 @@ export default class GameScene extends Phaser.Scene {
 
     this.enemies.forEach((enemy) => {
       enemy.updatePosition(offsetX, offsetY);
+      enemy.attackController.updateAttacks(offsetX, offsetY);
     });
     this.attack.updateAttacks(offsetX, offsetY);
     this.yellowAttack.updateObjectPosition(offsetX, offsetY);
