@@ -91,6 +91,7 @@ export default class GameScene extends Phaser.Scene {
         this.resetGame();
       }
       enemy.yellowAttack.checkCollisions([this.player]);
+      enemy.purpleAttack.checkCollisions([this.player]);
     });
     this.yellowAttack.checkCollisions(this.enemies);
   }

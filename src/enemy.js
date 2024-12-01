@@ -3,6 +3,7 @@ import { CONSTANTS } from "./constants";
 import Phaser from "phaser";
 import AttackController from "./attacks/AttackController";
 import YellowAttack from "./attacks/YellowAttack";
+import PurpleAttack from "./attacks/PurpleAttack";
 
 export default class Enemy {
   constructor(scene, x, y) {
@@ -55,6 +56,7 @@ export default class Enemy {
     };
 
     this.yellowAttack = new YellowAttack(scene, this);
+    this.purpleAttack = new PurpleAttack(scene, this);
   }
 
   setupAttackTimer() {
@@ -93,6 +95,7 @@ export default class Enemy {
     this.targetingOutline.x += offsetX;
     this.targetingOutline.y += offsetY;
     this.yellowAttack.updatePosition(offsetX, offsetY);
+    this.purpleAttack.updatePosition(offsetX, offsetY);
   }
 
   setTargetingVisible(visible) {
@@ -124,6 +127,7 @@ export default class Enemy {
     this.healthBarBackground.destroy();
     this.targetingOutline.destroy();
     this.yellowAttack.destroy();
+    this.purpleAttack.destroy();
   }
 
   isVisible() {

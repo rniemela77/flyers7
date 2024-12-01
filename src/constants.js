@@ -16,7 +16,7 @@ export const CONSTANTS = {
   fillYellowCircleDelay: 1000,
   fillYellowCircleDuration: 250,
   reduceHealthAmount: 45,
-  resetHealth: 100,
+  resetHealth: 200,
   lineAttackDamage: 20,
   lineAttackDuration: 100, // duration in milliseconds
   enemyAttackRange: 300,
@@ -25,4 +25,10 @@ export const CONSTANTS = {
   playerHealth: 100,
   healthBarOffset: 10,
   enemySpeed: 2,
+  purpleCircleRadius: 75,
+  purpleCircleColor: 0x800080,
+  purpleTelegraphDuration: 1000, // 1 second telegraph
+  purpleAttackDuration: 250, // Attack lasts 250ms
+  purpleAttackCooldown: 2000, // 2 seconds between attacks
+  purpleAttackDamage: 30,
 };

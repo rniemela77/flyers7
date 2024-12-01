@@ -1,6 +1,8 @@
 import Character from "./Character";
 import { CONSTANTS } from "../constants";
 import AttackController from "../attacks/AttackController";
+import YellowAttack from "../attacks/YellowAttack";
+import PurpleAttack from "../attacks/PurpleAttack";
 
 export default class Enemy extends Character {
   constructor(scene, x, y) {
@@ -24,6 +26,9 @@ export default class Enemy extends Character {
       x: 0,
       y: 0
     };
+
+    this.yellowAttack = new YellowAttack(scene, this);
+    this.purpleAttack = new PurpleAttack(scene, this);
   }
 
   update() {
@@ -74,9 +79,19 @@ export default class Enemy extends Character {
   destroy() {
     super.destroy();
     this.targetingOutline.destroy();
+    this.yellowAttack.destroy();
+    this.purpleAttack.destroy();
   }
 
   getRadius() {
     return this.sprite.radius;
+  }
+
+  updatePosition(offsetX, offsetY) {
+    super.updatePosition(offsetX, offsetY);
+    this.targetingOutline.x += offsetX;
+    this.targetingOutline.y += offsetY;
+    this.yellowAttack.updatePosition(offsetX, offsetY);
+    this.purpleAttack.updatePosition(offsetX, offsetY);
   }
 } 
