@@ -9,8 +9,6 @@ export default class Enemy {
   constructor(scene, x, y) {
     this.scene = scene;
     this.health = CONSTANTS.enemyMaxHealth;
-    this.x = x;
-    this.y = y;
 
     // Create enemy sprite
     this.sprite = scene.add.circle(
@@ -19,6 +17,13 @@ export default class Enemy {
       CONSTANTS.circleRadius,
       CONSTANTS.circleColor
     );
+    
+    // Enable physics
+    scene.physics.add.existing(this.sprite, false);
+    this.sprite.body.setBounce(0);
+    this.sprite.body.setDrag(0);
+    this.sprite.body.setFriction(0);
+    
     this.sprite.setDepth(10);
 
     // Create health bar background
@@ -52,57 +57,43 @@ export default class Enemy {
     // Add attack timer
     this.setupAttackTimer();
 
-    // Add velocity properties
-    this.velocity = {
-      x: 0,
-      y: 0
-    };
-
     this.purpleAttack = new PurpleAttack(scene, this);
     this.stickAttack = new StickAttack(scene, this);
   }
 
-  setupAttackTimer() {
-    this.scene.time.addEvent({
-      delay: 2000, // Attack every 2 seconds
-      callback: this.attackPlayer,
-      callbackScope: this,
-      loop: true
-    });
-  }
-
-  attackPlayer() {
+  update() {
     const player = this.scene.player;
-    if (player && this.getDistanceTo(player.getPosition().x, player.getPosition().y) < CONSTANTS.enemyAttackRange) {
-      const attackLine = this.attackController.lineAttack(player);
+    if (!player || !this.sprite || !this.sprite.body) return;
+
+    // Calculate direction to player
+    const dx = player.getPosition().x - this.sprite.x;
+    const dy = player.getPosition().y - this.sprite.y;
+    
+    // Normalize the direction and set velocity
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    if (distance > 0) {
+      // Scale up the velocity significantly for faster movement
+      const velocityX = (dx / distance) * CONSTANTS.enemySpeed * 15;
+      const velocityY = (dy / distance) * CONSTANTS.enemySpeed * 15;
+      
+      this.sprite.body.setVelocity(velocityX, velocityY);
+      
+      // Update UI elements
+      this.updateUIPositions();
+      
+      // Update stick attack
+      this.stickAttack.update();
     }
   }
 
-  moveDown() {
-    this.y += 1;
-    this.sprite.y += 1;
-    this.healthBarBackground.y += 1;
-    this.healthBar.y += 1;
-    this.targetingOutline.y += 1;
-  }
-
-  updatePosition(offsetX, offsetY) {
-    this.x += offsetX;
-    this.y += offsetY;
-    this.sprite.x += offsetX;
-    this.sprite.y += offsetY;
-    this.healthBarBackground.x += offsetX;
-    this.healthBarBackground.y += offsetY;
-    this.healthBar.x += offsetX;
-    this.healthBar.y += offsetY;
-    this.targetingOutline.x += offsetX;
-    this.targetingOutline.y += offsetY;
-    this.purpleAttack.updatePosition(offsetX, offsetY);
-    this.stickAttack.updatePosition(offsetX, offsetY);
-  }
-
-  setTargetingVisible(visible) {
-    this.targetingOutline.setVisible(visible);
+  updateUIPositions() {
+    // Update UI elements positions
+    this.healthBarBackground.x = this.sprite.x;
+    this.healthBarBackground.y = this.sprite.y - 35;
+    this.healthBar.x = this.sprite.x;
+    this.healthBar.y = this.sprite.y - 35;
+    this.targetingOutline.x = this.sprite.x;
+    this.targetingOutline.y = this.sprite.y;
   }
 
   getPosition() {
@@ -125,12 +116,24 @@ export default class Enemy {
   }
 
   destroy() {
-    this.sprite.destroy();
-    this.healthBar.destroy();
-    this.healthBarBackground.destroy();
-    this.targetingOutline.destroy();
-    this.purpleAttack.destroy();
-    this.stickAttack.destroy();
+    if (this.sprite && this.sprite.body) {
+      this.sprite.destroy();
+    }
+    if (this.healthBar) {
+      this.healthBar.destroy();
+    }
+    if (this.healthBarBackground) {
+      this.healthBarBackground.destroy();
+    }
+    if (this.targetingOutline) {
+      this.targetingOutline.destroy();
+    }
+    if (this.purpleAttack) {
+      this.purpleAttack.destroy();
+    }
+    if (this.stickAttack) {
+      this.stickAttack.destroy();
+    }
   }
 
   isVisible() {
@@ -145,38 +148,23 @@ export default class Enemy {
     return this.sprite.radius;
   }
 
-  update() {
-    const player = this.scene.player;
-    if (!player) return;
-
-    // Calculate direction to player
-    const dx = player.getPosition().x - this.sprite.x;
-    const dy = player.getPosition().y - this.sprite.y;
-    
-    // Normalize the direction and move
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    if (distance > 0) {
-      this.velocity.x = (dx / distance) * CONSTANTS.enemySpeed;
-      this.velocity.y = (dy / distance) * CONSTANTS.enemySpeed;
-      
-      this.sprite.x += this.velocity.x;
-      this.sprite.y += this.velocity.y;
-      
-      // Update UI elements
-      this.updateUIPositions();
-      
-      // Update stick attack
-      this.stickAttack.update();
-    }
+  setTargetingVisible(visible) {
+    this.targetingOutline.setVisible(visible);
   }
 
-  updateUIPositions() {
-    // Update UI elements positions
-    this.healthBarBackground.x = this.sprite.x;
-    this.healthBarBackground.y = this.sprite.y - 35;
-    this.healthBar.x = this.sprite.x;
-    this.healthBar.y = this.sprite.y - 35;
-    this.targetingOutline.x = this.sprite.x;
-    this.targetingOutline.y = this.sprite.y;
+  setupAttackTimer() {
+    this.scene.time.addEvent({
+      delay: 2000,
+      callback: this.attackPlayer,
+      callbackScope: this,
+      loop: true
+    });
+  }
+
+  attackPlayer() {
+    const player = this.scene.player;
+    if (player && this.getDistanceTo(player.getPosition().x, player.getPosition().y) < CONSTANTS.enemyAttackRange) {
+      const attackLine = this.attackController.lineAttack(player);
+    }
   }
 }

@@ -15,6 +15,7 @@ export default class GameScene extends Phaser.Scene {
     this.attack = null;
     this.yellowAttack = null;
     this.grid = null;
+    this.obstacles = null;
   }
 
   preload() {
@@ -23,6 +24,7 @@ export default class GameScene extends Phaser.Scene {
 
   create() {
     this.createBackground();
+    this.createObstacles();
     this.createPlayer();
     this.joystick = new Joystick(this, this.player);
     this.attack = new Attack(this);
@@ -30,6 +32,9 @@ export default class GameScene extends Phaser.Scene {
     this.yellowAttack.createYellowCircleOutline();
     this.setupInputHandlers();
     this.setupTimers();
+
+    // Set up camera to follow player
+    this.cameras.main.startFollow(this.player.sprite);
   }
 
   setupInputHandlers() {
@@ -66,7 +71,14 @@ export default class GameScene extends Phaser.Scene {
     this.joystick.applyJoystickVelocity();
     this.player.update();
 
-    this.enemies.forEach((enemy) => enemy.update());
+    // Update enemies and remove destroyed ones
+    this.enemies = this.enemies.filter(enemy => {
+      if (enemy.sprite && enemy.sprite.active) {
+        enemy.update();
+        return true;
+      }
+      return false;
+    });
 
     this.yellowAttack.updateUIPositions(this.enemies);
     this.checkCollisions();
@@ -77,6 +89,7 @@ export default class GameScene extends Phaser.Scene {
     const x = this.scale.width / 2;
     const y = this.scale.height / 2;
     this.player = new Player(this, x, y);
+    this.physics.add.collider(this.player.sprite, this.obstacles);
   }
 
   createEnemy() {
@@ -84,21 +97,12 @@ export default class GameScene extends Phaser.Scene {
     const y = 0;
     const enemy = new Enemy(this, x, y);
     this.enemies.push(enemy);
+    this.physics.add.collider(enemy.sprite, this.obstacles);
+    this.physics.add.collider(enemy.sprite, this.player.sprite);
   }
 
   checkCollisions() {
-    const playerBounds = this.player.getBounds();
     this.enemies.forEach((enemy) => {
-      // Check for body collisions
-      if (
-        Phaser.Geom.Intersects.RectangleToRectangle(
-          enemy.getBounds(),
-          playerBounds
-        )
-      ) {
-        this.resetGame();
-      }
-
       // Check enemy's line attacks
       enemy.attackController.activeAttacks.forEach((lineGraphic) => {
         if (lineGraphic?.attackLine) {
@@ -152,29 +156,21 @@ export default class GameScene extends Phaser.Scene {
     if (this.yellowAttack) this.yellowAttack.destroy();
     if (this.attack) this.attack.destroy();
 
-    this.enemies.forEach((enemy) => enemy.destroy());
+    // Clean up enemies
+    this.enemies.forEach(enemy => {
+      if (enemy && enemy.destroy) {
+        enemy.destroy();
+      }
+    });
     this.enemies = [];
 
     this.scene.restart();
   }
 
   updateGameObjects() {
-    const offsetX = this.scale.width / 2 - this.player.getPosition().x;
-    const offsetY = this.scale.height / 2 - this.player.getPosition().y;
-
-    // Update grid position
-    if (this.grid) {
-      this.grid.x += offsetX;
-      this.grid.y += offsetY;
-    }
-
-    this.enemies.forEach((enemy) => {
-      enemy.updatePosition(offsetX, offsetY);
-      enemy.attackController.updateAttacks(offsetX, offsetY);
-    });
-    this.attack.updateAttacks(offsetX, offsetY);
-    this.yellowAttack.updateObjectPosition(offsetX, offsetY);
-    this.player.updatePosition(offsetX, offsetY);
+    this.yellowAttack.updateUIPositions(this.enemies);
+    this.attack.updateAttacks(0, 0);
+    this.yellowAttack.updateObjectPosition(0, 0);
   }
 
   createBackground() {
@@ -201,5 +197,26 @@ export default class GameScene extends Phaser.Scene {
 
     this.grid.strokePath();
     this.grid.setDepth(0);
+  }
+
+  createObstacles() {
+    // Create a physics group for obstacles
+    this.obstacles = this.physics.add.staticGroup();
+
+    // Create obstacles in screen coordinates
+    const obstaclePositions = [
+      { x: 200, y: 200, width: 100, height: 100 },
+      { x: 600, y: 400, width: 150, height: 80 },
+      { x: 400, y: 600, width: 80, height: 200 },
+      { x: 800, y: 200, width: 120, height: 120 },
+      { x: 200, y: 700, width: 180, height: 60 }
+    ];
+
+    obstaclePositions.forEach(({ x, y, width, height }) => {
+      const obstacle = this.add.rectangle(x, y, width, height, 0x4a4a4a);
+      this.obstacles.add(obstacle);
+      obstacle.body.setSize(width, height);
+      obstacle.body.immovable = true;
+    });
   }
 }

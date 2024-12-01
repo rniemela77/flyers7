@@ -15,7 +15,16 @@ export default class Player {
       CONSTANTS.squareSize,
       CONSTANTS.squareColor
     );
+    
+    // Enable physics on the sprite
+    scene.physics.add.existing(this.sprite);
     this.sprite.setDepth(10);
+
+    // Configure physics body
+    this.sprite.body.setCollideWorldBounds(true);
+    this.sprite.body.setBounce(0);
+    this.sprite.body.setDrag(0);
+    this.sprite.body.setFriction(0);
 
     // Create health bar background
     this.healthBarBackground = scene.add.rectangle(
@@ -36,17 +45,11 @@ export default class Player {
       CONSTANTS.healthBarColor
     );
     this.healthBar.setDepth(11);
-
-    // Initialize player properties
-    this.velocity = { x: 0, y: 0 };
   }
 
   // Method to update the player's position
   update() {
-    this.sprite.x += this.velocity.x;
-    this.sprite.y += this.velocity.y;
-
-    // Update health bar position
+    // Update health bar position to follow the sprite
     this.healthBarBackground.x = this.sprite.x;
     this.healthBarBackground.y = this.sprite.y - CONSTANTS.squareSize - CONSTANTS.healthBarOffset;
     this.healthBar.x = this.sprite.x;
@@ -55,8 +58,8 @@ export default class Player {
 
   // Method to set the player's velocity
   setVelocity(x, y) {
-    this.velocity.x = x;
-    this.velocity.y = y;
+    // Multiply velocity by 300 to make movement faster
+    this.sprite.body.setVelocity(x * 300, y * 300);
   }
 
   // Method to get the player's position
@@ -90,19 +93,9 @@ export default class Player {
     this.healthBarBackground.destroy();
   }
 
-  // Method to reset player position (optional)
+  // Method to reset position (optional)
   resetPosition(x, y) {
     this.sprite.x = x;
     this.sprite.y = y;
-  }
-
-  // Method to update position based on camera offset
-  updatePosition(offsetX, offsetY) {
-    this.sprite.x += offsetX;
-    this.sprite.y += offsetY;
-    this.healthBarBackground.x += offsetX;
-    this.healthBarBackground.y += offsetY;
-    this.healthBar.x += offsetX;
-    this.healthBar.y += offsetY;
   }
 }
