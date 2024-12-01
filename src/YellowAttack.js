@@ -19,6 +19,7 @@ class YellowAttack {
       2,
       CONSTANTS.yellowCircleOutlineColor
     );
+    this.yellowCircleOutline.setDepth(1);
   }
 
   performYellowCircleAttack() {
@@ -33,6 +34,7 @@ class YellowAttack {
       CONSTANTS.circleRadius,
       CONSTANTS.yellowCircleOutlineColor
     );
+    yellowCircle.setDepth(1);
 
     this.activeAttacks.push(yellowCircle);
 

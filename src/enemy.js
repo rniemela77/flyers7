@@ -19,6 +19,7 @@ export default class Enemy {
       CONSTANTS.circleRadius,
       CONSTANTS.circleColor
     );
+    this.sprite.setDepth(10);
 
     // Create health bar background
     this.healthBarBackground = scene.add.rectangle(
@@ -28,6 +29,7 @@ export default class Enemy {
       CONSTANTS.healthBarHeight,
       CONSTANTS.healthBarBackgroundColor
     );
+    this.healthBarBackground.setDepth(11);
 
     // Create health bar
     this.healthBar = scene.add.rectangle(
@@ -37,6 +39,7 @@ export default class Enemy {
       CONSTANTS.healthBarHeight,
       CONSTANTS.healthBarColor
     );
+    this.healthBar.setDepth(11);
 
     // Create targeting outline
     this.targetingOutline = scene.add.circle(x, y, CONSTANTS.circleRadius + 5);

@@ -15,6 +15,7 @@ export default class Player {
       CONSTANTS.squareSize,
       CONSTANTS.squareColor
     );
+    this.sprite.setDepth(10);
 
     // Create health bar background
     this.healthBarBackground = scene.add.rectangle(
@@ -24,6 +25,7 @@ export default class Player {
       CONSTANTS.healthBarHeight,
       CONSTANTS.healthBarBackgroundColor
     );
+    this.healthBarBackground.setDepth(11);
 
     // Create health bar
     this.healthBar = scene.add.rectangle(
@@ -33,6 +35,7 @@ export default class Player {
       CONSTANTS.healthBarHeight,
       CONSTANTS.healthBarColor
     );
+    this.healthBar.setDepth(11);
 
     // Initialize player properties
     this.velocity = { x: 0, y: 0 };

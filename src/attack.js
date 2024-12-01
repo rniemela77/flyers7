@@ -18,6 +18,7 @@ export default class Attack {
     const lineGraphic = this.scene.add.graphics();
     lineGraphic.lineStyle(2, 0xff0000);
     lineGraphic.strokeLineShape(attackLine);
+    lineGraphic.setDepth(1);
 
     this.activeAttacks.push(lineGraphic);
 
