@@ -18,6 +18,7 @@ export default class GameScene extends Phaser.Scene {
     this.yellowAttack = null;
     this.grid = null;
     this.obstacles = null;
+    this.enemyCollisionGroup = null;
   }
 
   preload() {
@@ -29,7 +30,10 @@ export default class GameScene extends Phaser.Scene {
 
   create() {
     // Set world bounds
-    this.physics.world.setBounds(0, 0, 1000, 1000); // Smaller world
+    this.physics.world.setBounds(0, 0, 1000, 1000);
+    
+    // Create collision groups
+    this.enemyCollisionGroup = this.physics.add.group();
 
     this.createBackground();
     this.createBoundaryWalls();
@@ -44,7 +48,12 @@ export default class GameScene extends Phaser.Scene {
 
     // Set up camera to follow player with deadzone
     this.cameras.main.startFollow(this.player.sprite, true, 0.1, 0.1);
-    this.cameras.main.setZoom(1.0); // Adjust zoom if needed
+    this.cameras.main.setZoom(1.0);
+
+    // Set up collision groups once
+    this.physics.add.collider(this.enemyCollisionGroup, this.obstacles);
+    this.physics.add.collider(this.enemyCollisionGroup, this.walls);
+    this.physics.add.collider(this.enemyCollisionGroup, this.player.sprite);
   }
 
   setupInputHandlers() {
@@ -81,22 +90,24 @@ export default class GameScene extends Phaser.Scene {
     this.joystick.applyJoystickVelocity();
     this.player.update();
 
-    // Update enemies and remove destroyed ones
-    this.enemies = this.enemies.filter(enemy => {
-      if (enemy.sprite && enemy.sprite.active) {
+    // Update active enemies
+    for (let i = this.enemies.length - 1; i >= 0; i--) {
+      const enemy = this.enemies[i];
+      if (enemy.sprite?.active) {
         enemy.update();
-        return true;
+      } else {
+        this.enemies.splice(i, 1);
       }
-      return false;
-    });
+    }
 
+    // Single update for UI and objects
     this.yellowAttack.updateUIPositions(this.enemies);
-    this.checkCollisions();
-    this.updateGameObjects();
+    this.attack.updateAttacks(0, 0);
+    this.yellowAttack.updateObjectPosition(0, 0);
   }
 
   createPlayer() {
-    const x = 500; // Start in center of world
+    const x = 500;
     const y = 500;
     this.player = new Player(this, x, y);
     this.physics.add.collider(this.player.sprite, this.obstacles);
@@ -104,29 +115,22 @@ export default class GameScene extends Phaser.Scene {
   }
 
   createEnemy() {
-    // Spawn enemies at random positions in the world
     const x = Phaser.Math.Between(100, 900);
     const y = Phaser.Math.Between(100, 900);
     const enemy = new Enemy(this, x, y);
     this.enemies.push(enemy);
-    this.physics.add.collider(enemy.sprite, this.obstacles);
-    this.physics.add.collider(enemy.sprite, this.walls);
-    this.physics.add.collider(enemy.sprite, this.player.sprite);
-  }
-
-  checkCollisions() {
-    // All collision checks are now handled in the individual attack classes
-    // on the first frame of the attack only
-    return;
+    this.enemyCollisionGroup.add(enemy.sprite);
   }
 
   performLineAttack() {
     let targetEnemy = null;
-    this.enemies.forEach((enemy) => {
+    for (let i = 0; i < this.enemies.length; i++) {
+      const enemy = this.enemies[i];
       if (enemy.isVisible() && enemy.targetingOutline.visible) {
         targetEnemy = enemy;
+        break;
       }
-    });
+    }
 
     if (targetEnemy) {
       const startPosition = this.player.getPosition();
@@ -136,17 +140,12 @@ export default class GameScene extends Phaser.Scene {
   }
 
   resetGame() {
-    // Clean up timers and objects before restarting
     if (this.yellowAttackTimer) this.yellowAttackTimer.remove();
     if (this.lineAttackTimer) this.lineAttackTimer.remove();
     if (this.enemySpawnTimer) this.enemySpawnTimer.remove();
 
     if (this.joystick) {
-      this.input.off(
-        "pointerdown",
-        this.joystick.createJoystick,
-        this.joystick
-      );
+      this.input.off("pointerdown", this.joystick.createJoystick, this.joystick);
       this.input.off("pointermove", this.joystick.moveJoystick, this.joystick);
       this.input.off("pointerup", this.joystick.removeJoystick, this.joystick);
       this.joystick.removeJoystick();
@@ -155,47 +154,53 @@ export default class GameScene extends Phaser.Scene {
     if (this.yellowAttack) this.yellowAttack.destroy();
     if (this.attack) this.attack.destroy();
 
-    // Clean up enemies
-    this.enemies.forEach(enemy => {
-      if (enemy && enemy.destroy) {
+    for (let i = this.enemies.length - 1; i >= 0; i--) {
+      const enemy = this.enemies[i];
+      if (enemy?.destroy) {
         enemy.destroy();
       }
-    });
+    }
     this.enemies = [];
+    this.enemyCollisionGroup.clear(true, true);
 
     this.scene.restart();
   }
 
-  updateGameObjects() {
-    this.yellowAttack.updateUIPositions(this.enemies);
-    this.attack.updateAttacks(0, 0);
-    this.yellowAttack.updateObjectPosition(0, 0);
-  }
-
   createBackground() {
-    // Create a graphics object for the grid
-    this.grid = this.add.graphics();
-    this.grid.lineStyle(1, 0x3573C0, 1);
-
-    // Make the grid cover the entire world
+    // Create a single texture for the grid instead of drawing lines every frame
     const width = 1000;
     const height = 1000;
     const cellSize = 50;
+    
+    // Create the render texture at world origin (0,0)
+    const gridTexture = this.add.renderTexture(0, 0, width, height);
+    gridTexture.setOrigin(0, 0); // Important: set origin to top-left
+    gridTexture.setScrollFactor(1); // Make it scroll with the camera
+    
+    // Create a temporary graphics object to draw the grid
+    const tempGrid = this.add.graphics();
+    tempGrid.lineStyle(1, 0x3573C0, 1);
 
-    // Draw vertical lines
+    // Draw the grid pattern
     for (let x = 0; x <= width; x += cellSize) {
-      this.grid.moveTo(x, 0);
-      this.grid.lineTo(x, height);
+      tempGrid.moveTo(x, 0);
+      tempGrid.lineTo(x, height);
     }
-
-    // Draw horizontal lines
     for (let y = 0; y <= height; y += cellSize) {
-      this.grid.moveTo(0, y);
-      this.grid.lineTo(width, y);
+      tempGrid.moveTo(0, y);
+      tempGrid.lineTo(width, y);
     }
+    tempGrid.strokePath();
 
-    this.grid.strokePath();
-    this.grid.setDepth(0);
+    // Draw the graphics to the texture
+    gridTexture.draw(tempGrid);
+    
+    // Destroy the temporary graphics object
+    tempGrid.destroy();
+    
+    // Set the grid texture depth
+    gridTexture.setDepth(0);
+    this.grid = gridTexture;
   }
 
   createBoundaryWalls() {
@@ -203,22 +208,15 @@ export default class GameScene extends Phaser.Scene {
     const worldWidth = 1000;
     const worldHeight = 1000;
 
-    // Create walls group
     this.walls = this.physics.add.staticGroup();
 
-    // Create the four walls
     const walls = [
-      // Top wall
       this.add.rectangle(worldWidth/2, -wallThickness/2, worldWidth + wallThickness*2, wallThickness, 0x808080),
-      // Bottom wall
       this.add.rectangle(worldWidth/2, worldHeight + wallThickness/2, worldWidth + wallThickness*2, wallThickness, 0x808080),
-      // Left wall
       this.add.rectangle(-wallThickness/2, worldHeight/2, wallThickness, worldHeight + wallThickness*2, 0x808080),
-      // Right wall
       this.add.rectangle(worldWidth + wallThickness/2, worldHeight/2, wallThickness, worldHeight + wallThickness*2, 0x808080)
     ];
 
-    // Add walls to physics group
     walls.forEach(wall => {
       this.walls.add(wall);
       wall.setDepth(1);
@@ -226,10 +224,8 @@ export default class GameScene extends Phaser.Scene {
   }
 
   createObstacles() {
-    // Create a physics group for obstacles
     this.obstacles = this.physics.add.staticGroup();
 
-    // Create obstacles spread across the world
     const obstaclePositions = [
       { x: 150, y: 150, width: 100, height: 100 },
       { x: 850, y: 150, width: 120, height: 80 },

@@ -105,7 +105,7 @@ export default class Player {
         return;
       }
     }
-    
+
     // Get current angle in degrees
     let currentDegrees = this.sprite.angle;
     
@@ -122,7 +122,9 @@ export default class Player {
 
   // Method to set the player's velocity
   setVelocity(x, y) {
-    this.sprite.body.setVelocity(x * CONSTANTS.playerSpeed, y * CONSTANTS.playerSpeed);
+    if (this.sprite?.body) {
+      this.sprite.body.setVelocity(x * CONSTANTS.playerSpeed, y * CONSTANTS.playerSpeed);
+    }
   }
 
   // Method to get the player's position
@@ -152,14 +154,22 @@ export default class Player {
 
   // Method to destroy the player
   destroy() {
-    this.sprite.destroy();
-    this.healthBar.destroy();
-    this.healthBarBackground.destroy();
+    if (this.sprite?.body) {
+      this.sprite.destroy();
+    }
+    if (this.healthBar) {
+      this.healthBar.destroy();
+    }
+    if (this.healthBarBackground) {
+      this.healthBarBackground.destroy();
+    }
   }
 
   // Method to reset position (optional)
   resetPosition(x, y) {
-    this.sprite.x = x;
-    this.sprite.y = y;
+    if (this.sprite) {
+      this.sprite.x = x;
+      this.sprite.y = y;
+    }
   }
 }
