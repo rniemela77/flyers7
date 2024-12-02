@@ -50,16 +50,14 @@ export default class Player {
   update() {
     // Update health bar position to follow the sprite
     this.healthBarBackground.x = this.sprite.x;
-    this.healthBarBackground.y =
-      this.sprite.y - this.sprite.height / 2 - CONSTANTS.healthBarOffset;
+    this.healthBarBackground.y = this.sprite.y - this.sprite.height/2 - CONSTANTS.healthBarOffset;
     this.healthBar.x = this.sprite.x;
-    this.healthBar.y =
-      this.sprite.y - this.sprite.height / 2 - CONSTANTS.healthBarOffset;
+    this.healthBar.y = this.sprite.y - this.sprite.height/2 - CONSTANTS.healthBarOffset;
 
     // Find closest enemy that is being targeted
     let targetEnemy = null;
     let closestDistance = Infinity;
-
+    
     this.scene.enemies.forEach((enemy) => {
       if (enemy.isVisible() && enemy.targetingOutline.visible) {
         const distance = Phaser.Math.Distance.Between(
@@ -75,38 +73,41 @@ export default class Player {
       }
     });
 
-    // Rotate towards target if one exists
+    let targetDegrees;
+    
     if (targetEnemy) {
+      // Rotate towards target enemy
       const targetAngle = Phaser.Math.Angle.Between(
         this.sprite.x,
         this.sprite.y,
         targetEnemy.sprite.x,
         targetEnemy.sprite.y
       );
-
-      // Convert target angle to degrees
-      const targetDegrees = Phaser.Math.RadToDeg(targetAngle) + 230; // +90 to adjust for sprite orientation
-
-      // Get current angle in degrees
-      let currentDegrees = this.sprite.angle;
-
-      // Calculate shortest rotation direction
-      let angleDiff = Phaser.Math.Angle.ShortestBetween(
-        currentDegrees,
-        targetDegrees
-      );
-
-      // Apply maximum rotation speed
-      const maxRotationDegrees = Phaser.Math.RadToDeg(this.maxRotationSpeed);
-      const rotation = Phaser.Math.Clamp(
-        angleDiff,
-        -maxRotationDegrees,
-        maxRotationDegrees
-      );
-
-      // Apply the rotation
-      this.sprite.angle += rotation;
+      targetDegrees = Phaser.Math.RadToDeg(targetAngle) + 230;
+    } else {
+      // Rotate towards movement direction if moving
+      const velocity = this.sprite.body.velocity;
+      if (Math.abs(velocity.x) > 1 || Math.abs(velocity.y) > 1) {
+        const moveAngle = Math.atan2(velocity.y, velocity.x);
+        targetDegrees = Phaser.Math.RadToDeg(moveAngle) + 230;
+      } else {
+        // Keep current rotation if not moving
+        return;
+      }
     }
+    
+    // Get current angle in degrees
+    let currentDegrees = this.sprite.angle;
+    
+    // Calculate shortest rotation direction
+    let angleDiff = Phaser.Math.Angle.ShortestBetween(currentDegrees, targetDegrees);
+    
+    // Apply maximum rotation speed
+    const maxRotationDegrees = Phaser.Math.RadToDeg(this.maxRotationSpeed);
+    const rotation = Phaser.Math.Clamp(angleDiff, -maxRotationDegrees, maxRotationDegrees);
+    
+    // Apply the rotation
+    this.sprite.angle += rotation;
   }
 
   // Method to set the player's velocity
