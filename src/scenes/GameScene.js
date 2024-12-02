@@ -112,23 +112,9 @@ export default class GameScene extends Phaser.Scene {
   }
 
   checkCollisions() {
-    this.enemies.forEach((enemy) => {
-      // Check enemy's line attacks
-      enemy.attackController.activeAttacks.forEach((lineGraphic) => {
-        if (lineGraphic?.attackLine) {
-          enemy.attackController.checkLineAttackCollision(
-            lineGraphic.attackLine,
-            this.player,
-            lineGraphic
-          );
-        }
-      });
-
-      // Check other attacks
-      enemy.purpleAttack.checkCollisions([this.player]);
-      enemy.stickAttack.checkCollisions([this.player]);
-    });
-    this.yellowAttack.checkCollisions(this.enemies);
+    // All collision checks are now handled in the individual attack classes
+    // on the first frame of the attack only
+    return;
   }
 
   performLineAttack() {

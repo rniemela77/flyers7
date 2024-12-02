@@ -24,8 +24,10 @@ export default class AttackController {
     const lineGraphic = this.scene.add.graphics();
     lineGraphic.lineStyle(2, 0xff0000);
     lineGraphic.strokeLineShape(attackLine);
-    lineGraphic.hasHit = false;
+    lineGraphic.hasDealtDamage = false;
     lineGraphic.attackLine = attackLine;
+
+    this.checkLineAttackCollision(attackLine, target, lineGraphic);
 
     this.activeAttacks.push(lineGraphic);
 
@@ -42,7 +44,7 @@ export default class AttackController {
   }
 
   checkLineAttackCollision(attackLine, target, lineGraphic) {
-    if (!target || !target.isVisible?.() || lineGraphic.hasHit) return false;
+    if (!target || !target.isVisible?.() || lineGraphic.hasDealtDamage) return false;
 
     const targetGeom = new Phaser.Geom.Circle(
       target.getPosition().x,
@@ -51,7 +53,7 @@ export default class AttackController {
     );
 
     if (Phaser.Geom.Intersects.LineToCircle(attackLine, targetGeom)) {
-      lineGraphic.hasHit = true;
+      lineGraphic.hasDealtDamage = true;
       const isDead = target.takeDamage(CONSTANTS.lineAttackDamage);
       return isDead;
     }

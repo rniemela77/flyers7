@@ -107,9 +107,12 @@ export default class StickAttack {
     attackStick.setOrigin(0, 0.5);
     attackStick.setDepth(1);
     attackStick.rotation = this.stickOutline.rotation;
-    attackStick.hasHit = false;  // Add flag to track if this attack has hit
+    attackStick.hasDealtDamage = false;  // Track if damage has been dealt
 
     this.activeAttacks.push(attackStick);
+
+    // Check for collision immediately on the first frame
+    this.checkCollisionsForAttack(attackStick);
 
     this.scene.time.delayedCall(CONSTANTS.stickAttackDuration, () => {
       if (attackStick) {
@@ -117,6 +120,22 @@ export default class StickAttack {
         this.activeAttacks = this.activeAttacks.filter(
           (attack) => attack !== attackStick
         );
+      }
+    });
+  }
+
+  checkCollisionsForAttack(attack) {
+    if (!this.owner.sprite?.active || attack.hasDealtDamage) return;
+
+    const targets = this.scene.player ? [this.scene.player] : [];
+    targets.forEach((target) => {
+      if (target?.getBounds && 
+          Phaser.Geom.Intersects.RectangleToRectangle(attack.getBounds(), target.getBounds())) {
+        attack.hasDealtDamage = true;
+        const isDead = target.takeDamage(CONSTANTS.stickAttackDamage);
+        if (isDead && Array.isArray(this.scene.enemies)) {
+          this.scene.enemies = this.scene.enemies.filter(e => e !== target);
+        }
       }
     });
   }
@@ -191,22 +210,8 @@ export default class StickAttack {
   }
 
   checkCollisions(targets) {
-    if (!this.owner.sprite?.active) return;
-
-    this.activeAttacks.forEach((attack) => {
-      if (attack?.active && !attack.hasHit) {  // Only check if hasn't hit yet
-        targets.forEach((target) => {
-          if (target?.getBounds && 
-              Phaser.Geom.Intersects.RectangleToRectangle(attack.getBounds(), target.getBounds())) {
-            attack.hasHit = true;  // Mark as having hit
-            const isDead = target.takeDamage(CONSTANTS.stickAttackDamage);
-            if (isDead && Array.isArray(this.scene.enemies)) {
-              this.scene.enemies = this.scene.enemies.filter(e => e !== target);
-            }
-          }
-        });
-      }
-    });
+    // No longer check collisions in update loop - damage is only dealt on first frame
+    return;
   }
 
   destroy() {

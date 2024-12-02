@@ -68,6 +68,10 @@ export default class PurpleAttack {
     // Hide outline, show full attack
     this.outline.setVisible(false);
     this.attackCircle.setAlpha(1);
+    this.attackCircle.hasDealtDamage = false;
+
+    // Check for collision immediately on the first frame
+    this.checkCollisionsForAttack();
 
     // After attack duration, hide attack and start cooldown
     this.scene.time.delayedCall(CONSTANTS.purpleAttackDuration, () => {
@@ -82,6 +86,22 @@ export default class PurpleAttack {
     });
   }
 
+  checkCollisionsForAttack() {
+    if (!this.owner.sprite?.active || this.attackCircle.hasDealtDamage) return;
+
+    const targets = this.scene.player ? [this.scene.player] : [];
+    targets.forEach((target) => {
+      if (target?.getBounds && 
+          Phaser.Geom.Intersects.CircleToRectangle(this.attackCircle, target.getBounds())) {
+        this.attackCircle.hasDealtDamage = true;
+        const isDead = target.takeDamage(CONSTANTS.purpleAttackDamage);
+        if (isDead && Array.isArray(this.scene.enemies)) {
+          this.scene.enemies = this.scene.enemies.filter(e => e !== target);
+        }
+      }
+    });
+  }
+
   updatePosition() {
     if (!this.owner.sprite?.active) return;
     
@@ -93,17 +113,8 @@ export default class PurpleAttack {
   }
 
   checkCollisions(targets) {
-    if (!this.owner.sprite?.active || !this.attackCircle.visible || this.attackCircle.alpha < 1) return;
-
-    targets.forEach((target) => {
-      if (target?.getBounds && 
-          Phaser.Geom.Intersects.CircleToRectangle(this.attackCircle, target.getBounds())) {
-        const isDead = target.takeDamage(CONSTANTS.purpleAttackDamage);
-        if (isDead && Array.isArray(this.scene.enemies)) {
-          this.scene.enemies = this.scene.enemies.filter(e => e !== target);
-        }
-      }
-    });
+    // No longer check collisions in update loop - damage is only dealt on first frame
+    return;
   }
 
   destroy() {

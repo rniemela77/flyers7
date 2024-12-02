@@ -27,14 +27,34 @@ export default class YellowAttack {
       CONSTANTS.circleRadius,
       CONSTANTS.yellowCircleOutlineColor
     );
+    yellowCircle.setDepth(1);
+    yellowCircle.hasDealtDamage = false;
 
     this.activeAttacks.push(yellowCircle);
+
+    this.checkCollisionsForAttack(yellowCircle);
 
     this.scene.time.delayedCall(CONSTANTS.fillYellowCircleDuration, () => {
       yellowCircle.destroy();
       this.activeAttacks = this.activeAttacks.filter(
         (attack) => attack !== yellowCircle
       );
+    });
+  }
+
+  checkCollisionsForAttack(attack) {
+    if (attack.hasDealtDamage) return;
+
+    const targets = this.scene.enemies || [];
+    targets.forEach((target) => {
+      if (target.isVisible() && 
+          Phaser.Geom.Intersects.CircleToCircle(attack, target.sprite)) {
+        attack.hasDealtDamage = true;
+        const isDead = target.takeDamage(CONSTANTS.yellowCircleAttackDamage);
+        if (isDead) {
+          this.scene.enemies = this.scene.enemies.filter(e => e !== target);
+        }
+      }
     });
   }
 
@@ -81,19 +101,7 @@ export default class YellowAttack {
   }
 
   checkCollisions(targets) {
-    this.activeAttacks.forEach((attack) => {
-      if (attack instanceof Phaser.GameObjects.Arc) {
-        targets.forEach((target) => {
-          if (target && target.getBounds && 
-              Phaser.Geom.Intersects.CircleToCircle(attack, target.sprite)) {
-            const isDead = target.takeDamage(CONSTANTS.yellowCircleAttackDamage);
-            if (isDead) {
-              this.scene.enemies = this.scene.enemies.filter(e => e !== target);
-            }
-          }
-        });
-      }
-    });
+    return;
   }
 
   updatePosition(offsetX, offsetY) {
