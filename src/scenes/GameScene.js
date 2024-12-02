@@ -39,6 +39,10 @@ export default class GameScene extends Phaser.Scene {
     this.createBoundaryWalls();
     this.createObstacles();
     this.createPlayer();
+    
+    // Spawn initial enemy
+    this.createEnemy();
+    
     this.joystick = new Joystick(this, this.player);
     this.attack = new Attack(this);
     this.yellowAttack = new YellowAttack(this, this.player);
