@@ -133,47 +133,44 @@ export default class StickAttack {
       this.growingStick.y = position.y;
     }
 
-    // Only update rotation if we're in telegraph phase
-    if (this.isAttacking) {
-      // Calculate target angle based on velocity
-      if (this.owner.velocity && (this.owner.velocity.x !== 0 || this.owner.velocity.y !== 0)) {
-        this.targetRotation = Math.atan2(this.owner.velocity.y, this.owner.velocity.x);
-        
-        // Normalize current and target rotations
-        let currentRotation = this.stickOutline.rotation;
-        while (currentRotation < -Math.PI) currentRotation += Math.PI * 2;
-        while (currentRotation > Math.PI) currentRotation -= Math.PI * 2;
-        
-        while (this.targetRotation < -Math.PI) this.targetRotation += Math.PI * 2;
-        while (this.targetRotation > Math.PI) this.targetRotation -= Math.PI * 2;
-        
-        // Take shortest path
-        const diff = this.targetRotation - currentRotation;
-        if (diff > Math.PI) this.targetRotation -= Math.PI * 2;
-        if (diff < -Math.PI) this.targetRotation += Math.PI * 2;
-        
-        // Smoothly interpolate rotation
-        const newRotation = Phaser.Math.Linear(
-          currentRotation,
-          this.targetRotation,
-          CONSTANTS.stickRotationLerp
-        );
-        
-        this.stickOutline.rotation = newRotation;
-        if (this.growingStick?.active) {
-          this.growingStick.rotation = newRotation;
-        }
-      }
-    }
+    // Calculate angle to player
+    const player = this.scene.player;
+    if (player) {
+      const dx = player.getPosition().x - position.x;
+      const dy = player.getPosition().y - position.y;
+      const targetAngle = Math.atan2(dy, dx);
 
-    // Update active attacks positions
-    this.activeAttacks.forEach(attack => {
-      if (attack?.active) {
-        attack.x = position.x;
-        attack.y = position.y;
-        attack.rotation = this.stickOutline.rotation;
+      // Smoothly rotate toward target angle
+      let currentAngle = this.stickOutline.rotation;
+      
+      // Normalize angles to -PI to PI range
+      while (currentAngle < -Math.PI) currentAngle += Math.PI * 2;
+      while (currentAngle > Math.PI) currentAngle -= Math.PI * 2;
+      let targetNormalized = targetAngle;
+      while (targetNormalized < -Math.PI) targetNormalized += Math.PI * 2;
+      while (targetNormalized > Math.PI) targetNormalized -= Math.PI * 2;
+
+      // Find shortest rotation direction
+      let angleDiff = targetNormalized - currentAngle;
+      if (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+      if (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+
+      // Apply smooth rotation
+      const newAngle = currentAngle + angleDiff * CONSTANTS.stickRotationLerp;
+      
+      // Apply rotation to both outline and growing stick
+      this.stickOutline.rotation = newAngle;
+      if (this.growingStick?.active) {
+        this.growingStick.rotation = newAngle;
       }
-    });
+      
+      // Update active attacks rotation
+      this.activeAttacks.forEach(attack => {
+        if (attack?.active) {
+          attack.rotation = newAngle;
+        }
+      });
+    }
   }
 
   updatePosition(offsetX, offsetY) {
