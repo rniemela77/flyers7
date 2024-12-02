@@ -25,7 +25,11 @@ export default class GameScene extends Phaser.Scene {
   }
 
   create() {
+    // Set world bounds
+    this.physics.world.setBounds(0, 0, 1000, 1000); // Smaller world
+
     this.createBackground();
+    this.createBoundaryWalls();
     this.createObstacles();
     this.createPlayer();
     this.joystick = new Joystick(this, this.player);
@@ -35,8 +39,9 @@ export default class GameScene extends Phaser.Scene {
     this.setupInputHandlers();
     this.setupTimers();
 
-    // Set up camera to follow player
-    this.cameras.main.startFollow(this.player.sprite);
+    // Set up camera to follow player with deadzone
+    this.cameras.main.startFollow(this.player.sprite, true, 0.1, 0.1);
+    this.cameras.main.setZoom(1.0); // Adjust zoom if needed
   }
 
   setupInputHandlers() {
@@ -88,18 +93,21 @@ export default class GameScene extends Phaser.Scene {
   }
 
   createPlayer() {
-    const x = this.scale.width / 2;
-    const y = this.scale.height / 2;
+    const x = 500; // Start in center of world
+    const y = 500;
     this.player = new Player(this, x, y);
     this.physics.add.collider(this.player.sprite, this.obstacles);
+    this.physics.add.collider(this.player.sprite, this.walls);
   }
 
   createEnemy() {
-    const x = Phaser.Math.Between(0, this.scale.width);
-    const y = 0;
+    // Spawn enemies at random positions in the world
+    const x = Phaser.Math.Between(100, 900);
+    const y = Phaser.Math.Between(100, 900);
     const enemy = new Enemy(this, x, y);
     this.enemies.push(enemy);
     this.physics.add.collider(enemy.sprite, this.obstacles);
+    this.physics.add.collider(enemy.sprite, this.walls);
     this.physics.add.collider(enemy.sprite, this.player.sprite);
   }
 
@@ -178,40 +186,68 @@ export default class GameScene extends Phaser.Scene {
   createBackground() {
     // Create a graphics object for the grid
     this.grid = this.add.graphics();
-    this.grid.lineStyle(1, 0x3573C0, 1); // Thicker, darker lines with higher opacity
+    this.grid.lineStyle(1, 0x3573C0, 1);
 
-    // Make the grid much larger than the screen to handle camera movement
-    const width = this.scale.width * 4;
-    const height = this.scale.height * 4;
-    const cellSize = 50; // Slightly larger cells
+    // Make the grid cover the entire world
+    const width = 1000;
+    const height = 1000;
+    const cellSize = 50;
 
     // Draw vertical lines
     for (let x = 0; x <= width; x += cellSize) {
-      this.grid.moveTo(x - width / 2, -height / 2);
-      this.grid.lineTo(x - width / 2, height / 2);
+      this.grid.moveTo(x, 0);
+      this.grid.lineTo(x, height);
     }
 
     // Draw horizontal lines
     for (let y = 0; y <= height; y += cellSize) {
-      this.grid.moveTo(-width / 2, y - height / 2);
-      this.grid.lineTo(width / 2, y - height / 2);
+      this.grid.moveTo(0, y);
+      this.grid.lineTo(width, y);
     }
 
     this.grid.strokePath();
     this.grid.setDepth(0);
   }
 
+  createBoundaryWalls() {
+    const wallThickness = 50;
+    const worldWidth = 1000;
+    const worldHeight = 1000;
+
+    // Create walls group
+    this.walls = this.physics.add.staticGroup();
+
+    // Create the four walls
+    const walls = [
+      // Top wall
+      this.add.rectangle(worldWidth/2, -wallThickness/2, worldWidth + wallThickness*2, wallThickness, 0x808080),
+      // Bottom wall
+      this.add.rectangle(worldWidth/2, worldHeight + wallThickness/2, worldWidth + wallThickness*2, wallThickness, 0x808080),
+      // Left wall
+      this.add.rectangle(-wallThickness/2, worldHeight/2, wallThickness, worldHeight + wallThickness*2, 0x808080),
+      // Right wall
+      this.add.rectangle(worldWidth + wallThickness/2, worldHeight/2, wallThickness, worldHeight + wallThickness*2, 0x808080)
+    ];
+
+    // Add walls to physics group
+    walls.forEach(wall => {
+      this.walls.add(wall);
+      wall.setDepth(1);
+    });
+  }
+
   createObstacles() {
     // Create a physics group for obstacles
     this.obstacles = this.physics.add.staticGroup();
 
-    // Create obstacles in screen coordinates
+    // Create obstacles spread across the world
     const obstaclePositions = [
-      { x: 200, y: 200, width: 100, height: 100 },
-      { x: 600, y: 400, width: 150, height: 80 },
-      { x: 400, y: 600, width: 80, height: 200 },
-      { x: 800, y: 200, width: 120, height: 120 },
-      { x: 200, y: 700, width: 180, height: 60 }
+      { x: 150, y: 150, width: 100, height: 100 },
+      { x: 850, y: 150, width: 120, height: 80 },
+      { x: 500, y: 300, width: 150, height: 100 },
+      { x: 200, y: 700, width: 80, height: 200 },
+      { x: 800, y: 800, width: 120, height: 120 },
+      { x: 500, y: 800, width: 180, height: 60 }
     ];
 
     obstaclePositions.forEach(({ x, y, width, height }) => {
