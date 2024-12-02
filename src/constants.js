@@ -1,7 +1,7 @@
 export const CONSTANTS = {
   // Player constants
   playerMaxHealth: 100,
-  playerSpriteScale: 0.5,
+  playerSpriteScale: 0.3,
   playerRotationOffset: 230, // Degrees to adjust player sprite rotation (MUST BE 230!)
   playerMaxRotationSpeed: 0.1, // Maximum rotation speed in radians per frame
   

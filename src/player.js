@@ -21,9 +21,16 @@ export default class Player {
     this.sprite.body.setDrag(0);
     this.sprite.body.setFriction(0);
     
-    // Set circular body for better collision
-    this.sprite.body.setCircle(this.sprite.width / 4);
-    this.sprite.body.offset.set(this.sprite.width / 4, this.sprite.height / 4);
+    // Wait for the next frame to ensure sprite dimensions are loaded
+    scene.time.delayedCall(0, () => {
+      // Set circular body for better collision
+      const radius = Math.min(this.sprite.width, this.sprite.height) / 4;
+      this.sprite.body.setCircle(radius);
+      this.sprite.body.offset.set(
+        (this.sprite.width - radius * 2) / 2,
+        (this.sprite.height - radius * 2) / 2
+      );
+    });
 
     // Create health bar background
     this.healthBarBackground = scene.add.rectangle(
