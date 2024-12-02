@@ -50,8 +50,8 @@ export default class PurpleAttack {
     this.outline.x = position.x;
     this.outline.y = position.y;
 
-    // Grow the telegraph circle
-    this.scene.tweens.add({
+    // Store reference to tween so we can stop it if needed
+    this.currentTween = this.scene.tweens.add({
       targets: this.attackCircle,
       radius: CONSTANTS.purpleCircleRadius,
       duration: 1000,
@@ -107,6 +107,12 @@ export default class PurpleAttack {
   }
 
   destroy() {
+    // Stop any active tween
+    if (this.currentTween) {
+      this.currentTween.stop();
+      this.currentTween = null;
+    }
+    
     if (this.outline) {
       this.outline.destroy();
     }

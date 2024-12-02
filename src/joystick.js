@@ -10,7 +10,6 @@ class Joystick {
     
     // Create the indicator line
     this.indicatorLine = scene.add.line(0, 0, 0, 0, 0, 0, 0xffffff);
-    this.indicatorLine.setDepth(12);
     
     // Initialize velocities
     this.velocityX = 0;
@@ -35,12 +34,32 @@ class Joystick {
       CONSTANTS.joystickRadius,
       CONSTANTS.joystickColor
     );
+    this.joystick.setScrollFactor(0); // Make joystick stay fixed on screen
   }
 
   moveJoystick(pointer) {
     if (this.joystick) {
       const deltaX = pointer.x - this.initialPointerX;
       const deltaY = pointer.y - this.initialPointerY;
+
+      // Calculate distance from initial point
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+      const maxDistance = 50; // Maximum distance joystick can move from center
+
+      // Calculate joystick position
+      let moveX = deltaX;
+      let moveY = deltaY;
+      if (distance > maxDistance) {
+        const scale = maxDistance / distance;
+        moveX *= scale;
+        moveY *= scale;
+      }
+
+      // Update joystick position, constrained to maxDistance
+      this.joystick.x = this.initialPointerX + moveX;
+      this.joystick.y = this.initialPointerY + moveY;
+
+      // Calculate velocities based on original delta (unconstrained)
       this.targetVelocityX = Phaser.Math.Clamp(
         deltaX * 0.1,
         -CONSTANTS.maxSpeed,
