@@ -120,6 +120,14 @@ export default class Enemy {
     this.health = Math.max(this.health - damage, 0);
     this.healthBar.width = (this.health / CONSTANTS.enemyMaxHealth) * CONSTANTS.healthBarWidth;
 
+    // Create flash effect
+    this.sprite.setTintFill(0xffffff);
+    this.scene.time.delayedCall(100, () => {
+      if (this.sprite?.active) {
+        this.sprite.clearTint();
+      }
+    });
+
     if (this.health === 0) {
       this.destroy();
       return true;

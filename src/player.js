@@ -144,6 +144,14 @@ export default class Player {
     this.healthBar.width =
       (this.health / CONSTANTS.playerMaxHealth) * CONSTANTS.healthBarWidth;
 
+    // Create flash effect
+    this.sprite.setTintFill(0xffffff);
+    this.scene.time.delayedCall(100, () => {
+      if (this.sprite?.active) {
+        this.sprite.clearTint();
+      }
+    });
+
     if (this.health === 0) {
       this.destroy();
       this.scene.resetGame();
