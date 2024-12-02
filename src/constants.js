@@ -10,7 +10,7 @@ export const CONSTANTS = {
   enemyMaxHealth: 200,
   enemySpeed: 2,
   enemyAttackRange: 300,
-  enemyAttackInterval: 2000,
+  enemyAttackInterval: 4000,
   enemyAttackDamage: 15,
   
   // UI and HUD
@@ -35,20 +35,20 @@ export const CONSTANTS = {
   
   // Yellow attack properties
   yellowCircleOutlineColor: 0xffff00,
-  fillYellowCircleDelay: 1000,
-  fillYellowCircleDuration: 250,
+  fillYellowCircleDelay: 3000,
+  fillYellowCircleDuration: 500,
   yellowCircleAttackDamage: 45,
   
   // Line attack properties
   lineAttackDamage: 20,
-  lineAttackDuration: 100, // duration in milliseconds
+  lineAttackDuration: 200,
   
   // Purple attack properties
   purpleCircleRadius: 175,
   purpleCircleColor: 0x800080,
-  purpleTelegraphDuration: 1000, // 1 second telegraph
-  purpleAttackDuration: 250, // Attack lasts 250ms
-  purpleAttackCooldown: 2000, // 2 seconds between attacks
+  purpleTelegraphDuration: 2000,
+  purpleAttackDuration: 500,
+  purpleAttackCooldown: 4000,
   purpleAttackDamage: 30,
   
   // Stick attack properties
@@ -57,7 +57,7 @@ export const CONSTANTS = {
   stickLength: 300,
   stickWidth: 20,
   stickColor: 0x00ff00,
-  stickTelegraphDuration: 1000,
-  stickAttackDuration: 250,
-  stickAttackCooldown: 2000,
+  stickTelegraphDuration: 2000,
+  stickAttackDuration: 500,
+  stickAttackCooldown: 4000,
 };
