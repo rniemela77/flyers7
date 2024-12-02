@@ -6,11 +6,12 @@ export default class Player {
   constructor(scene, x, y) {
     this.scene = scene;
     this.health = CONSTANTS.playerMaxHealth;
+    this.maxRotationSpeed = 0.1; // Maximum rotation speed in radians per frame
 
     // Create player sprite using the loaded image
-    this.sprite = scene.add.sprite(x, y, 'player');
+    this.sprite = scene.add.sprite(x, y, "player");
     this.sprite.setScale(0.5); // Adjust scale as needed
-    
+
     // Enable physics on the sprite
     scene.physics.add.existing(this.sprite);
     this.sprite.setDepth(10);
@@ -20,15 +21,15 @@ export default class Player {
     this.sprite.body.setBounce(0);
     this.sprite.body.setDrag(0);
     this.sprite.body.setFriction(0);
-    
+
     // Set circular body for better collision
-    this.sprite.body.setCircle(this.sprite.width / 4); // Adjust radius as needed
-    this.sprite.body.offset.set(this.sprite.width / 4, this.sprite.height / 4); // Center the circular body
+    this.sprite.body.setCircle(this.sprite.width / 4);
+    this.sprite.body.offset.set(this.sprite.width / 4, this.sprite.height / 4);
 
     // Create health bar background
     this.healthBarBackground = scene.add.rectangle(
       x,
-      y - this.sprite.height/2 - CONSTANTS.healthBarOffset,
+      y - this.sprite.height / 2 - CONSTANTS.healthBarOffset,
       CONSTANTS.healthBarWidth,
       CONSTANTS.healthBarHeight,
       CONSTANTS.healthBarBackgroundColor
@@ -38,7 +39,7 @@ export default class Player {
     // Create health bar
     this.healthBar = scene.add.rectangle(
       x,
-      y - this.sprite.height/2 - CONSTANTS.healthBarOffset,
+      y - this.sprite.height / 2 - CONSTANTS.healthBarOffset,
       CONSTANTS.healthBarWidth,
       CONSTANTS.healthBarHeight,
       CONSTANTS.healthBarColor
@@ -46,13 +47,66 @@ export default class Player {
     this.healthBar.setDepth(11);
   }
 
-  // Method to update the player's position
   update() {
     // Update health bar position to follow the sprite
     this.healthBarBackground.x = this.sprite.x;
-    this.healthBarBackground.y = this.sprite.y - this.sprite.height/2 - CONSTANTS.healthBarOffset;
+    this.healthBarBackground.y =
+      this.sprite.y - this.sprite.height / 2 - CONSTANTS.healthBarOffset;
     this.healthBar.x = this.sprite.x;
-    this.healthBar.y = this.sprite.y - this.sprite.height/2 - CONSTANTS.healthBarOffset;
+    this.healthBar.y =
+      this.sprite.y - this.sprite.height / 2 - CONSTANTS.healthBarOffset;
+
+    // Find closest enemy that is being targeted
+    let targetEnemy = null;
+    let closestDistance = Infinity;
+
+    this.scene.enemies.forEach((enemy) => {
+      if (enemy.isVisible() && enemy.targetingOutline.visible) {
+        const distance = Phaser.Math.Distance.Between(
+          this.sprite.x,
+          this.sprite.y,
+          enemy.sprite.x,
+          enemy.sprite.y
+        );
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          targetEnemy = enemy;
+        }
+      }
+    });
+
+    // Rotate towards target if one exists
+    if (targetEnemy) {
+      const targetAngle = Phaser.Math.Angle.Between(
+        this.sprite.x,
+        this.sprite.y,
+        targetEnemy.sprite.x,
+        targetEnemy.sprite.y
+      );
+
+      // Convert target angle to degrees
+      const targetDegrees = Phaser.Math.RadToDeg(targetAngle) + 230; // +90 to adjust for sprite orientation
+
+      // Get current angle in degrees
+      let currentDegrees = this.sprite.angle;
+
+      // Calculate shortest rotation direction
+      let angleDiff = Phaser.Math.Angle.ShortestBetween(
+        currentDegrees,
+        targetDegrees
+      );
+
+      // Apply maximum rotation speed
+      const maxRotationDegrees = Phaser.Math.RadToDeg(this.maxRotationSpeed);
+      const rotation = Phaser.Math.Clamp(
+        angleDiff,
+        -maxRotationDegrees,
+        maxRotationDegrees
+      );
+
+      // Apply the rotation
+      this.sprite.angle += rotation;
+    }
   }
 
   // Method to set the player's velocity
@@ -75,8 +129,9 @@ export default class Player {
   takeDamage(damage) {
     this.health = Math.max(this.health - damage, 0);
     // Update health bar width based on current health
-    this.healthBar.width = (this.health / CONSTANTS.playerMaxHealth) * CONSTANTS.healthBarWidth;
-    
+    this.healthBar.width =
+      (this.health / CONSTANTS.playerMaxHealth) * CONSTANTS.healthBarWidth;
+
     if (this.health === 0) {
       this.destroy();
       this.scene.resetGame();
