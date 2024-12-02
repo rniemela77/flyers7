@@ -10,13 +10,9 @@ export default class Enemy {
     this.scene = scene;
     this.health = CONSTANTS.enemyMaxHealth;
 
-    // Create enemy sprite
-    this.sprite = scene.add.circle(
-      x,
-      y,
-      CONSTANTS.circleRadius,
-      CONSTANTS.circleColor
-    );
+    // Create enemy sprite using the image
+    this.sprite = scene.add.sprite(x, y, 'enemy');
+    this.sprite.setScale(CONSTANTS.playerSpriteScale); // Use same scale as player for now
     
     // Enable physics
     scene.physics.add.existing(this.sprite, false);
@@ -46,8 +42,10 @@ export default class Enemy {
     );
     this.healthBar.setDepth(11);
 
-    // Create targeting outline
-    this.targetingOutline = scene.add.circle(x, y, CONSTANTS.circleRadius + 5);
+    // Create targeting outline - adjust size based on sprite bounds
+    const bounds = this.sprite.getBounds();
+    const radius = Math.max(bounds.width, bounds.height) / 2;
+    this.targetingOutline = scene.add.circle(x, y, radius + 5);
     this.targetingOutline.setStrokeStyle(2, 0xffffff);
     this.targetingOutline.setVisible(false);
 
@@ -77,6 +75,15 @@ export default class Enemy {
       const velocityY = (dy / distance) * CONSTANTS.enemySpeed * 15;
       
       this.sprite.body.setVelocity(velocityX, velocityY);
+
+      // Update sprite rotation to face the player
+      const angle = Phaser.Math.Angle.Between(
+        this.sprite.x,
+        this.sprite.y,
+        player.getPosition().x,
+        player.getPosition().y
+      );
+      this.sprite.rotation = angle + Math.PI / 2; // Add 90 degrees to make sprite face the direction of movement
       
       // Update UI elements
       this.updateUIPositions();
@@ -150,7 +157,8 @@ export default class Enemy {
   }
 
   getRadius() {
-    return this.sprite.radius;
+    const bounds = this.sprite.getBounds();
+    return Math.max(bounds.width, bounds.height) / 2;
   }
 
   setTargetingVisible(visible) {
