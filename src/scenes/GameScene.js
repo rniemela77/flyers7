@@ -5,6 +5,7 @@ import Enemy from "../enemy";
 import Attack from "../attack";
 import Player from "../player";
 import YellowAttack from "../YellowAttack";
+import playerSprite from '../trnasp.png';
 
 export default class GameScene extends Phaser.Scene {
   constructor() {
@@ -19,7 +20,8 @@ export default class GameScene extends Phaser.Scene {
   }
 
   preload() {
-    // Load any assets if necessary
+    // Load player sprite using the imported asset
+    this.load.image('player', playerSprite);
   }
 
   create() {

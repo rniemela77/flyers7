@@ -7,14 +7,9 @@ export default class Player {
     this.scene = scene;
     this.health = CONSTANTS.playerMaxHealth;
 
-    // Create player sprite (square)
-    this.sprite = scene.add.rectangle(
-      x,
-      y,
-      CONSTANTS.squareSize,
-      CONSTANTS.squareSize,
-      CONSTANTS.squareColor
-    );
+    // Create player sprite using the loaded image
+    this.sprite = scene.add.sprite(x, y, 'player');
+    this.sprite.setScale(0.5); // Adjust scale as needed
     
     // Enable physics on the sprite
     scene.physics.add.existing(this.sprite);
@@ -25,11 +20,15 @@ export default class Player {
     this.sprite.body.setBounce(0);
     this.sprite.body.setDrag(0);
     this.sprite.body.setFriction(0);
+    
+    // Set circular body for better collision
+    this.sprite.body.setCircle(this.sprite.width / 4); // Adjust radius as needed
+    this.sprite.body.offset.set(this.sprite.width / 4, this.sprite.height / 4); // Center the circular body
 
     // Create health bar background
     this.healthBarBackground = scene.add.rectangle(
       x,
-      y - CONSTANTS.squareSize - CONSTANTS.healthBarOffset,
+      y - this.sprite.height/2 - CONSTANTS.healthBarOffset,
       CONSTANTS.healthBarWidth,
       CONSTANTS.healthBarHeight,
       CONSTANTS.healthBarBackgroundColor
@@ -39,7 +38,7 @@ export default class Player {
     // Create health bar
     this.healthBar = scene.add.rectangle(
       x,
-      y - CONSTANTS.squareSize - CONSTANTS.healthBarOffset,
+      y - this.sprite.height/2 - CONSTANTS.healthBarOffset,
       CONSTANTS.healthBarWidth,
       CONSTANTS.healthBarHeight,
       CONSTANTS.healthBarColor
@@ -51,9 +50,9 @@ export default class Player {
   update() {
     // Update health bar position to follow the sprite
     this.healthBarBackground.x = this.sprite.x;
-    this.healthBarBackground.y = this.sprite.y - CONSTANTS.squareSize - CONSTANTS.healthBarOffset;
+    this.healthBarBackground.y = this.sprite.y - this.sprite.height/2 - CONSTANTS.healthBarOffset;
     this.healthBar.x = this.sprite.x;
-    this.healthBar.y = this.sprite.y - CONSTANTS.squareSize - CONSTANTS.healthBarOffset;
+    this.healthBar.y = this.sprite.y - this.sprite.height/2 - CONSTANTS.healthBarOffset;
   }
 
   // Method to set the player's velocity
