@@ -94,6 +94,11 @@ export default class Enemy {
     this.healthBar.y = this.sprite.y - 35;
     this.targetingOutline.x = this.sprite.x;
     this.targetingOutline.y = this.sprite.y;
+    
+    // Update attack positions
+    if (this.purpleAttack) {
+      this.purpleAttack.updatePosition(0, 0);
+    }
   }
 
   getPosition() {
