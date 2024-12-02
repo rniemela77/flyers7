@@ -54,6 +54,8 @@ export default class Player {
   }
 
   update() {
+    if (!this.sprite?.active) return;
+
     // Update health bar position to follow the sprite
     this.healthBarBackground.x = this.sprite.x;
     this.healthBarBackground.y = this.sprite.y - this.sprite.height/2 - CONSTANTS.healthBarOffset;
@@ -64,24 +66,26 @@ export default class Player {
     let targetEnemy = null;
     let closestDistance = Infinity;
     
-    this.scene.enemies.forEach((enemy) => {
-      if (enemy.isVisible() && enemy.targetingOutline.visible) {
-        const distance = Phaser.Math.Distance.Between(
-          this.sprite.x,
-          this.sprite.y,
-          enemy.sprite.x,
-          enemy.sprite.y
-        );
-        if (distance < closestDistance) {
-          closestDistance = distance;
-          targetEnemy = enemy;
+    if (this.scene.enemies) {
+      this.scene.enemies.forEach((enemy) => {
+        if (enemy?.sprite?.active && enemy.isVisible() && enemy.targetingOutline?.visible) {
+          const distance = Phaser.Math.Distance.Between(
+            this.sprite.x,
+            this.sprite.y,
+            enemy.sprite.x,
+            enemy.sprite.y
+          );
+          if (distance < closestDistance) {
+            closestDistance = distance;
+            targetEnemy = enemy;
+          }
         }
-      }
-    });
+      });
+    }
 
     let targetDegrees;
     
-    if (targetEnemy) {
+    if (targetEnemy?.sprite?.active) {
       // Rotate towards target enemy
       const targetAngle = Phaser.Math.Angle.Between(
         this.sprite.x,

@@ -37,9 +37,18 @@ export default class PurpleAttack {
 
     // Show outline and start telegraph
     this.outline.setVisible(true);
-    this.attackCircle.setAlpha(0.3);
+    
+    // Reset attack circle to initial state
     this.attackCircle.setVisible(true);
+    this.attackCircle.setAlpha(0.3);
     this.attackCircle.setRadius(1);
+
+    // Update positions before starting animation
+    const position = this.owner.getPosition();
+    this.attackCircle.x = position.x;
+    this.attackCircle.y = position.y;
+    this.outline.x = position.x;
+    this.outline.y = position.y;
 
     // Grow the telegraph circle
     this.scene.tweens.add({
@@ -48,7 +57,9 @@ export default class PurpleAttack {
       duration: 1000,
       ease: 'Linear',
       onComplete: () => {
-        this.performAttack();
+        if (this.attackCircle?.active) {
+          this.performAttack();
+        }
       }
     });
   }
