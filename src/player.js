@@ -6,12 +6,11 @@ export default class Player {
   constructor(scene, x, y) {
     this.scene = scene;
     this.health = CONSTANTS.playerMaxHealth;
-    this.maxRotationSpeed = 0.1; // Maximum rotation speed in radians per frame
 
     // Create player sprite using the loaded image
-    this.sprite = scene.add.sprite(x, y, "player");
-    this.sprite.setScale(0.5); // Adjust scale as needed
-
+    this.sprite = scene.add.sprite(x, y, 'player');
+    this.sprite.setScale(CONSTANTS.playerSpriteScale);
+    
     // Enable physics on the sprite
     scene.physics.add.existing(this.sprite);
     this.sprite.setDepth(10);
@@ -21,7 +20,7 @@ export default class Player {
     this.sprite.body.setBounce(0);
     this.sprite.body.setDrag(0);
     this.sprite.body.setFriction(0);
-
+    
     // Set circular body for better collision
     this.sprite.body.setCircle(this.sprite.width / 4);
     this.sprite.body.offset.set(this.sprite.width / 4, this.sprite.height / 4);
@@ -29,7 +28,7 @@ export default class Player {
     // Create health bar background
     this.healthBarBackground = scene.add.rectangle(
       x,
-      y - this.sprite.height / 2 - CONSTANTS.healthBarOffset,
+      y - this.sprite.height/2 - CONSTANTS.healthBarOffset,
       CONSTANTS.healthBarWidth,
       CONSTANTS.healthBarHeight,
       CONSTANTS.healthBarBackgroundColor
@@ -39,7 +38,7 @@ export default class Player {
     // Create health bar
     this.healthBar = scene.add.rectangle(
       x,
-      y - this.sprite.height / 2 - CONSTANTS.healthBarOffset,
+      y - this.sprite.height/2 - CONSTANTS.healthBarOffset,
       CONSTANTS.healthBarWidth,
       CONSTANTS.healthBarHeight,
       CONSTANTS.healthBarColor
@@ -83,13 +82,13 @@ export default class Player {
         targetEnemy.sprite.x,
         targetEnemy.sprite.y
       );
-      targetDegrees = Phaser.Math.RadToDeg(targetAngle) + 230;
+      targetDegrees = Phaser.Math.RadToDeg(targetAngle) + CONSTANTS.playerRotationOffset;
     } else {
       // Rotate towards movement direction if moving
       const velocity = this.sprite.body.velocity;
       if (Math.abs(velocity.x) > 1 || Math.abs(velocity.y) > 1) {
         const moveAngle = Math.atan2(velocity.y, velocity.x);
-        targetDegrees = Phaser.Math.RadToDeg(moveAngle) + 230;
+        targetDegrees = Phaser.Math.RadToDeg(moveAngle) + CONSTANTS.playerRotationOffset;
       } else {
         // Keep current rotation if not moving
         return;
@@ -103,7 +102,7 @@ export default class Player {
     let angleDiff = Phaser.Math.Angle.ShortestBetween(currentDegrees, targetDegrees);
     
     // Apply maximum rotation speed
-    const maxRotationDegrees = Phaser.Math.RadToDeg(this.maxRotationSpeed);
+    const maxRotationDegrees = Phaser.Math.RadToDeg(CONSTANTS.playerMaxRotationSpeed);
     const rotation = Phaser.Math.Clamp(angleDiff, -maxRotationDegrees, maxRotationDegrees);
     
     // Apply the rotation
