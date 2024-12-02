@@ -122,8 +122,7 @@ export default class Player {
 
   // Method to set the player's velocity
   setVelocity(x, y) {
-    // Multiply velocity by 300 to make movement faster
-    this.sprite.body.setVelocity(x * 300, y * 300);
+    this.sprite.body.setVelocity(x * CONSTANTS.playerSpeed, y * CONSTANTS.playerSpeed);
   }
 
   // Method to get the player's position

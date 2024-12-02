@@ -4,6 +4,7 @@ export const CONSTANTS = {
   playerSpriteScale: 0.3,
   playerRotationOffset: 230, // Degrees to adjust player sprite rotation (MUST BE 230!)
   playerMaxRotationSpeed: 0.1, // Maximum rotation speed in radians per frame
+  playerSpeed: 20, // Base movement speed for the player
   
   // Enemy constants
   enemyMaxHealth: 200,
