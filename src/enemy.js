@@ -167,9 +167,17 @@ export default class Enemy {
     this.sprite.setTintFill(0xffffff);
     this.scene.time.delayedCall(100, () => {
       if (this.sprite?.active) {
-        this.sprite.clearTint(); // Just clear the tint, don't set a color
+        this.sprite.clearTint();
       }
     });
+
+    // Show damage number
+    this.scene.createDamageNumber(
+      this.sprite.x,
+      this.sprite.y - 50,
+      damage,
+      this
+    );
 
     if (this.health === 0) {
       this.destroy();

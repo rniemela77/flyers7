@@ -268,4 +268,46 @@ export default class GameScene extends Phaser.Scene {
       obstacle.body.immovable = true;
     });
   }
+
+  // Add helper function to create damage numbers
+  createDamageNumber(x, y, damage, entity) {
+    // Create the text
+    const text = this.add.text(
+      x - CONSTANTS.healthBarWidth/2, // Align with left side of health bar
+      y - CONSTANTS.healthBarOffset + 5, // Position slightly below health bar
+      `-${damage}`, 
+      {
+        fontSize: '12px',
+        color: '#ff0000'
+      }
+    );
+    text.setDepth(100); // Make sure it's above everything
+    text.setOrigin(0, 0.5); // Left-align the text (0 for x origin)
+
+    // Store initial offset from entity
+    const offsetX = text.x - entity.sprite.x;
+    const offsetY = text.y - entity.sprite.y;
+
+    // Create the tween for floating up and fading
+    this.tweens.add({
+      targets: text,
+      alpha: 0,
+      duration: 1000,
+      ease: 'Cubic.easeOut',
+      onComplete: () => {
+        text.destroy(); // Clean up when done
+      }
+    });
+
+    // Add update callback to follow entity
+    const updateCallback = () => {
+      if (text.active && entity.sprite?.active) {
+        text.x = entity.sprite.x + offsetX;
+        text.y = entity.sprite.y + offsetY - 2; // Small float up
+      } else {
+        this.events.off('update', updateCallback);
+      }
+    };
+    this.events.on('update', updateCallback);
+  }
 }

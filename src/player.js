@@ -152,6 +152,14 @@ export default class Player {
       }
     });
 
+    // Show damage number
+    this.scene.createDamageNumber(
+      this.sprite.x,
+      this.sprite.y - this.sprite.height/2 - CONSTANTS.healthBarOffset,
+      damage,
+      this
+    );
+
     if (this.health === 0) {
       this.destroy();
       this.scene.resetGame();
