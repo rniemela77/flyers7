@@ -13,11 +13,10 @@ export default class DamageNumber {
       y - 15, // Just below the health bar
       `-${Math.round(damage)}`, 
       {
+        fontFamily: 'Arial',
         fontSize: isCrit ? '20px' : '16px',
         fontStyle: 'bold',
-        color: isCrit ? '#FFCC00' : '#ff0000',
-        stroke: isCrit ? '#996600' : '#660000',  // Add stroke for better visibility
-        strokeThickness: isCrit ? 2 : 1
+        color: isCrit ? '#FFCC00' : '#ff0000'
       }
     );
     text.setDepth(100);
@@ -27,7 +26,7 @@ export default class DamageNumber {
     const numberInfo = {
       text,
       healthBar,
-      xOffset: x - healthBar.background.x,
+      xOffset: x - healthBar.background.x + 10,
       yOffset: -35 
     };
     this.activeNumbers.push(numberInfo);
@@ -35,7 +34,7 @@ export default class DamageNumber {
     // Float up from the offset position
     this.scene.tweens.add({
       targets: text,
-      y: y - 10, // Float up a smaller distance
+      y: y - 30, // Float up a smaller distance
       alpha: 0,
       duration: 1000,
       ease: 'Cubic.easeOut',
