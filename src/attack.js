@@ -46,7 +46,17 @@ export default class Attack {
     );
 
     if (Phaser.Geom.Intersects.LineToCircle(attackLine, targetEnemyGeom)) {
-      const isDead = targetEnemy.takeDamage(CONSTANTS.lineAttackDamage);
+      // Calculate random damage
+      const baseDamage = Phaser.Math.Between(
+        CONSTANTS.lineAttackDamageMin,
+        CONSTANTS.lineAttackDamageMax
+      );
+
+      // Check for crit
+      const isCrit = Math.random() < CONSTANTS.lineAttackCritChance;
+      const finalDamage = isCrit ? baseDamage * CONSTANTS.lineAttackCritMultiplier : baseDamage;
+
+      const isDead = targetEnemy.takeDamage(finalDamage, isCrit);
       return isDead;
     }
     return false;

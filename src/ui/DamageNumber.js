@@ -6,16 +6,18 @@ export default class DamageNumber {
     this.activeNumbers = [];
   }
 
-  create(x, y, damage, healthBar) {
+  create(x, y, damage, healthBar, isCrit) {
     // Create the text at the initial position
     const text = this.scene.add.text(
       x - 20,
       y - 15, // Just below the health bar
-      `-${damage}`, 
+      `-${Math.round(damage)}`, 
       {
-        fontSize: '16px', // Smaller text
+        fontSize: isCrit ? '20px' : '16px',
         fontStyle: 'bold',
-        color: '#ff0000'
+        color: isCrit ? '#FFCC00' : '#ff0000',
+        stroke: isCrit ? '#996600' : '#660000',  // Add stroke for better visibility
+        strokeThickness: isCrit ? 2 : 1
       }
     );
     text.setDepth(100);

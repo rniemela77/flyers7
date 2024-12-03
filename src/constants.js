@@ -59,7 +59,10 @@ export const CONSTANTS = {
   yellowCircleAttackDamage: 45,
   
   // Line attack properties
-  lineAttackDamage: 20,
+  lineAttackDamageMin: 15,
+  lineAttackDamageMax: 25,
+  lineAttackCritChance: 0.2, // 20% chance to crit
+  lineAttackCritMultiplier: 1.5, // 50% more damage on crit
   lineAttackDuration: 200,
   
   // Purple attack properties

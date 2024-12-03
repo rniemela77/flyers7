@@ -50,7 +50,7 @@ export default class Entity {
     });
   }
 
-  takeDamage(damage) {
+  takeDamage(damage, isCrit = false) {
     this.health = Math.max(this.health - damage, 0);
     this.healthBar.updatePercentage(this.health / this.maxHealth);
 
@@ -68,7 +68,8 @@ export default class Entity {
       barPosition.x,
       barPosition.y,
       damage,
-      this.healthBar
+      this.healthBar,
+      isCrit
     );
 
     if (this.health === 0) {
