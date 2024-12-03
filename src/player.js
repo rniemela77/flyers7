@@ -1,51 +1,38 @@
 // src/Player.js
 import Phaser from "phaser";
 import { CONSTANTS } from "./constants";
+import Entity from "./entities/Entity";
 import DashManager from "./player/DashManager";
 import TargetingSystem from "./player/TargetingSystem";
-import UIManager from "./player/UIManager";
 
-export default class Player {
+export default class Player extends Entity {
   constructor(scene, x, y) {
-    this.scene = scene;
-    this.health = CONSTANTS.playerMaxHealth;
+    super(scene, {
+      x,
+      y,
+      maxHealth: CONSTANTS.playerMaxHealth,
+      sprite: {
+        key: 'player',
+        scale: CONSTANTS.playerSpriteScale,
+        depth: 10
+      },
+      physics: true,
+      healthBar: {
+        yOffset: CONSTANTS.healthBarOffset
+      }
+    });
 
-    this.initializeSprite(x, y);
     this.initializeTrail();
-    this.initializePhysics();
-
+    
     // Initialize systems
     this.dashManager = new DashManager(scene, this);
     this.targetingSystem = new TargetingSystem(scene, this);
-    this.uiManager = new UIManager(scene, this);
-  }
 
-  initializeSprite(x, y) {
-    // Create player sprite using the loaded image
-    this.sprite = this.scene.add.sprite(x, y, 'player');
-    this.sprite.setScale(CONSTANTS.playerSpriteScale);
-    this.sprite.setDepth(10);
-    
-    // Enable physics on the sprite
-    this.scene.physics.add.existing(this.sprite);
-  }
-
-  initializeTrail() {
-    this.trail = [];
-    this.lastTrailTime = 0;
-    this.trailGraphics = this.scene.add.graphics();
-    this.trailGraphics.setDepth(5);
-    this.lastPosition = { x: this.sprite.x, y: this.sprite.y };
-  }
-
-  initializePhysics() {
+    // Configure physics body
     this.sprite.body.setCollideWorldBounds(true);
-    this.sprite.body.setBounce(0);
-    this.sprite.body.setDrag(0);
-    this.sprite.body.setFriction(0);
 
     // Wait for the next frame to ensure sprite dimensions are loaded
-    this.scene.time.delayedCall(0, () => {
+    scene.time.delayedCall(0, () => {
       // Set circular body for better collision
       const radius = Math.min(this.sprite.width, this.sprite.height) / 4;
       this.sprite.body.setCircle(radius);
@@ -56,16 +43,21 @@ export default class Player {
     });
   }
 
+  initializeTrail() {
+    this.trail = [];
+    this.lastTrailTime = 0;
+    this.trailGraphics = this.scene.add.graphics();
+    this.trailGraphics.setDepth(5);
+    this.lastPosition = { x: this.sprite.x, y: this.sprite.y };
+  }
+
   update() {
+    super.update();
     if (!this.sprite?.active) return;
 
     this.updateTrail();
     this.dashManager.update();
     this.targetingSystem.update();
-    this.uiManager.update(
-      this.health / CONSTANTS.playerMaxHealth,
-      this.dashManager.getDashProgress()
-    );
   }
 
   updateTrail() {
@@ -120,44 +112,12 @@ export default class Player {
     }
   }
 
-  getPosition() {
-    return { x: this.sprite.x, y: this.sprite.y };
-  }
-
-  getBounds() {
-    return this.sprite.getBounds();
-  }
-
-  takeDamage(damage) {
-    this.health = Math.max(this.health - damage, 0);
-
-    // Create flash effect
-    this.sprite.setTintFill(0xffffff);
-    this.scene.time.delayedCall(100, () => {
-      if (this.sprite?.active) {
-        this.sprite.clearTint();
-      }
-    });
-
-    this.uiManager.showDamageNumber(damage);
-
-    if (this.health === 0) {
-      this.destroy();
-      this.scene.resetGame();
-      return true; // Player is dead
-    }
-    return false;
-  }
-
   dash(directionX, directionY) {
     this.dashManager.dash(directionX, directionY);
   }
 
   destroy() {
-    if (this.sprite?.body) {
-      this.sprite.destroy();
-    }
-    this.uiManager.destroy();
+    super.destroy();
     if (this.trailGraphics) {
       this.trailGraphics.destroy();
     }

@@ -1,10 +1,12 @@
 import { CONSTANTS } from "../constants";
 import HealthBar from "../ui/HealthBar";
+import DamageNumber from "../ui/DamageNumber";
 
 export default class UIManager {
   constructor(scene, player) {
     this.scene = scene;
     this.player = player;
+    this.damageNumber = new DamageNumber(scene);
 
     // Create health bar
     this.healthBar = new HealthBar(scene, {
@@ -28,6 +30,7 @@ export default class UIManager {
   update(healthPercentage, dashProgress) {
     this.updatePositions();
     this.updateBars(healthPercentage, dashProgress);
+    this.damageNumber.update();
   }
 
   updatePositions() {
@@ -52,11 +55,17 @@ export default class UIManager {
   }
 
   showDamageNumber(damage) {
-    this.scene.createDamageNumber(
-      this.player.sprite.x,
-      this.player.sprite.y - this.player.sprite.height/2 - CONSTANTS.healthBarOffset,
+    // Get the left edge of health bar for X alignment
+    const healthBarX = this.player.sprite.x - CONSTANTS.healthBarWidth/2;
+    
+    // Position WAY above the player, using the health bar's Y position as reference
+    const healthBarY = this.player.sprite.y - this.player.sprite.height/2 - CONSTANTS.healthBarOffset;
+    
+    this.damageNumber.create(
+      healthBarX,
+      healthBarY,
       damage,
-      this.player
+      this.healthBar
     );
   }
 
