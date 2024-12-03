@@ -64,6 +64,26 @@ export default class Player {
       CONSTANTS.healthBarColor
     );
     this.healthBar.setDepth(11);
+
+    // Create dash cooldown bar background
+    this.dashCooldownBarBackground = scene.add.rectangle(
+      x,
+      y - this.sprite.height/2 - CONSTANTS.healthBarOffset + CONSTANTS.healthBarHeight + 1,
+      CONSTANTS.healthBarWidth,
+      CONSTANTS.healthBarHeight,
+      CONSTANTS.healthBarBackgroundColor
+    );
+    this.dashCooldownBarBackground.setDepth(11);
+
+    // Create dash cooldown bar
+    this.dashCooldownBar = scene.add.rectangle(
+      x,
+      y - this.sprite.height/2 - CONSTANTS.healthBarOffset + CONSTANTS.healthBarHeight + 1,
+      CONSTANTS.healthBarWidth,
+      CONSTANTS.healthBarHeight,
+      CONSTANTS.dashCooldownBarColor
+    );
+    this.dashCooldownBar.setDepth(11);
   }
 
   update() {
@@ -80,6 +100,20 @@ export default class Player {
     this.healthBarBackground.y = this.sprite.y - this.sprite.height/2 - CONSTANTS.healthBarOffset;
     this.healthBar.x = this.sprite.x;
     this.healthBar.y = this.sprite.y - this.sprite.height/2 - CONSTANTS.healthBarOffset;
+
+    // Update dash cooldown bar position and width
+    this.dashCooldownBarBackground.x = this.sprite.x;
+    this.dashCooldownBarBackground.y = this.sprite.y - this.sprite.height/2 - CONSTANTS.healthBarOffset + CONSTANTS.healthBarHeight + 1;
+    this.dashCooldownBar.x = this.sprite.x;
+    this.dashCooldownBar.y = this.sprite.y - this.sprite.height/2 - CONSTANTS.healthBarOffset + CONSTANTS.healthBarHeight + 1;
+
+    if (!this.canDash) {
+      const timeSinceDash = this.scene.time.now - this.lastDashTime;
+      const cooldownProgress = Math.min(timeSinceDash / CONSTANTS.dashCooldown, 1);
+      this.dashCooldownBar.width = CONSTANTS.healthBarWidth * cooldownProgress;
+    } else {
+      this.dashCooldownBar.width = CONSTANTS.healthBarWidth;
+    }
 
     // Find closest enemy that is being targeted
     let targetEnemy = null;
@@ -243,6 +277,12 @@ export default class Player {
     }
     if (this.healthBarBackground) {
       this.healthBarBackground.destroy();
+    }
+    if (this.dashCooldownBar) {
+      this.dashCooldownBar.destroy();
+    }
+    if (this.dashCooldownBarBackground) {
+      this.dashCooldownBarBackground.destroy();
     }
     if (this.trailGraphics) {
       this.trailGraphics.destroy();

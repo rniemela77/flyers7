@@ -29,6 +29,8 @@ export const CONSTANTS = {
   healthBarOffset: window.innerWidth * 0.01, // 1%
   healthBarBackgroundColor: 0x000000,
   healthBarColor: 0xff0000,
+  dashCooldownBarColor: 0xffffff, // White color for dash cooldown
+  dashCooldownBarOffset: window.innerWidth * 0.015, // 1.5% (slightly below health bar)
   
   // Movement and controls
   joystickRadius: window.innerWidth * 0.03, // 3%
@@ -42,7 +44,7 @@ export const CONSTANTS = {
   // Evasion dash
   dashSpeed: 550, // Speed multiplier during dash (nearly doubled for much longer dash)
   dashDuration: 250, // Duration of dash in milliseconds (increased for longer dash)
-  dashCooldown: 10, // Time before player can dash again
+  dashCooldown: 2000, // Time before player can dash again (in milliseconds)
   
   // Basic shapes (for collision and visuals)
   squareSize: window.innerWidth * 0.05, // 5%
