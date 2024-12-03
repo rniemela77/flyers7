@@ -46,7 +46,7 @@ export const CONSTANTS = {
   // Purple attack properties
   purpleCircleRadius: 175,
   purpleCircleColor: 0x800080,
-  purpleTelegraphDuration: 2000,
+  purpleTelegraphDuration: 5500,
   purpleAttackDuration: 500,
   purpleAttackCooldown: 4000,
   purpleAttackDamage: 30,
@@ -57,7 +57,7 @@ export const CONSTANTS = {
   stickLength: 300,
   stickWidth: 20,
   stickColor: 0x00ff00,
-  stickTelegraphDuration: 2000,
-  stickAttackDuration: 500,
-  stickAttackCooldown: 4000,
+  stickTelegraphDuration: 3500, // this is the duration of the telegraph
+  stickAttackDuration: 500, // this is the duration of the attack
+  stickAttackCooldown: 5000,
 };

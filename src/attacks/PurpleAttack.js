@@ -54,7 +54,7 @@ export default class PurpleAttack {
     this.currentTween = this.scene.tweens.add({
       targets: this.attackCircle,
       radius: CONSTANTS.purpleCircleRadius,
-      duration: 1000,
+      duration: CONSTANTS.purpleTelegraphDuration,
       ease: 'Linear',
       onComplete: () => {
         if (this.attackCircle?.active) {
@@ -65,20 +65,21 @@ export default class PurpleAttack {
   }
 
   performAttack() {
-    // Hide outline, show full attack
+    // Hide outline
     this.outline.setVisible(false);
+    
+    // Show attack circle at full opacity for visual feedback
     this.attackCircle.setAlpha(1);
-    this.attackCircle.hasDealtDamage = false;
-
-    // Check for collision immediately on the first frame
+    
+    // Check for collision on this single frame
     this.checkCollisionsForAttack();
 
-    // After attack duration, hide attack and start cooldown
-    this.scene.time.delayedCall(CONSTANTS.purpleAttackDuration, () => {
+    // Hide attack circle after a brief visual feedback
+    this.scene.time.delayedCall(100, () => {
       this.attackCircle.setVisible(false);
       
       // Start next sequence after cooldown
-      this.scene.time.delayedCall(1000, () => {
+      this.scene.time.delayedCall(CONSTANTS.purpleAttackCooldown, () => {
         if (this.owner.sprite?.active) {
           this.startAttackSequence();
         }
@@ -87,13 +88,12 @@ export default class PurpleAttack {
   }
 
   checkCollisionsForAttack() {
-    if (!this.owner.sprite?.active || this.attackCircle.hasDealtDamage) return;
+    if (!this.owner.sprite?.active) return;
 
     const targets = this.scene.player ? [this.scene.player] : [];
     targets.forEach((target) => {
       if (target?.getBounds && 
           Phaser.Geom.Intersects.CircleToRectangle(this.attackCircle, target.getBounds())) {
-        this.attackCircle.hasDealtDamage = true;
         const isDead = target.takeDamage(CONSTANTS.purpleAttackDamage);
         if (isDead && Array.isArray(this.scene.enemies)) {
           this.scene.enemies = this.scene.enemies.filter(e => e !== target);

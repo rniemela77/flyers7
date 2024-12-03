@@ -97,6 +97,7 @@ export default class StickAttack {
   performStickAttack() {
     const position = this.owner.getPosition();
     
+    // Create the attack stick for visual feedback
     const attackStick = this.scene.add.rectangle(
       position.x,
       position.y,
@@ -107,14 +108,15 @@ export default class StickAttack {
     attackStick.setOrigin(0, 0.5);
     attackStick.setDepth(1);
     attackStick.rotation = this.stickOutline.rotation;
-    attackStick.hasDealtDamage = false;  // Track if damage has been dealt
 
-    this.activeAttacks.push(attackStick);
-
-    // Check for collision immediately on the first frame
+    // Check for collision on this single frame
     this.checkCollisionsForAttack(attackStick);
 
-    this.scene.time.delayedCall(CONSTANTS.stickAttackDuration, () => {
+    // Add to active attacks for cleanup
+    this.activeAttacks.push(attackStick);
+
+    // Remove the attack visual after brief feedback
+    this.scene.time.delayedCall(100, () => {
       if (attackStick) {
         attackStick.destroy();
         this.activeAttacks = this.activeAttacks.filter(
@@ -125,13 +127,12 @@ export default class StickAttack {
   }
 
   checkCollisionsForAttack(attack) {
-    if (!this.owner.sprite?.active || attack.hasDealtDamage) return;
+    if (!this.owner.sprite?.active) return;
 
     const targets = this.scene.player ? [this.scene.player] : [];
     targets.forEach((target) => {
       if (target?.getBounds && 
           Phaser.Geom.Intersects.RectangleToRectangle(attack.getBounds(), target.getBounds())) {
-        attack.hasDealtDamage = true;
         const isDead = target.takeDamage(CONSTANTS.stickAttackDamage);
         if (isDead && Array.isArray(this.scene.enemies)) {
           this.scene.enemies = this.scene.enemies.filter(e => e !== target);

@@ -10,6 +10,7 @@ class Joystick {
     
     // Create the indicator line
     this.indicatorLine = scene.add.line(0, 0, 0, 0, 0, 0, 0xffffff);
+    this.indicatorLine.setDepth(1); // Make sure line is visible above ground
     
     // Initialize velocities
     this.velocityX = 0;
@@ -23,6 +24,10 @@ class Joystick {
     // Store initial position based on player's current position
     this.initialX = player.getPosition().x;
     this.initialY = player.getPosition().y;
+
+    // Store last angle and line length
+    this.lastAngle = 0;
+    this.lastLineLength = 0;
   }
 
   createJoystick(pointer) {
@@ -71,26 +76,9 @@ class Joystick {
         CONSTANTS.maxSpeed
       );
 
-      const angle = Math.atan2(deltaY, deltaX);
-      const lineLength = Math.sqrt(deltaX * deltaX + deltaY * deltaY) * 0.5;
-
-      const playerPosition = this.player.getPosition();
-      this.indicatorLine.setTo(
-        playerPosition.x,
-        playerPosition.y,
-        playerPosition.x + lineLength * Math.cos(angle),
-        playerPosition.y + lineLength * Math.sin(angle)
-      );
-    }
-  }
-
-  removeJoystick() {
-    if (this.joystick) {
-      this.joystick.destroy();
-      this.joystick = null;
-      this.targetVelocityX = 0;
-      this.targetVelocityY = 0;
-      this.indicatorLine.setTo(0, 0, 0, 0);
+      // Store angle and line length for continuous updates
+      this.lastAngle = Math.atan2(deltaY, deltaX);
+      this.lastLineLength = Math.sqrt(deltaX * deltaX + deltaY * deltaY) * 0.5;
     }
   }
 
@@ -105,6 +93,31 @@ class Joystick {
       this.targetVelocityY,
       CONSTANTS.acceleration
     );
+
+    // Update indicator line position if moving
+    if (Math.abs(this.velocityX) > 0.1 || Math.abs(this.velocityY) > 0.1) {
+      const playerPosition = this.player.getPosition();
+      this.indicatorLine.setTo(
+        playerPosition.x,
+        playerPosition.y,
+        playerPosition.x + this.lastLineLength * Math.cos(this.lastAngle),
+        playerPosition.y + this.lastLineLength * Math.sin(this.lastAngle)
+      );
+    } else {
+      // Hide line if not moving
+      this.indicatorLine.setTo(0, 0, 0, 0);
+    }
+  }
+
+  removeJoystick() {
+    if (this.joystick) {
+      this.joystick.destroy();
+      this.joystick = null;
+      this.targetVelocityX = 0;
+      this.targetVelocityY = 0;
+      this.indicatorLine.setTo(0, 0, 0, 0);
+      this.lastLineLength = 0;
+    }
   }
 
   applyJoystickVelocity() {
