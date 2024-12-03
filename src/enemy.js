@@ -6,13 +6,14 @@ import PurpleAttack from "./attacks/PurpleAttack";
 import StickAttack from "./attacks/StickAttack";
 
 export default class Enemy {
-  constructor(scene, x, y) {
+  constructor(scene, x, y, enemyType = 'stick') {
     this.scene = scene;
     this.health = CONSTANTS.enemyMaxHealth;
+    this.enemyType = enemyType;
 
     // Create enemy sprite using the image
     this.sprite = scene.add.sprite(x, y, 'enemy');
-    this.sprite.setScale(CONSTANTS.playerSpriteScale); // Use same scale as player for now
+    this.sprite.setScale(CONSTANTS.playerSpriteScale);
     
     // Enable physics
     scene.physics.add.existing(this.sprite, false);
@@ -49,14 +50,33 @@ export default class Enemy {
     this.targetingOutline.setStrokeStyle(2, 0xffffff);
     this.targetingOutline.setVisible(false);
 
-    // Add attack controller
-    this.attackController = new AttackController(scene, this);
-    
-    // Add attack timer
-    this.setupAttackTimer();
-
-    this.purpleAttack = new PurpleAttack(scene, this);
-    this.stickAttack = new StickAttack(scene, this);
+    // Initialize attacks based on type
+    if (enemyType === 'purple') {
+      this.purpleAttack = new PurpleAttack(scene, this);
+      this.stickAttack = null;
+      // Start purple attack sequence after a delay
+      this.scene.time.delayedCall(1000, () => {
+        if (this.purpleAttack && this.sprite?.active) {
+          this.purpleAttack.startAttackSequence();
+        }
+      });
+    } else {
+      this.stickAttack = new StickAttack(scene, this);
+      this.purpleAttack = null;
+      // Start stick attack immediately and then set up cycle
+      if (this.stickAttack && this.sprite?.active) {
+        this.stickAttack.attackCycle();
+      }
+      this.scene.time.addEvent({
+        delay: CONSTANTS.stickAttackCooldown,
+        callback: () => {
+          if (this.stickAttack && this.sprite?.active) {
+            this.stickAttack.attackCycle();
+          }
+        },
+        loop: true
+      });
+    }
   }
 
   update() {
@@ -83,13 +103,15 @@ export default class Enemy {
         player.getPosition().x,
         player.getPosition().y
       );
-      this.sprite.rotation = angle + Math.PI / 2; // Add 90 degrees to make sprite face the direction of movement
+      this.sprite.rotation = angle + Math.PI / 2;
       
       // Update UI elements
       this.updateUIPositions();
       
-      // Update stick attack
-      this.stickAttack.update();
+      // Update only the active attack type
+      if (this.stickAttack) {
+        this.stickAttack.update();
+      }
     }
   }
 
@@ -102,37 +124,10 @@ export default class Enemy {
     this.targetingOutline.x = this.sprite.x;
     this.targetingOutline.y = this.sprite.y;
     
-    // Update attack positions
+    // Update attack positions based on type
     if (this.purpleAttack) {
       this.purpleAttack.updatePosition(0, 0);
     }
-  }
-
-  getPosition() {
-    return { x: this.sprite.x, y: this.sprite.y };
-  }
-
-  getBounds() {
-    return this.sprite.getBounds();
-  }
-
-  takeDamage(damage) {
-    this.health = Math.max(this.health - damage, 0);
-    this.healthBar.width = (this.health / CONSTANTS.enemyMaxHealth) * CONSTANTS.healthBarWidth;
-
-    // Create flash effect
-    this.sprite.setTintFill(0xffffff);
-    this.scene.time.delayedCall(100, () => {
-      if (this.sprite?.active) {
-        this.sprite.clearTint();
-      }
-    });
-
-    if (this.health === 0) {
-      this.destroy();
-      return true;
-    }
-    return false;
   }
 
   destroy() {
@@ -156,6 +151,33 @@ export default class Enemy {
     }
   }
 
+  getPosition() {
+    return { x: this.sprite.x, y: this.sprite.y };
+  }
+
+  getBounds() {
+    return this.sprite.getBounds();
+  }
+
+  takeDamage(damage) {
+    this.health = Math.max(this.health - damage, 0);
+    this.healthBar.width = (this.health / CONSTANTS.enemyMaxHealth) * CONSTANTS.healthBarWidth;
+
+    // Create flash effect
+    this.sprite.setTintFill(0xffffff);
+    this.scene.time.delayedCall(100, () => {
+      if (this.sprite?.active) {
+        this.sprite.clearTint(); // Just clear the tint, don't set a color
+      }
+    });
+
+    if (this.health === 0) {
+      this.destroy();
+      return true;
+    }
+    return false;
+  }
+
   isVisible() {
     return this.sprite.visible;
   }
@@ -171,21 +193,5 @@ export default class Enemy {
 
   setTargetingVisible(visible) {
     this.targetingOutline.setVisible(visible);
-  }
-
-  setupAttackTimer() {
-    this.scene.time.addEvent({
-      delay: 2000,
-      callback: this.attackPlayer,
-      callbackScope: this,
-      loop: true
-    });
-  }
-
-  attackPlayer() {
-    const player = this.scene.player;
-    if (player && this.getDistanceTo(player.getPosition().x, player.getPosition().y) < CONSTANTS.enemyAttackRange) {
-      const attackLine = this.attackController.lineAttack(player);
-    }
   }
 }

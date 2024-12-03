@@ -25,22 +25,10 @@ export default class StickAttack {
     this.targetRotation = 0;
     this.growingStick = null;
     this.isAttacking = false;
-
-    // Start the attack cycle
-    this.setupAttackTimer();
-  }
-
-  setupAttackTimer() {
-    this.scene.time.addEvent({
-      delay: CONSTANTS.stickAttackCooldown,
-      callback: this.attackCycle,
-      callbackScope: this,
-      loop: true
-    });
   }
 
   attackCycle() {
-    if (!this.owner.sprite?.active) return;
+    if (!this.owner.sprite?.active || this.isAttacking) return;
 
     // Start telegraph phase
     this.isAttacking = true;
@@ -87,7 +75,7 @@ export default class StickAttack {
         this.stickOutline.setVisible(false);
         
         // Reset after attack duration
-        this.scene.time.delayedCall(CONSTANTS.stickAttackDuration, () => {
+        this.scene.time.delayedCall(100, () => {
           this.isAttacking = false;
         });
       }

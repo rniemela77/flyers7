@@ -16,7 +16,7 @@ export default class PurpleAttack {
     this.outline.setVisible(false);
     this.outline.setDepth(1);
 
-    // Create the attack circle (reused for both telegraph and attack)
+    // Create the attack circle
     this.attackCircle = scene.add.circle(
       owner.getPosition().x,
       owner.getPosition().y,
@@ -25,40 +25,59 @@ export default class PurpleAttack {
     );
     this.attackCircle.setVisible(false);
     this.attackCircle.setDepth(1);
-    
-    // Start the attack sequence after initial delay
-    this.scene.time.delayedCall(1000, () => {
-      this.startAttackSequence();
-    });
+
+    this.growingCircle = null;
+    this.currentTween = null;
   }
 
   startAttackSequence() {
     if (!this.owner.sprite?.active) return;
 
+    // Stop any existing tween
+    if (this.currentTween) {
+      this.currentTween.stop();
+      this.currentTween = null;
+    }
+
+    // Clean up existing growing circle
+    if (this.growingCircle) {
+      this.growingCircle.destroy();
+    }
+
     // Show outline and start telegraph
     this.outline.setVisible(true);
     
-    // Reset attack circle to initial state
-    this.attackCircle.setVisible(true);
-    this.attackCircle.setAlpha(0.3);
-    this.attackCircle.setRadius(1);
-
-    // Update positions before starting animation
+    // Create new growing circle
     const position = this.owner.getPosition();
-    this.attackCircle.x = position.x;
-    this.attackCircle.y = position.y;
+    this.growingCircle = this.scene.add.circle(
+      position.x,
+      position.y,
+      1,
+      CONSTANTS.purpleCircleColor
+    );
+    this.growingCircle.setAlpha(0.3);
+    this.growingCircle.setDepth(1);
+
+    // Update positions
     this.outline.x = position.x;
     this.outline.y = position.y;
+    this.attackCircle.x = position.x;
+    this.attackCircle.y = position.y;
 
-    // Store reference to tween so we can stop it if needed
+    // Create new tween
     this.currentTween = this.scene.tweens.add({
-      targets: this.attackCircle,
+      targets: this.growingCircle,
       radius: CONSTANTS.purpleCircleRadius,
       duration: CONSTANTS.purpleTelegraphDuration,
       ease: 'Linear',
       onComplete: () => {
-        if (this.attackCircle?.active) {
+        if (this.owner.sprite?.active) {
           this.performAttack();
+        }
+        // Clean up growing circle after tween completes
+        if (this.growingCircle) {
+          this.growingCircle.destroy();
+          this.growingCircle = null;
         }
       }
     });
@@ -68,13 +87,15 @@ export default class PurpleAttack {
     // Hide outline
     this.outline.setVisible(false);
     
-    // Show attack circle at full opacity for visual feedback
+    // Show and position attack circle
+    this.attackCircle.setVisible(true);
     this.attackCircle.setAlpha(1);
+    this.attackCircle.setRadius(CONSTANTS.purpleCircleRadius);
     
     // Check for collision on this single frame
     this.checkCollisionsForAttack();
 
-    // Hide attack circle after a brief visual feedback
+    // Hide attack circle after brief visual feedback
     this.scene.time.delayedCall(100, () => {
       this.attackCircle.setVisible(false);
       
@@ -110,11 +131,10 @@ export default class PurpleAttack {
     this.outline.y = position.y;
     this.attackCircle.x = position.x;
     this.attackCircle.y = position.y;
-  }
-
-  checkCollisions(targets) {
-    // No longer check collisions in update loop - damage is only dealt on first frame
-    return;
+    if (this.growingCircle?.active) {
+      this.growingCircle.x = position.x;
+      this.growingCircle.y = position.y;
+    }
   }
 
   destroy() {
@@ -129,6 +149,9 @@ export default class PurpleAttack {
     }
     if (this.attackCircle) {
       this.attackCircle.destroy();
+    }
+    if (this.growingCircle) {
+      this.growingCircle.destroy();
     }
   }
 } 
