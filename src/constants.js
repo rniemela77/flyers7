@@ -26,9 +26,11 @@ export const CONSTANTS = {
   // Movement and controls
   joystickRadius: window.innerWidth * 0.03, // 3%
   joystickColor: 0x888888,
-  acceleration: 0.1,
-  deceleration: 0.05,
+  acceleration: 0.3, // Faster response
+  deceleration: 0.15, // Smoother stop
   maxSpeed: 5,
+  joystickSensitivity: 0.008, // Fine control over joystick sensitivity
+  deadzone: 0.1, // Minimum movement threshold
   
   // Basic shapes (for collision and visuals)
   squareSize: window.innerWidth * 0.05, // 5%

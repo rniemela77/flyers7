@@ -51,6 +51,16 @@ class Joystick {
       const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
       const maxDistance = 50; // Maximum distance joystick can move from center
 
+      // Calculate normalized direction vector
+      let dirX = deltaX / (distance || 1);
+      let dirY = deltaY / (distance || 1);
+
+      // Apply deadzone
+      if (distance < maxDistance * CONSTANTS.deadzone) {
+        dirX = 0;
+        dirY = 0;
+      }
+
       // Calculate joystick position
       let moveX = deltaX;
       let moveY = deltaY;
@@ -64,38 +74,43 @@ class Joystick {
       this.joystick.x = this.initialPointerX + moveX;
       this.joystick.y = this.initialPointerY + moveY;
 
-      // Calculate velocities based on original delta (unconstrained)
-      this.targetVelocityX = Phaser.Math.Clamp(
-        deltaX * 0.1,
-        -CONSTANTS.maxSpeed,
-        CONSTANTS.maxSpeed
-      );
-      this.targetVelocityY = Phaser.Math.Clamp(
-        deltaY * 0.1,
-        -CONSTANTS.maxSpeed,
-        CONSTANTS.maxSpeed
-      );
+      // Calculate speed based on distance from center (normalized)
+      const speedMultiplier = Math.min(distance / maxDistance, 1);
+
+      // Set target velocities using normalized direction and speed
+      this.targetVelocityX = dirX * CONSTANTS.maxSpeed * speedMultiplier;
+      this.targetVelocityY = dirY * CONSTANTS.maxSpeed * speedMultiplier;
 
       // Store angle and line length for continuous updates
-      this.lastAngle = Math.atan2(deltaY, deltaX);
-      this.lastLineLength = Math.sqrt(deltaX * deltaX + deltaY * deltaY) * 0.5;
+      this.lastAngle = Math.atan2(dirY, dirX);
+      this.lastLineLength = distance * 0.5;
     }
   }
 
   updateJoystickVelocity() {
+    // Apply acceleration or deceleration based on whether we're moving toward target or stopping
+    const accelX = Math.abs(this.targetVelocityX) > Math.abs(this.velocityX) ? 
+      CONSTANTS.acceleration : CONSTANTS.deceleration;
+    const accelY = Math.abs(this.targetVelocityY) > Math.abs(this.velocityY) ? 
+      CONSTANTS.acceleration : CONSTANTS.deceleration;
+
     this.velocityX = Phaser.Math.Linear(
       this.velocityX,
       this.targetVelocityX,
-      CONSTANTS.acceleration
+      accelX
     );
     this.velocityY = Phaser.Math.Linear(
       this.velocityY,
       this.targetVelocityY,
-      CONSTANTS.acceleration
+      accelY
     );
 
+    // Apply small deadzone to velocity to prevent micro-movements
+    if (Math.abs(this.velocityX) < CONSTANTS.deadzone) this.velocityX = 0;
+    if (Math.abs(this.velocityY) < CONSTANTS.deadzone) this.velocityY = 0;
+
     // Update indicator line position if moving
-    if (Math.abs(this.velocityX) > 0.1 || Math.abs(this.velocityY) > 0.1) {
+    if (Math.abs(this.velocityX) > CONSTANTS.deadzone || Math.abs(this.velocityY) > CONSTANTS.deadzone) {
       const playerPosition = this.player.getPosition();
       this.indicatorLine.setTo(
         playerPosition.x,
