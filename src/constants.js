@@ -26,7 +26,7 @@ export const CONSTANTS = {
   // UI and HUD
   healthBarWidth: window.innerWidth * 0.05, // 5%
   healthBarHeight: window.innerWidth * 0.01, // 1%
-  healthBarOffset: window.innerWidth * 0.01, // 1%
+  healthBarOffset: window.innerWidth * -0.05, // 3% (increased from 1% to move bars lower)
   healthBarBackgroundColor: 0x000000,
   healthBarColor: 0xff0000,
   dashCooldownBarColor: 0xffffff, // White color for dash cooldown
