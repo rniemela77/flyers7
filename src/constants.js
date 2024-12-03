@@ -9,6 +9,13 @@ export const CONSTANTS = {
   playerMaxRotationSpeed: 0.1, // Maximum rotation speed in radians per frame
   playerSpeed: 20, // Base movement speed for the player
   
+  // Trail settings
+  trailSegmentSize: window.innerWidth * 0.002, // 0.2% of screen width for line thickness
+  trailFadeDuration: 300, // Shorter duration for smoother trail
+  trailColor: 0x00ffff, // Cyan color
+  maxTrailSegments: 12, // Fewer segments for line trail
+  trailSpawnInterval: 16, // ~60fps for smooth line
+  
   // Enemy constants
   enemyMaxHealth: 200,
   enemySpeed: 2,
