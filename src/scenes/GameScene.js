@@ -17,6 +17,14 @@ export default class GameScene extends Phaser.Scene {
     this.grid = null;
     this.obstacles = null;
     this.targetedEnemy = null;
+    
+    // Swipe state
+    this.swipeState = {
+      startX: 0,
+      startY: 0,
+      startTime: 0,
+      isTracking: false
+    };
   }
 
   preload() {
@@ -58,9 +66,45 @@ export default class GameScene extends Phaser.Scene {
   }
 
   setupInputHandlers() {
-    this.input.on("pointerdown", this.joystick.createJoystick, this.joystick);
-    this.input.on("pointermove", this.joystick.moveJoystick, this.joystick);
-    this.input.on("pointerup", this.joystick.removeJoystick, this.joystick);
+    this.input.on("pointerdown", (pointer) => {
+      // Start tracking motion
+      this.swipeState = {
+        startX: pointer.x,
+        startY: pointer.y,
+        startTime: this.time.now,
+        isTracking: true
+      };
+
+      // Create joystick
+      this.joystick.createJoystick.call(this.joystick, pointer);
+    });
+
+    this.input.on("pointermove", (pointer) => {
+      // Only handle joystick movement
+      if (this.joystick.joystick) {
+        this.joystick.moveJoystick.call(this.joystick, pointer);
+      }
+    });
+
+    this.input.on("pointerup", (pointer) => {
+      if (this.swipeState.isTracking) {
+        const dx = pointer.x - this.swipeState.startX;
+        const dy = pointer.y - this.swipeState.startY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const duration = this.time.now - this.swipeState.startTime;
+
+        // If it was a quick motion, trigger dash
+        if (distance > 30 && duration < 200) {
+          this.player.dash(dx / distance, dy / distance);
+        }
+      }
+
+      // Clean up
+      if (this.joystick.joystick) {
+        this.joystick.removeJoystick.call(this.joystick);
+      }
+      this.swipeState.isTracking = false;
+    });
   }
 
   setupTimers() {

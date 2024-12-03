@@ -28,6 +28,12 @@ export default class Player {
     this.sprite.body.setDrag(0);
     this.sprite.body.setFriction(0);
     
+    // Initialize dash properties
+    this.isDashing = false;
+    this.canDash = true;
+    this.dashDirection = { x: 0, y: 0 };
+    this.lastDashTime = 0;
+
     // Wait for the next frame to ensure sprite dimensions are loaded
     scene.time.delayedCall(0, () => {
       // Set circular body for better collision
@@ -65,6 +71,9 @@ export default class Player {
 
     // Update trail
     this.updateTrail();
+
+    // Update dash state
+    this.updateDash();
 
     // Update health bar position to follow the sprite
     this.healthBarBackground.x = this.sprite.x;
@@ -178,7 +187,8 @@ export default class Player {
   // Method to set the player's velocity
   setVelocity(x, y) {
     if (this.sprite?.body) {
-      this.sprite.body.setVelocity(x * CONSTANTS.playerSpeed, y * CONSTANTS.playerSpeed);
+      const speed = this.isDashing ? CONSTANTS.dashSpeed : CONSTANTS.playerSpeed;
+      this.sprite.body.setVelocity(x * speed, y * speed);
     }
   }
 
@@ -245,6 +255,45 @@ export default class Player {
     if (this.sprite) {
       this.sprite.x = x;
       this.sprite.y = y;
+    }
+  }
+
+  dash(directionX, directionY) {
+    if (!this.canDash || this.isDashing) return;
+
+    // Normalize direction
+    const length = Math.sqrt(directionX * directionX + directionY * directionY);
+    if (length === 0) return;
+
+    this.dashDirection.x = directionX / length;
+    this.dashDirection.y = directionY / length;
+    
+    this.isDashing = true;
+    this.canDash = false;
+    this.lastDashTime = this.scene.time.now;
+
+    // Set velocity in dash direction
+    this.setVelocity(this.dashDirection.x, this.dashDirection.y);
+
+    // Reset dash after duration
+    this.scene.time.delayedCall(CONSTANTS.dashDuration, () => {
+      this.isDashing = false;
+      // Reset velocity after dash
+      if (this.sprite?.body) {
+        this.sprite.body.setVelocity(0, 0);
+      }
+    });
+
+    // Reset dash cooldown
+    this.scene.time.delayedCall(CONSTANTS.dashCooldown, () => {
+      this.canDash = true;
+    });
+  }
+
+  updateDash() {
+    if (this.isDashing) {
+      // Keep applying dash velocity during dash
+      this.setVelocity(this.dashDirection.x, this.dashDirection.y);
     }
   }
 }

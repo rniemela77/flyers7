@@ -1,13 +1,13 @@
 export const CONSTANTS = {
   // Camera settings
-  cameraZoom: window.innerWidth * 0.002, // 0.2%
+  cameraZoom: window.innerWidth * 0.0018, // 0.2%
   
   // Player constants
   playerMaxHealth: 100,
   playerSpriteScale: 0.3,
   playerRotationOffset: 230, // Degrees to adjust player sprite rotation (MUST BE 230!)
   playerMaxRotationSpeed: 0.1, // Maximum rotation speed in radians per frame
-  playerSpeed: 20, // Base movement speed for the player
+  playerSpeed: 40, // Base movement speed for the player
   
   // Trail settings
   trailSegmentSize: window.innerWidth * 0.002, // 0.2% of screen width for line thickness
@@ -38,6 +38,11 @@ export const CONSTANTS = {
   maxSpeed: 5,
   joystickSensitivity: 0.008, // Fine control over joystick sensitivity
   deadzone: 0.1, // Minimum movement threshold
+  
+  // Evasion dash
+  dashSpeed: 550, // Speed multiplier during dash (nearly doubled for much longer dash)
+  dashDuration: 250, // Duration of dash in milliseconds (increased for longer dash)
+  dashCooldown: 10, // Time before player can dash again
   
   // Basic shapes (for collision and visuals)
   squareSize: window.innerWidth * 0.05, // 5%
