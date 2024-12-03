@@ -49,7 +49,7 @@ export default class GameScene extends Phaser.Scene {
 
     // Set up camera to follow player with deadzone
     this.cameras.main.startFollow(this.player.sprite, true, 0.1, 0.1);
-    this.cameras.main.setZoom(1.0);
+    this.cameras.main.setZoom(CONSTANTS.cameraZoom);
 
     // Set up collision groups once
     this.physics.add.collider(this.enemyCollisionGroup, this.obstacles);

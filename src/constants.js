@@ -1,4 +1,7 @@
 export const CONSTANTS = {
+  // Camera settings
+  cameraZoom: window.innerWidth * 0.002, // 0.2%
+  
   // Player constants
   playerMaxHealth: 100,
   playerSpriteScale: 0.3,
