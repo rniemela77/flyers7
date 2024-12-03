@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { CONSTANTS } from "../constants";
+import HealthBar from "../ui/HealthBar";
 
 export default class Character {
   constructor(scene, x, y, config) {
@@ -16,32 +17,22 @@ export default class Character {
       config.color
     );
 
-    // Create health bar background
-    this.healthBarBackground = scene.add.rectangle(
-      x,
-      y - config.size - 10,
-      CONSTANTS.healthBarWidth,
-      CONSTANTS.healthBarHeight,
-      CONSTANTS.healthBarBackgroundColor
-    );
-
     // Create health bar
-    this.healthBar = scene.add.rectangle(
+    this.healthBar = new HealthBar(scene, {
       x,
-      y - config.size - 10,
-      CONSTANTS.healthBarWidth,
-      CONSTANTS.healthBarHeight,
-      CONSTANTS.healthBarColor
-    );
+      y: y - config.size - 10,
+      width: CONSTANTS.healthBarWidth,
+      height: CONSTANTS.healthBarHeight
+    });
   }
 
   updatePosition(offsetX, offsetY) {
     this.sprite.x += offsetX;
     this.sprite.y += offsetY;
-    this.healthBarBackground.x += offsetX;
-    this.healthBarBackground.y += offsetY;
-    this.healthBar.x += offsetX;
-    this.healthBar.y += offsetY;
+    this.healthBar.setPosition(
+      this.sprite.x,
+      this.sprite.y - this.sprite.height - 10
+    );
   }
 
   takeDamage(damage) {
@@ -56,7 +47,7 @@ export default class Character {
   }
 
   updateHealthBar() {
-    this.healthBar.width = (this.health / this.maxHealth) * CONSTANTS.healthBarWidth;
+    this.healthBar.updatePercentage(this.health / this.maxHealth);
   }
 
   getPosition() {
@@ -70,7 +61,6 @@ export default class Character {
   destroy() {
     this.sprite.destroy();
     this.healthBar.destroy();
-    this.healthBarBackground.destroy();
   }
 
   isVisible() {

@@ -43,6 +43,16 @@ export default class Enemy {
     );
     this.healthBar.setDepth(11);
 
+    // Create health bar bottom border
+    this.healthBarBorder = scene.add.rectangle(
+      x,
+      y - 35 + CONSTANTS.healthBarHeight,
+      CONSTANTS.healthBarWidth,
+      1,
+      CONSTANTS.healthBarColor
+    );
+    this.healthBarBorder.setDepth(11);
+
     // Create targeting outline - adjust size based on sprite bounds
     const bounds = this.sprite.getBounds();
     const radius = Math.max(bounds.width, bounds.height) / 2;
@@ -121,6 +131,8 @@ export default class Enemy {
     this.healthBarBackground.y = this.sprite.y - 35;
     this.healthBar.x = this.sprite.x;
     this.healthBar.y = this.sprite.y - 35;
+    this.healthBarBorder.x = this.sprite.x;
+    this.healthBarBorder.y = this.sprite.y - 35 + CONSTANTS.healthBarHeight;
     this.targetingOutline.x = this.sprite.x;
     this.targetingOutline.y = this.sprite.y;
     
@@ -139,6 +151,9 @@ export default class Enemy {
     }
     if (this.healthBarBackground) {
       this.healthBarBackground.destroy();
+    }
+    if (this.healthBarBorder) {
+      this.healthBarBorder.destroy();
     }
     if (this.targetingOutline) {
       this.targetingOutline.destroy();
