@@ -9,28 +9,28 @@ export const CONSTANTS = {
   // Enemy constants
   enemyMaxHealth: 200,
   enemySpeed: 2,
-  enemyAttackRange: 300,
+  enemyAttackRange: window.innerWidth * 0.3, // 30%
   enemyAttackInterval: 4000,
   enemyAttackDamage: 15,
   
   // UI and HUD
-  healthBarWidth: 50,
-  healthBarHeight: 10,
-  healthBarOffset: 10,
+  healthBarWidth: window.innerWidth * 0.05, // 5%
+  healthBarHeight: window.innerWidth * 0.01, // 1%
+  healthBarOffset: window.innerWidth * 0.01, // 1%
   healthBarBackgroundColor: 0x000000,
   healthBarColor: 0xff0000,
   
   // Movement and controls
-  joystickRadius: 30,
+  joystickRadius: window.innerWidth * 0.03, // 3%
   joystickColor: 0x888888,
   acceleration: 0.1,
   deceleration: 0.05,
   maxSpeed: 5,
   
   // Basic shapes (for collision and visuals)
-  squareSize: 50,
+  squareSize: window.innerWidth * 0.05, // 5%
   squareColor: 0xff0000,
-  circleRadius: 25,
+  circleRadius: window.innerWidth * 0.025, // 2.5%
   circleColor: 0x0000ff,
   
   // Yellow attack properties
@@ -44,7 +44,7 @@ export const CONSTANTS = {
   lineAttackDuration: 200,
   
   // Purple attack properties
-  purpleCircleRadius: 175,
+  purpleCircleRadius: window.innerWidth * 0.175, // 17.5%
   purpleCircleColor: 0x800080,
   purpleTelegraphDuration: 5500,
   purpleAttackDuration: 500,
@@ -54,8 +54,8 @@ export const CONSTANTS = {
   // Stick attack properties
   stickAttackDamage: 10,
   stickRotationLerp: 0.02,
-  stickLength: 300,
-  stickWidth: 20,
+  stickLength: window.innerWidth * 0.3, // 30%
+  stickWidth: window.innerWidth * 0.02, // 2%
   stickColor: 0x00ff00,
   stickTelegraphDuration: 3500,
   stickAttackDuration: 500,
