@@ -62,6 +62,9 @@ export default class Entity {
       }
     });
 
+    // Create impact effect
+    this.createImpactEffect();
+
     // Show damage number
     const barPosition = this.getHealthBarPosition();
     this.damageNumber.create(
@@ -77,6 +80,62 @@ export default class Entity {
       return true;
     }
     return false;
+  }
+
+  createImpactEffect() {
+    // Get player position
+    const player = this.scene.player;
+    if (!player) return;
+
+    // Calculate angle between player and entity
+    const angle = Phaser.Math.Angle.Between(
+      player.sprite.x,
+      player.sprite.y,
+      this.sprite.x,
+      this.sprite.y
+    );
+
+    // Calculate impact point closer to edge (using 80% of radius instead of 60%)
+    const radius = this.getRadius();
+    const impactX = this.sprite.x - Math.cos(angle) * (radius * 0.8);
+    const impactY = this.sprite.y - Math.sin(angle) * (radius * 0.8);
+
+    // Add random offset (±5 pixels)
+    const randomOffset = 5;
+    const randomX = impactX + Phaser.Math.Between(-randomOffset, randomOffset);
+    const randomY = impactY + Phaser.Math.Between(-randomOffset, randomOffset);
+
+    // First blink with random size
+    const size1 = radius * (0.2 + Math.random() * 0.15); // Random between 20-35% of radius
+    const impact1 = this.scene.add.circle(
+      randomX,
+      randomY,
+      size1,
+      0xffffff
+    );
+    impact1.setDepth(99);
+
+    // Remove first circle after 50ms
+    this.scene.time.delayedCall(50, () => {
+      impact1.destroy();
+      
+      // Second blink after 50ms gap with different random size
+      this.scene.time.delayedCall(50, () => {
+        const size2 = radius * (0.2 + Math.random() * 0.15); // Different random size
+        const impact2 = this.scene.add.circle(
+          randomX,
+          randomY,
+          size2,
+          0xffffff
+        );
+        impact2.setDepth(99);
+
+        // Remove second circle after 50ms
+        this.scene.time.delayedCall(50, () => {
+          impact2.destroy();
+        });
+      });
+    });
   }
 
   update() {
