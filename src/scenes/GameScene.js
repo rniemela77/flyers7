@@ -55,8 +55,10 @@ export default class GameScene extends Phaser.Scene {
     this.setupInputHandlers();
     this.setupTimers();
 
-    // Set up camera to follow player with deadzone
+    // Set up camera to follow player with offset
+    const cameraOffsetY = -window.innerHeight * 0.14; // Position player at 1/4 from top
     this.cameras.main.startFollow(this.player.sprite, true, 0.1, 0.1);
+    this.cameras.main.setFollowOffset(0, cameraOffsetY);
     this.cameras.main.setZoom(CONSTANTS.cameraZoom);
 
     // Set up collision groups once
