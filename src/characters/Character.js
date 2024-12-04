@@ -1,12 +1,16 @@
 import Phaser from "phaser";
 import { CONSTANTS } from "../constants";
 import HealthBar from "../ui/HealthBar";
+import DamageNumber from "../ui/DamageNumber";
 
 export default class Character {
   constructor(scene, x, y, config) {
     this.scene = scene;
     this.health = config.maxHealth;
     this.maxHealth = config.maxHealth;
+
+    // Initialize damage numbers
+    this.damageNumber = new DamageNumber(scene);
 
     // Create main sprite
     if (config.sprite) {
@@ -50,11 +54,23 @@ export default class Character {
       this.sprite.x,
       this.sprite.y - this.sprite.height - 10
     );
+    // Update damage numbers
+    this.damageNumber.update();
   }
 
-  takeDamage(damage) {
+  takeDamage(damage, isCrit = false) {
     this.health = Math.max(this.health - damage, 0);
     this.updateHealthBar();
+
+    // Show damage number
+    const barPosition = this.healthBar.getPosition();
+    this.damageNumber.create(
+      barPosition.x,
+      barPosition.y,
+      damage,
+      this.healthBar,
+      isCrit
+    );
 
     if (this.health === 0) {
       this.destroy();
@@ -78,6 +94,7 @@ export default class Character {
   destroy() {
     this.sprite.destroy();
     this.healthBar.destroy();
+    this.damageNumber.destroy();
   }
 
   isVisible() {

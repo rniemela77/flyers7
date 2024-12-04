@@ -34,7 +34,7 @@ export default class DamageNumber {
     // Float up from the offset position
     this.scene.tweens.add({
       targets: text,
-      y: y - 30, // Float up a smaller distance
+      y: y - 15, // Reduced from -30 to -15 for shorter float distance
       alpha: 0,
       duration: 1000,
       ease: 'Cubic.easeOut',

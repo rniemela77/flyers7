@@ -56,6 +56,13 @@ export default class HealthBar {
     this.border.y = y + CONSTANTS.healthBarHeight;
   }
 
+  getPosition() {
+    return {
+      x: this.background.x,
+      y: this.background.y
+    };
+  }
+
   updatePercentage(percentage) {
     this.bar.width = this.fullWidth * Math.max(0, Math.min(1, percentage));
   }
