@@ -11,9 +11,9 @@ export const CONSTANTS = {
   
   // Trail settings
   trailSegmentSize: window.innerWidth * 0.002, // 0.2% of screen width for line thickness
-  trailFadeDuration: 300, // Shorter duration for smoother trail
+  trailFadeDuration: 500, // Increased duration for longer-lasting trail
   trailColor: 0x00ffff, // Cyan color
-  maxTrailSegments: 12, // Fewer segments for line trail
+  maxTrailSegments: 24, // Doubled segments for longer trail
   trailSpawnInterval: 16, // ~60fps for smooth line
   
   // Enemy constants
@@ -35,16 +35,17 @@ export const CONSTANTS = {
   // Movement and controls
   joystickRadius: window.innerWidth * 0.03, // 3%
   joystickColor: 0x888888,
-  acceleration: 0.3, // Faster response
-  deceleration: 0.15, // Smoother stop
-  maxSpeed: 5,
+  acceleration: 0.025, // Extremely reduced for ice-like acceleration
+  deceleration: 0.01, // Extremely reduced for very long sliding
+  maxSpeed: 8, // Increased to compensate for the very smooth movement
   joystickSensitivity: 0.008, // Fine control over joystick sensitivity
   deadzone: 0.1, // Minimum movement threshold
   
   // Evasion dash
-  dashSpeed: 550, // Speed multiplier during dash (nearly doubled for much longer dash)
-  dashDuration: 250, // Duration of dash in milliseconds (increased for longer dash)
-  dashCooldown: 2000, // Time before player can dash again (in milliseconds)
+  dashSpeed: 3000, // Speed to cover 300px in 0.1s (300px / 0.1s = 3000px/s)
+  dashVelocity: 3000, // Matching velocity for consistent movement
+  dashDuration: 100, // Exactly 0.1 seconds
+  dashCooldown: 800, // Keep the quick cooldown
   
   // Basic shapes (for collision and visuals)
   squareSize: window.innerWidth * 0.05, // 5%
