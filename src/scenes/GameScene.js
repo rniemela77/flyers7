@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { CONSTANTS } from "../constants";
 import Joystick from "../joystick";
-import Enemy from "../enemy";
+import Enemy from "../characters/Enemy";
 import Attack from "../attack";
 import Player from "../player";
 import playerSprite from '../trnasp.png';

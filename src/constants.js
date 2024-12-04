@@ -71,9 +71,9 @@ export const CONSTANTS = {
   // Purple attack properties
   purpleCircleRadius: window.innerWidth * 0.175, // 17.5%
   purpleCircleColor: 0x800080,
-  purpleTelegraphDuration: 5500,
+  purpleTelegraphDuration: 2000, // Reduced from 5500ms to 2000ms
   purpleAttackDuration: 500,
-  purpleAttackCooldown: 7000,
+  purpleAttackCooldown: 4000, // Reduced from 7000ms to 4000ms
   purpleAttackDamage: 30,
   
   // Stick attack properties
@@ -82,7 +82,7 @@ export const CONSTANTS = {
   stickLength: window.innerWidth * 0.3, // 30%
   stickWidth: window.innerWidth * 0.02, // 2%
   stickColor: 0x00ff00,
-  stickTelegraphDuration: 3500,
+  stickTelegraphDuration: 1500, // Reduced from 3500ms to 1500ms
   stickAttackDuration: 500,
-  stickAttackCooldown: 6000,
+  stickAttackCooldown: 3000, // Reduced from 6000ms to 3000ms
 };

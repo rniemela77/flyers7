@@ -3,23 +3,31 @@ import { CONSTANTS } from "../constants";
 import AttackController from "../attacks/AttackController";
 import YellowAttack from "../attacks/YellowAttack";
 import PurpleAttack from "../attacks/PurpleAttack";
+import StickAttack from "../attacks/StickAttack";
 
 export default class Enemy extends Character {
-  constructor(scene, x, y) {
+  constructor(scene, x, y, enemyType = 'stick') {
     super(scene, x, y, {
-      maxHealth: CONSTANTS.resetHealth,
-      spriteType: "circle",
-      size: CONSTANTS.circleRadius,
-      color: CONSTANTS.circleColor
+      maxHealth: CONSTANTS.enemyMaxHealth,
+      sprite: {
+        key: 'enemy',
+        scale: CONSTANTS.playerSpriteScale,
+        depth: 10
+      },
+      physics: true,
+      healthBar: {
+        yOffset: 35
+      }
     });
 
-    // Create targeting outline
-    this.targetingOutline = scene.add.circle(x, y, CONSTANTS.circleRadius + 5);
+    // Create targeting outline - adjust size based on sprite bounds
+    const bounds = this.sprite.getBounds();
+    const radius = Math.max(bounds.width, bounds.height) / 2;
+    this.targetingOutline = scene.add.circle(x, y, radius + 5);
     this.targetingOutline.setStrokeStyle(2, 0xffffff);
     this.targetingOutline.setVisible(false);
 
     this.attackController = new AttackController(scene, this);
-    this.setupAttackTimer();
     
     // Add velocity properties
     this.velocity = {
@@ -27,8 +35,29 @@ export default class Enemy extends Character {
       y: 0
     };
 
-    this.yellowAttack = new YellowAttack(scene, this);
-    this.purpleAttack = new PurpleAttack(scene, this);
+    // Create attack based on enemy type
+    this.enemyType = enemyType;
+    if (enemyType === 'purple') {
+      this.purpleAttack = new PurpleAttack(scene, this);
+    } else if (enemyType === 'stick') {
+      this.stickAttack = new StickAttack(scene, this);
+    }
+
+    // Configure physics body
+    this.sprite.body.setCollideWorldBounds(true);
+
+    // Wait for the next frame to ensure sprite dimensions are loaded
+    scene.time.delayedCall(0, () => {
+      // Set circular body for better collision
+      const radius = Math.min(this.sprite.width, this.sprite.height) / 4;
+      this.sprite.body.setCircle(radius);
+      this.sprite.body.offset.set(
+        (this.sprite.width - radius * 2) / 2,
+        (this.sprite.height - radius * 2) / 2
+      );
+    });
+
+    this.setupAttackTimer();
   }
 
   update() {
@@ -49,23 +78,57 @@ export default class Enemy extends Character {
       // Apply velocity
       this.sprite.x += this.velocity.x;
       this.sprite.y += this.velocity.y;
+
+      // Update sprite rotation to face the player
+      const angle = Phaser.Math.Angle.Between(
+        this.sprite.x,
+        this.sprite.y,
+        player.getPosition().x,
+        player.getPosition().y
+      );
+      this.sprite.rotation = angle + Math.PI / 2;
       
       // Update health bar and targeting outline positions
-      this.healthBarBackground.x = this.sprite.x;
-      this.healthBarBackground.y = this.sprite.y - CONSTANTS.circleRadius - 10;
-      this.healthBar.x = this.sprite.x;
-      this.healthBar.y = this.sprite.y - CONSTANTS.circleRadius - 10;
+      this.healthBar.setPosition(
+        this.sprite.x,
+        this.sprite.y - this.sprite.height/2 - 10
+      );
       this.targetingOutline.x = this.sprite.x;
       this.targetingOutline.y = this.sprite.y;
+
+      // Update attack positions
+      if (this.purpleAttack) {
+        this.purpleAttack.updatePosition();
+      }
+      if (this.stickAttack) {
+        this.stickAttack.update();
+      }
     }
   }
 
-  moveDown() {
-    const moveAmount = 1;
-    this.sprite.y += moveAmount;
-    this.healthBarBackground.y += moveAmount;
-    this.healthBar.y += moveAmount;
-    this.targetingOutline.y += moveAmount;
+  setupAttackTimer() {
+    // Start purple attack sequence if this enemy has it
+    if (this.purpleAttack) {
+      // Start immediately
+      this.purpleAttack.startAttackSequence();
+    }
+
+    // Start stick attack cycle if this enemy has it
+    if (this.stickAttack) {
+      // Start immediately
+      this.stickAttack.attackCycle();
+      
+      // Set up recurring attacks
+      this.scene.time.addEvent({
+        delay: CONSTANTS.stickAttackCooldown,
+        callback: () => {
+          if (this.sprite?.active) {
+            this.stickAttack.attackCycle();
+          }
+        },
+        loop: true
+      });
+    }
   }
 
   setTargetingVisible(visible) {
@@ -76,22 +139,31 @@ export default class Enemy extends Character {
     return Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, x, y);
   }
 
+  getRadius() {
+    const bounds = this.sprite.getBounds();
+    return Math.max(bounds.width, bounds.height) / 2;
+  }
+
   destroy() {
     super.destroy();
     this.targetingOutline.destroy();
-    this.yellowAttack.destroy();
-    this.purpleAttack.destroy();
-  }
-
-  getRadius() {
-    return this.sprite.radius;
+    if (this.purpleAttack) {
+      this.purpleAttack.destroy();
+    }
+    if (this.stickAttack) {
+      this.stickAttack.destroy();
+    }
   }
 
   updatePosition(offsetX, offsetY) {
     super.updatePosition(offsetX, offsetY);
     this.targetingOutline.x += offsetX;
     this.targetingOutline.y += offsetY;
-    this.yellowAttack.updatePosition(offsetX, offsetY);
-    this.purpleAttack.updatePosition(offsetX, offsetY);
+    if (this.purpleAttack) {
+      this.purpleAttack.updatePosition(offsetX, offsetY);
+    }
+    if (this.stickAttack) {
+      this.stickAttack.updatePosition(offsetX, offsetY);
+    }
   }
 } 
