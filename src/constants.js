@@ -37,11 +37,11 @@ export const CONSTANTS = {
   // Movement and controls
   joystickRadius: window.innerWidth * 0.03, // 3%
   joystickColor: 0x888888,
-  acceleration: 0.025, // Extremely reduced for ice-like acceleration
-  deceleration: 0.01, // Extremely reduced for very long sliding
-  maxSpeed: 8, // Increased to compensate for the very smooth movement
-  joystickSensitivity: 0.008, // Fine control over joystick sensitivity
-  deadzone: 0.1, // Minimum movement threshold
+  acceleration: 0.3, // Increased for even snappier response
+  deceleration: 0.15, // Slightly reduced for smoother stops
+  maxSpeed: 5, // Keep the same speed
+  joystickSensitivity: 0.015, // Increased for more responsive turning
+  deadzone: 0.05, // Reduced for better fine control
   
   // Evasion dash
   dashSpeed: 3000, // Speed to cover 300px in 0.1s (300px / 0.1s = 3000px/s)
