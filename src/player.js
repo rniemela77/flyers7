@@ -68,18 +68,34 @@ export default class Player extends Entity {
     if (currentTime - this.lastTrailTime >= CONSTANTS.trailSpawnInterval &&
         (Math.abs(this.sprite.body.velocity.x) > 1 || Math.abs(this.sprite.body.velocity.y) > 1)) {
       
-      // Add new point to trail
+      // Use sprite's rotation to calculate offset
+      // Convert sprite rotation to radians and adjust for sprite's base rotation
+      const rotation = (this.sprite.rotation + Math.PI * 2 * (CONSTANTS.playerRotationOffset / 360));
+      
+      // Calculate perpendicular offset using rotation, rotated 90 degrees
+      const offsetX = Math.cos(rotation) * CONSTANTS.trailOffset;
+      const offsetY = Math.sin(rotation) * CONSTANTS.trailOffset;
+
+      // Add new points to both trails
       this.trail.push({
-        x: currentPos.x,
-        y: currentPos.y,
+        x: currentPos.x + offsetX,
+        y: currentPos.y + offsetY,
         time: currentTime
+      });
+
+      this.trail.push({
+        x: currentPos.x - offsetX,
+        y: currentPos.y - offsetY,
+        time: currentTime,
+        isSecondTrail: true
       });
       
       this.lastTrailTime = currentTime;
       this.lastPosition = currentPos;
 
-      // Remove old points if we exceed the maximum
-      while (this.trail.length > CONSTANTS.maxTrailSegments) {
+      // Remove old points if we exceed the maximum (account for two trails)
+      while (this.trail.length > CONSTANTS.maxTrailSegments * 2) {
+        this.trail.shift();
         this.trail.shift();
       }
     }
@@ -91,14 +107,32 @@ export default class Player extends Entity {
 
     // Redraw the entire trail
     this.trailGraphics.clear();
-    if (this.trail.length >= 2) {
-      this.trailGraphics.lineStyle(CONSTANTS.trailSegmentSize * 2, CONSTANTS.trailColor);
+    
+    // Separate points into two trails
+    const trail1 = this.trail.filter(point => !point.isSecondTrail);
+    const trail2 = this.trail.filter(point => point.isSecondTrail);
+
+    // Draw first trail
+    if (trail1.length >= 2) {
+      this.trailGraphics.lineStyle(CONSTANTS.trailSegmentSize, CONSTANTS.trailColor);
       this.trailGraphics.beginPath();
-      this.trailGraphics.moveTo(this.trail[0].x, this.trail[0].y);
+      this.trailGraphics.moveTo(trail1[0].x, trail1[0].y);
       
-      // Draw smooth curve through points
-      for (let i = 1; i < this.trail.length; i++) {
-        const point = this.trail[i];
+      for (let i = 1; i < trail1.length; i++) {
+        const point = trail1[i];
+        this.trailGraphics.lineTo(point.x, point.y);
+      }
+      this.trailGraphics.strokePath();
+    }
+
+    // Draw second trail
+    if (trail2.length >= 2) {
+      this.trailGraphics.lineStyle(CONSTANTS.trailSegmentSize, CONSTANTS.trailColor);
+      this.trailGraphics.beginPath();
+      this.trailGraphics.moveTo(trail2[0].x, trail2[0].y);
+      
+      for (let i = 1; i < trail2.length; i++) {
+        const point = trail2[i];
         this.trailGraphics.lineTo(point.x, point.y);
       }
       this.trailGraphics.strokePath();

@@ -11,10 +11,12 @@ export const CONSTANTS = {
   
   // Trail settings
   trailSegmentSize: window.innerWidth * 0.002, // 0.2% of screen width for line thickness
-  trailFadeDuration: 500, // Increased duration for longer-lasting trail
+  trailFadeDuration: 1000, // Increased to 1 second for slower fade
   trailColor: 0x00ffff, // Cyan color
-  maxTrailSegments: 24, // Doubled segments for longer trail
+  maxTrailSegments: 48, // Doubled again for much longer trails
   trailSpawnInterval: 16, // ~60fps for smooth line
+  trailOffset: window.innerWidth * 0.02, // Increased to 2% for much wider spacing
+  trailRotationOffset: 90, // Degrees to rotate the trail offset (90 = perpendicular to movement)
   
   // Enemy constants
   enemyMaxHealth: 200,
