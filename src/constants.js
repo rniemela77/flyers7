@@ -47,6 +47,17 @@ export const CONSTANTS = {
   circleRadius: window.innerWidth * 0.025,
   circleColor: 0x0000ff,
   
+  // Impact effect settings
+  impactEffect: {
+    size: { min: 0.2, max: 0.35 },
+    duration: 50,
+    gap: 50,
+    flashes: 2,
+    color: 0xffffff,
+    radiusMultiplier: 0.8,
+    randomOffset: 5
+  },
+  
   yellowCircleOutlineColor: 0xffff00,
   fillYellowCircleDelay: 3000,
   fillYellowCircleDuration: 500,

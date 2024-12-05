@@ -1,11 +1,13 @@
 // src/Attack.js
 import Phaser from "phaser";
 import { CONSTANTS } from "./constants";
+import AttackController from "./attacks/AttackController";
 
 export default class Attack {
   constructor(scene) {
     this.scene = scene;
     this.activeAttacks = [];
+    this.attackController = new AttackController(scene, this);
   }
 
   lineAttack(startPosition, targetPosition) {
@@ -62,7 +64,9 @@ export default class Attack {
         );
 
         const finalDamage = isCrit ? baseDamage * CONSTANTS.lineAttackCritMultiplier : baseDamage;
-        enemy.takeDamage(finalDamage, isCrit);
+        
+        // Use AttackController to handle damage and flash effect
+        this.attackController.handleDamage(enemy, finalDamage, isCrit);
       }
     });
 
@@ -81,7 +85,8 @@ export default class Attack {
   updateAttacks(offsetX, offsetY) {
     this.activeAttacks.forEach((attack) => {
       if (attack instanceof Phaser.GameObjects.Graphics) {
-        // Handle line attack graphics positions if needed
+        attack.x += offsetX;
+        attack.y += offsetY;
       }
     });
   }

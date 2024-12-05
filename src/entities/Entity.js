@@ -1,151 +1,92 @@
 import { CONSTANTS } from "../constants";
-import DamageNumber from "../ui/DamageNumber";
+import ImpactEffect from "../effects/ImpactEffect";
 import HealthBar from "../ui/HealthBar";
+import DamageNumber from "../ui/DamageNumber";
 
 export default class Entity {
   constructor(scene, config) {
-    const {
-      x,
-      y,
-      maxHealth,
-      sprite: {
-        key,
-        scale = 1,
-        depth = 10
-      },
-      healthBar: {
-        yOffset = 35,
-        width = CONSTANTS.healthBarWidth,
-        height = CONSTANTS.healthBarHeight
-      } = {}
-    } = config;
-
     this.scene = scene;
-    this.health = maxHealth;
-    this.maxHealth = maxHealth;
-
+    this.maxHealth = config.maxHealth;
+    this.currentHealth = this.maxHealth;
+    this.impactEffect = new ImpactEffect(scene);
+    
     // Create sprite
-    this.sprite = scene.add.sprite(x, y, key);
-    this.sprite.setScale(scale);
-    this.sprite.setDepth(depth);
-
-    // Enable physics if needed
+    this.sprite = scene.add.sprite(config.x, config.y, config.sprite.key);
+    if (config.sprite.scale) {
+      this.sprite.setScale(config.sprite.scale);
+    }
+    if (config.sprite.depth !== undefined) {
+      this.sprite.setDepth(config.sprite.depth);
+    }
+    
+    // Add physics if requested
     if (config.physics) {
-      scene.physics.add.existing(this.sprite, false);
-      this.sprite.body.setBounce(0);
-      this.sprite.body.setDrag(0);
-      this.sprite.body.setFriction(0);
+      scene.physics.add.existing(this.sprite);
     }
 
     // Initialize damage number system
     this.damageNumber = new DamageNumber(scene);
 
-    // Create health bar
-    this.healthBar = new HealthBar(scene, {
-      x,
-      y: y - yOffset,
-      width,
-      height,
-      foregroundColor: CONSTANTS.healthBarColor
-    });
-  }
-
-  takeDamage(damage, isCrit = false) {
-    this.health = Math.max(this.health - damage, 0);
-    this.healthBar.updatePercentage(this.health / this.maxHealth);
-
-    // Create flash effect
-    this.sprite.setTintFill(0xffffff);
-    this.scene.time.delayedCall(100, () => {
-      if (this.sprite?.active) {
-        this.sprite.clearTint();
-      }
-    });
-
-    // Create impact effect
-    this.createImpactEffect();
-
-    // Show damage number
-    const barPosition = this.getHealthBarPosition();
-    this.damageNumber.create(
-      barPosition.x,
-      barPosition.y,
-      damage,
-      this.healthBar,
-      isCrit
-    );
-
-    if (this.health === 0) {
-      this.destroy();
-      return true;
-    }
-    return false;
-  }
-
-  createImpactEffect() {
-    // Get player position
-    const player = this.scene.player;
-    if (!player) return;
-
-    // Calculate angle between player and entity
-    const angle = Phaser.Math.Angle.Between(
-      player.sprite.x,
-      player.sprite.y,
-      this.sprite.x,
-      this.sprite.y
-    );
-
-    // Calculate impact point closer to edge (using 80% of radius instead of 60%)
-    const radius = this.getRadius();
-    const impactX = this.sprite.x - Math.cos(angle) * (radius * 0.8);
-    const impactY = this.sprite.y - Math.sin(angle) * (radius * 0.8);
-
-    // Add random offset (±5 pixels)
-    const randomOffset = 5;
-    const randomX = impactX + Phaser.Math.Between(-randomOffset, randomOffset);
-    const randomY = impactY + Phaser.Math.Between(-randomOffset, randomOffset);
-
-    // First blink with random size
-    const size1 = radius * (0.2 + Math.random() * 0.15); // Random between 20-35% of radius
-    const impact1 = this.scene.add.circle(
-      randomX,
-      randomY,
-      size1,
-      0xffffff
-    );
-    impact1.setDepth(99);
-
-    // Remove first circle after 50ms
-    this.scene.time.delayedCall(50, () => {
-      impact1.destroy();
-      
-      // Second blink after 50ms gap with different random size
-      this.scene.time.delayedCall(50, () => {
-        const size2 = radius * (0.2 + Math.random() * 0.15); // Different random size
-        const impact2 = this.scene.add.circle(
-          randomX,
-          randomY,
-          size2,
-          0xffffff
-        );
-        impact2.setDepth(99);
-
-        // Remove second circle after 50ms
-        this.scene.time.delayedCall(50, () => {
-          impact2.destroy();
-        });
+    // Create health bar if config specifies it
+    if (config.healthBar) {
+      const yOffset = config.healthBar.yOffset || CONSTANTS.healthBarOffset;
+      this.healthBar = new HealthBar(scene, {
+        x: config.x,
+        y: config.y - yOffset,
+        width: config.healthBar.width || CONSTANTS.healthBarWidth,
+        height: config.healthBar.height || CONSTANTS.healthBarHeight,
+        foregroundColor: CONSTANTS.healthBarColor
       });
-    });
+    }
+  }
+
+  takeDamage(amount, source = null) {
+    if (amount <= 0) return false;
+    
+    this.currentHealth = Math.max(0, this.currentHealth - amount);
+    
+    // Update health bar if it exists
+    if (this.healthBar) {
+      this.healthBar.updatePercentage(this.currentHealth / this.maxHealth);
+    }
+    
+    // Create impact effect
+    this.impactEffect.create(this, source);
+
+    // Show damage number if we have a health bar
+    if (this.healthBar && this.damageNumber) {
+      const barPosition = this.getHealthBarPosition();
+      this.damageNumber.create(
+        barPosition.x,
+        barPosition.y,
+        amount,
+        this.healthBar
+      );
+    }
+    
+    // Return true if entity died from this damage
+    return this.currentHealth <= 0;
   }
 
   update() {
     if (!this.sprite?.active) return;
-    this.updateHealthBarPosition();
+    
+    // Update health bar position if it exists
+    if (this.healthBar) {
+      this.updateHealthBarPosition();
+    }
+
+    // Update damage numbers if they exist
+    if (this.damageNumber) {
+      this.damageNumber.update();
+    }
   }
 
   updateHealthBarPosition() {
-    const { x, y } = this.getHealthBarPosition();
-    this.healthBar.setPosition(x, y);
+    if (this.healthBar) {
+      const { x, y } = this.getHealthBarPosition();
+      this.healthBar.setPosition(x, y);
+    }
   }
 
   getHealthBarPosition() {
@@ -156,15 +97,14 @@ export default class Entity {
   }
 
   getPosition() {
-    return { x: this.sprite.x, y: this.sprite.y };
+    return {
+      x: this.sprite.x,
+      y: this.sprite.y
+    };
   }
 
   getBounds() {
     return this.sprite.getBounds();
-  }
-
-  isVisible() {
-    return this.sprite.visible;
   }
 
   getRadius() {
@@ -172,11 +112,19 @@ export default class Entity {
     return Math.max(bounds.width, bounds.height) / 2;
   }
 
+  isVisible() {
+    return this.sprite?.visible;
+  }
+
   destroy() {
-    if (this.sprite?.body) {
+    if (this.sprite) {
       this.sprite.destroy();
     }
-    this.healthBar.destroy();
-    this.damageNumber.destroy();
+    if (this.healthBar) {
+      this.healthBar.destroy();
+    }
+    if (this.damageNumber) {
+      this.damageNumber.destroy();
+    }
   }
 } 
