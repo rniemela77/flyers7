@@ -1,15 +1,15 @@
-import Phaser from "phaser";
-import { CONSTANTS } from "../constants";
-import Joystick from "../joystick";
-import EnemyFactory from "../factories/EnemyFactory";
-import PlayerAttackManager from "../attacks/PlayerAttackManager";
-import Player from "../player";
+import Phaser from 'phaser';
+import { CONSTANTS } from '../constants';
+import Joystick from '../joystick';
+import EnemyFactory from '../factories/EnemyFactory';
+import PlayerAttackManager from '../attacks/PlayerAttackManager';
+import Player from '../player';
 import playerSprite from '../trnasp.png';
 import enemySprite from '../enemy.png';
 
 export default class GameScene extends Phaser.Scene {
   constructor() {
-    super({ key: "GameScene" });
+    super({ key: 'GameScene' });
     this.initializeProperties();
   }
 
@@ -58,6 +58,14 @@ export default class GameScene extends Phaser.Scene {
     this.setupPlayerSystems();
   }
 
+  createPlayer() {
+    const x = 500;
+    const y = 500;
+    this.player = new Player(this, x, y);
+    this.physics.add.collider(this.player.sprite, this.obstacles);
+    this.physics.add.collider(this.player.sprite, this.walls);
+  }
+
   spawnInitialEnemies() {
     EnemyFactory.spawnEnemyAwayFromPlayer(this, EnemyFactory.ENEMY_TYPES.PURPLE);
     EnemyFactory.spawnEnemyAwayFromPlayer(this, EnemyFactory.ENEMY_TYPES.GREEN);
@@ -79,6 +87,48 @@ export default class GameScene extends Phaser.Scene {
     this.physics.add.collider(this.enemyCollisionGroup, this.obstacles);
     this.physics.add.collider(this.enemyCollisionGroup, this.walls);
     this.physics.add.collider(this.enemyCollisionGroup, this.player.sprite);
+  }
+
+  setupInputHandlers() {
+    this.input.on("pointerdown", (pointer) => {
+      // Start tracking motion
+      this.swipeState = {
+        startX: pointer.x,
+        startY: pointer.y,
+        startTime: this.time.now,
+        isTracking: true
+      };
+
+      // Create joystick
+      this.joystick.createJoystick.call(this.joystick, pointer);
+    });
+
+    this.input.on("pointermove", (pointer) => {
+      // Only handle joystick movement
+      if (this.joystick.joystick) {
+        this.joystick.moveJoystick.call(this.joystick, pointer);
+      }
+    });
+
+    this.input.on("pointerup", (pointer) => {
+      if (this.swipeState.isTracking) {
+        const dx = pointer.x - this.swipeState.startX;
+        const dy = pointer.y - this.swipeState.startY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const duration = this.time.now - this.swipeState.startTime;
+
+        // If it was a quick motion, trigger dash
+        if (distance > 30 && duration < 200) {
+          this.player.dash(dx / distance, dy / distance);
+        }
+      }
+
+      // Clean up
+      if (this.joystick.joystick) {
+        this.joystick.removeJoystick.call(this.joystick);
+      }
+      this.swipeState.isTracking = false;
+    });
   }
 
   setupTimers() {
@@ -201,21 +251,17 @@ export default class GameScene extends Phaser.Scene {
   }
 
   createBackground() {
-    // Create a single texture for the grid instead of drawing lines every frame
     const width = 1000;
     const height = 1000;
     const cellSize = 50;
     
-    // Create the render texture at world origin (0,0)
     const gridTexture = this.add.renderTexture(0, 0, width, height);
-    gridTexture.setOrigin(0, 0); // Important: set origin to top-left
-    gridTexture.setScrollFactor(1); // Make it scroll with the camera
+    gridTexture.setOrigin(0, 0);
+    gridTexture.setScrollFactor(1);
     
-    // Create a temporary graphics object to draw the grid
     const tempGrid = this.add.graphics();
     tempGrid.lineStyle(1, 0x3573C0, 1);
 
-    // Draw the grid pattern
     for (let x = 0; x <= width; x += cellSize) {
       tempGrid.moveTo(x, 0);
       tempGrid.lineTo(x, height);
@@ -226,13 +272,9 @@ export default class GameScene extends Phaser.Scene {
     }
     tempGrid.strokePath();
 
-    // Draw the graphics to the texture
     gridTexture.draw(tempGrid);
-    
-    // Destroy the temporary graphics object
     tempGrid.destroy();
     
-    // Set the grid texture depth
     gridTexture.setDepth(0);
     this.grid = gridTexture;
   }
@@ -274,56 +316,6 @@ export default class GameScene extends Phaser.Scene {
       this.obstacles.add(obstacle);
       obstacle.body.setSize(width, height);
       obstacle.body.immovable = true;
-    });
-  }
-
-  createPlayer() {
-    const x = 500;
-    const y = 500;
-    this.player = new Player(this, x, y);
-    this.physics.add.collider(this.player.sprite, this.obstacles);
-    this.physics.add.collider(this.player.sprite, this.walls);
-  }
-
-  setupInputHandlers() {
-    this.input.on("pointerdown", (pointer) => {
-      // Start tracking motion
-      this.swipeState = {
-        startX: pointer.x,
-        startY: pointer.y,
-        startTime: this.time.now,
-        isTracking: true
-      };
-
-      // Create joystick
-      this.joystick.createJoystick.call(this.joystick, pointer);
-    });
-
-    this.input.on("pointermove", (pointer) => {
-      // Only handle joystick movement
-      if (this.joystick.joystick) {
-        this.joystick.moveJoystick.call(this.joystick, pointer);
-      }
-    });
-
-    this.input.on("pointerup", (pointer) => {
-      if (this.swipeState.isTracking) {
-        const dx = pointer.x - this.swipeState.startX;
-        const dy = pointer.y - this.swipeState.startY;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        const duration = this.time.now - this.swipeState.startTime;
-
-        // If it was a quick motion, trigger dash
-        if (distance > 30 && duration < 200) {
-          this.player.dash(dx / distance, dy / distance);
-        }
-      }
-
-      // Clean up
-      if (this.joystick.joystick) {
-        this.joystick.removeJoystick.call(this.joystick);
-      }
-      this.swipeState.isTracking = false;
     });
   }
 }

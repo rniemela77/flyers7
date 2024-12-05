@@ -1,10 +1,16 @@
 import Phaser from 'phaser';
 import { CONSTANTS } from '../constants';
-import BaseAttack from './BaseAttack';
+import Attack from './Attack';
 
-export default class YellowAttack extends BaseAttack {
+export default class YellowAttack extends Attack {
   constructor(scene, owner) {
-    super(scene, owner);
+    super(scene, {
+      damage: 25,
+      knockback: 150,
+      owner: owner,
+      targetTypes: ['enemy'],
+      effects: []
+    });
     
     this.yellowCircleOutline = this.createOutline('circle', {
       x: owner.getPosition().x,
