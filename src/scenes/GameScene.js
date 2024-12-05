@@ -48,7 +48,7 @@ export default class GameScene extends Phaser.Scene {
     
     // Spawn one of each enemy type initially
     this.createEnemy('purple');
-    this.createEnemy('stick');
+    this.createEnemy('green');
     
     this.joystick = new Joystick(this, this.player);
     this.attack = new Attack(this);
@@ -118,11 +118,11 @@ export default class GameScene extends Phaser.Scene {
     });
 
     // Spawn enemies alternating between types
-    this.lastSpawnedType = 'stick';
+    this.lastSpawnedType = 'green';
     this.enemySpawnTimer = this.time.addEvent({
       delay: 8000,
       callback: () => {
-        this.lastSpawnedType = this.lastSpawnedType === 'purple' ? 'stick' : 'purple';
+        this.lastSpawnedType = this.lastSpawnedType === 'purple' ? 'green' : 'purple';
         this.createEnemy(this.lastSpawnedType);
       },
       loop: true,

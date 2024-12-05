@@ -63,7 +63,7 @@ export default class BaseAttack {
     return this.attackController.handleDamage(target, damage, isCrit);
   }
 
-  // Common method to create a growing effect (used by purple and stick attacks)
+  // Common method to create a growing effect (used by purple and green attacks)
   createGrowingEffect({
     x,
     y,
@@ -82,7 +82,7 @@ export default class BaseAttack {
       x,
       y,
       startSize,
-      type === 'rectangle' ? CONSTANTS.stickWidth : undefined,
+      type === 'rectangle' ? CONSTANTS.greenWidth : undefined,
       color
     );
 

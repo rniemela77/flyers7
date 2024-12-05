@@ -7,21 +7,21 @@ export default class GreenAttack extends BaseAttack {
     super(scene, owner);
     
     // Create the outline that will be used for telegraphing
-    this.stickOutline = scene.add.rectangle(
+    this.greenOutline = scene.add.rectangle(
       owner.getPosition().x,
       owner.getPosition().y,
-      CONSTANTS.stickLength,
-      CONSTANTS.stickWidth
+      CONSTANTS.greenLength,
+      CONSTANTS.greenWidth
     );
-    this.stickOutline.setStrokeStyle(2, CONSTANTS.stickColor);
-    this.stickOutline.setFillStyle(0x000000, 0); // Make it transparent
-    this.stickOutline.setOrigin(0, 0.5);
-    this.stickOutline.setDepth(1);
-    this.stickOutline.setVisible(false); // Start hidden
+    this.greenOutline.setStrokeStyle(2, CONSTANTS.greenColor);
+    this.greenOutline.setFillStyle(0x000000, 0); // Make it transparent
+    this.greenOutline.setOrigin(0, 0.5);
+    this.greenOutline.setDepth(1);
+    this.greenOutline.setVisible(false); // Start hidden
 
     // Track current target rotation
     this.targetRotation = 0;
-    this.growingStick = null;
+    this.growingGreen = null;
     this.isAttacking = false;
   }
 
@@ -30,7 +30,7 @@ export default class GreenAttack extends BaseAttack {
 
     // Start telegraph phase
     this.isAttacking = true;
-    this.stickOutline.setVisible(true);
+    this.greenOutline.setVisible(true);
 
     // Initially point at player
     const player = this.scene.player;
@@ -38,37 +38,39 @@ export default class GreenAttack extends BaseAttack {
       const ownerPos = this.owner.getPosition();
       const playerPos = player.getPosition();
       this.targetRotation = this.getAngleBetween(ownerPos, playerPos);
-      this.stickOutline.rotation = this.targetRotation;
+      this.greenOutline.rotation = this.targetRotation;
     }
 
-    // Create growing stick animation
+    // Create growing green animation
     const position = this.owner.getPosition();
-    this.growingStick = this.scene.add.rectangle(
+    this.growingGreen = this.scene.add.rectangle(
       position.x,
       position.y,
       1,  // Start with 1px length
-      CONSTANTS.stickWidth,
-      CONSTANTS.stickColor
+      CONSTANTS.greenWidth,
+      CONSTANTS.greenColor
     );
-    this.growingStick.setOrigin(0, 0.5);
-    this.growingStick.setAlpha(0.3);
-    this.growingStick.setDepth(1);
-    this.growingStick.rotation = this.stickOutline.rotation;
+    this.growingGreen.setOrigin(0, 0.5);
+    this.growingGreen.setAlpha(0.3);
+    this.growingGreen.setDepth(1);
+    this.growingGreen.rotation = this.greenOutline.rotation;
 
-    // Animate the stick growing
+    // Animate the green growing
     this.scene.tweens.add({
-      targets: this.growingStick,
-      width: CONSTANTS.stickLength,
-      duration: CONSTANTS.stickTelegraphDuration,
+      targets: this.growingGreen,
+      width: CONSTANTS.greenLength,
+      duration: CONSTANTS.greenTelegraphDuration,
       ease: 'Linear',
       onComplete: () => {
-        // Destroy growing stick and perform attack
-        if (this.growingStick) {
-          this.growingStick.destroy();
-          this.growingStick = null;
+        // Destroy growing green and perform attack
+        if (this.growingGreen) {
+          this.growingGreen.destroy();
+          this.growingGreen = null;
         }
-        this.performStickAttack();
-        this.stickOutline.setVisible(false);
+        this.performGreenAttack();
+        
+        // Hide outline during attack
+        this.greenOutline.setVisible(false);
         
         // Reset after attack duration
         this.scene.time.delayedCall(100, () => {
@@ -78,27 +80,27 @@ export default class GreenAttack extends BaseAttack {
     });
   }
 
-  performStickAttack() {
+  performGreenAttack() {
     const position = this.owner.getPosition();
     
-    // Create the attack stick for visual feedback
-    const attackStick = this.scene.add.rectangle(
+    // Create the attack green for visual feedback
+    const attackGreen = this.scene.add.rectangle(
       position.x,
       position.y,
-      CONSTANTS.stickLength,
-      CONSTANTS.stickWidth,
-      CONSTANTS.stickColor
+      CONSTANTS.greenLength,
+      CONSTANTS.greenWidth,
+      CONSTANTS.greenColor
     );
-    attackStick.setOrigin(0, 0.5);
-    attackStick.setDepth(1);
-    attackStick.rotation = this.stickOutline.rotation;
+    attackGreen.setOrigin(0, 0.5);
+    attackGreen.setDepth(1);
+    attackGreen.rotation = this.greenOutline.rotation;
 
     // Check for collision on this single frame
-    this.checkCollisions(attackStick);
+    this.checkCollisions(attackGreen);
 
     // Add to active attacks and set up cleanup
-    this.activeAttacks.push(attackStick);
-    this.cleanupAttack(attackStick, 100);
+    this.activeAttacks.push(attackGreen);
+    this.cleanupAttack(attackGreen, 100);
   }
 
   checkCollisions(attack) {
@@ -112,7 +114,7 @@ export default class GreenAttack extends BaseAttack {
         attack.getBounds(),
         target.getBounds()
       )) {
-        this.handleCollision(target, CONSTANTS.stickAttackDamage);
+        this.handleCollision(target, CONSTANTS.greenAttackDamage);
       }
     });
   }
@@ -121,12 +123,12 @@ export default class GreenAttack extends BaseAttack {
     if (!this.owner.sprite?.active) return;
 
     const position = this.owner.getPosition();
-    this.stickOutline.x = position.x;
-    this.stickOutline.y = position.y;
+    this.greenOutline.x = position.x;
+    this.greenOutline.y = position.y;
     
-    if (this.growingStick?.active) {
-      this.growingStick.x = position.x;
-      this.growingStick.y = position.y;
+    if (this.growingGreen?.active) {
+      this.growingGreen.x = position.x;
+      this.growingGreen.y = position.y;
     }
 
     // Calculate angle to player
@@ -137,7 +139,7 @@ export default class GreenAttack extends BaseAttack {
       const targetAngle = this.getAngleBetween(ownerPos, playerPos);
 
       // Smoothly rotate toward target angle
-      let currentAngle = this.stickOutline.rotation;
+      let currentAngle = this.greenOutline.rotation;
       
       // Normalize angles to -PI to PI range
       while (currentAngle < -Math.PI) currentAngle += Math.PI * 2;
@@ -152,12 +154,12 @@ export default class GreenAttack extends BaseAttack {
       if (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
 
       // Apply smooth rotation
-      const newAngle = currentAngle + angleDiff * CONSTANTS.stickRotationLerp;
+      const newAngle = currentAngle + angleDiff * CONSTANTS.greenRotationLerp;
       
-      // Apply rotation to both outline and growing stick
-      this.stickOutline.rotation = newAngle;
-      if (this.growingStick?.active) {
-        this.growingStick.rotation = newAngle;
+      // Apply rotation to both outline and growing green
+      this.greenOutline.rotation = newAngle;
+      if (this.growingGreen?.active) {
+        this.growingGreen.rotation = newAngle;
       }
       
       // Update active attacks rotation
@@ -170,31 +172,25 @@ export default class GreenAttack extends BaseAttack {
   }
 
   updatePosition(offsetX, offsetY) {
-    if (this.stickOutline?.active) {
-      this.stickOutline.x += offsetX;
-      this.stickOutline.y += offsetY;
+    if (this.greenOutline?.active) {
+      this.greenOutline.x += offsetX;
+      this.greenOutline.y += offsetY;
     }
-    if (this.growingStick?.active) {
-      this.growingStick.x += offsetX;
-      this.growingStick.y += offsetY;
+    if (this.growingGreen?.active) {
+      this.growingGreen.x += offsetX;
+      this.growingGreen.y += offsetY;
     }
     super.updatePosition(offsetX, offsetY);
   }
 
-  destroy() {
-    super.destroy();
-    this.stickOutline?.destroy();
-    this.growingStick?.destroy();
-  }
-
   getTrailPoints() {
-    if (!this.stickOutline?.active) return [];
+    if (!this.greenOutline?.active) return [];
     
     const position = this.owner.getPosition();
-    const angle = this.stickOutline.rotation;
-    const length = CONSTANTS.stickLength;
+    const angle = this.greenOutline.rotation;
+    const length = CONSTANTS.greenLength;
     
-    // Calculate end point of stick
+    // Calculate end point of green
     const endX = position.x + Math.cos(angle) * length;
     const endY = position.y + Math.sin(angle) * length;
     
@@ -202,5 +198,11 @@ export default class GreenAttack extends BaseAttack {
       { x: position.x, y: position.y },
       { x: endX, y: endY }
     ];
+  }
+
+  destroy() {
+    super.destroy();
+    this.greenOutline?.destroy();
+    this.growingGreen?.destroy();
   }
 } 

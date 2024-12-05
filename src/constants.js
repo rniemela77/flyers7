@@ -76,12 +76,12 @@ export const CONSTANTS = {
   purpleAttackCooldown: 4000,
   purpleAttackDamage: 30,
   
-  stickAttackDamage: 10,
-  stickRotationLerp: 0.02,
-  stickLength: window.innerWidth * 0.3,
-  stickWidth: window.innerWidth * 0.02,
-  stickColor: 0x00ff00,
-  stickTelegraphDuration: 1500,
-  stickAttackDuration: 500,
-  stickAttackCooldown: 3000
+  greenAttackDamage: 10,
+  greenRotationLerp: 0.02,
+  greenLength: window.innerWidth * 0.3,
+  greenWidth: window.innerWidth * 0.02,
+  greenColor: 0x00ff00,
+  greenTelegraphDuration: 1500,
+  greenAttackDuration: 500,
+  greenAttackCooldown: 3000
 };
