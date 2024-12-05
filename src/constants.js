@@ -68,6 +68,9 @@ export const CONSTANTS = {
   whiteAttackCritChance: 0.2,
   whiteAttackCritMultiplier: 1.5,
   whiteAttackDuration: 200,
+  whiteAttackRange: window.innerWidth * 0.3,
+  whiteAttackRangeColor: 0xffffff,
+  whiteAttackRangeAlpha: 0.1,
   
   purpleCircleRadius: window.innerWidth * 0.175,
   purpleCircleColor: 0x800080,

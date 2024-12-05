@@ -205,6 +205,7 @@ export default class GameScene extends Phaser.Scene {
   updateAttacks() {
     if (this.attackManager) {
       this.attackManager.updateAttacks(0, 0);
+      this.attackManager.attacks.whiteAttack.update();
     }
   }
 
