@@ -1,16 +1,15 @@
-// src/Attack.js
-import Phaser from "phaser";
-import { CONSTANTS } from "./constants";
-import AttackController from "./attacks/AttackController";
+import Phaser from 'phaser';
+import { CONSTANTS } from '../constants';
+import BaseAttack from './BaseAttack';
 
-export default class Attack {
-  constructor(scene) {
-    this.scene = scene;
-    this.activeAttacks = [];
-    this.attackController = new AttackController(scene, this);
+export default class PlayerLineAttack extends BaseAttack {
+  constructor(scene, owner) {
+    super(scene, owner);
   }
 
-  lineAttack(startPosition, targetPosition) {
+  performAttack(targetPosition) {
+    const startPosition = this.owner.getPosition();
+    
     // Calculate direction vector
     const dx = targetPosition.x - startPosition.x;
     const dy = targetPosition.y - startPosition.y;
@@ -32,17 +31,25 @@ export default class Attack {
       impactY
     );
 
+    const lineGraphic = this.createLineGraphic(attackLine);
+    this.checkCollisions(attackLine, lineGraphic.isCrit);
+    this.setupCleanup(lineGraphic);
+
+    return attackLine;
+  }
+
+  createLineGraphic(attackLine) {
     const lineGraphic = this.scene.add.graphics();
     lineGraphic.setDepth(1);
 
     // Check for crit before drawing
     const isCrit = Math.random() < CONSTANTS.lineAttackCritChance;
+    lineGraphic.isCrit = isCrit;
     
     if (isCrit) {
-      // Draw yellow glow (more subtle)
+      // Draw yellow glow
       lineGraphic.lineStyle(4, 0xffff00, 0.4);
       lineGraphic.strokeLineShape(attackLine);
-      // Second yellow line for subtle glow
       lineGraphic.lineStyle(3, 0xffff00, 0.2);
       lineGraphic.strokeLineShape(attackLine);
     }
@@ -51,38 +58,50 @@ export default class Attack {
     lineGraphic.lineStyle(2, 0xff0000);
     lineGraphic.strokeLineShape(attackLine);
 
+    this.activeAttacks.push(lineGraphic);
+    return lineGraphic;
+  }
+
+  checkCollisions(attackLine, isCrit) {
     this.scene.enemies.forEach(enemy => {
-      if (Phaser.Geom.Intersects.LineToCircle(attackLine, new Phaser.Geom.Circle(
+      if (!this.isValidTarget(enemy)) return;
+
+      if (this.isLineIntersectingEnemy(attackLine, enemy)) {
+        const damage = this.calculateDamage(isCrit);
+        this.handleCollision(enemy, damage, isCrit);
+      }
+    });
+  }
+
+  isLineIntersectingEnemy(attackLine, enemy) {
+    return Phaser.Geom.Intersects.LineToCircle(
+      attackLine,
+      new Phaser.Geom.Circle(
         enemy.getPosition().x,
         enemy.getPosition().y,
         enemy.getRadius()
-      ))) {
-        // Calculate random damage
-        const baseDamage = Phaser.Math.Between(
-          CONSTANTS.lineAttackDamageMin,
-          CONSTANTS.lineAttackDamageMax
-        );
+      )
+    );
+  }
 
-        const finalDamage = isCrit ? baseDamage * CONSTANTS.lineAttackCritMultiplier : baseDamage;
-        
-        // Use AttackController to handle damage and flash effect
-        this.attackController.handleDamage(enemy, finalDamage, isCrit);
-      }
-    });
+  calculateDamage(isCrit) {
+    const baseDamage = Phaser.Math.Between(
+      CONSTANTS.lineAttackDamageMin,
+      CONSTANTS.lineAttackDamageMax
+    );
+    return isCrit ? baseDamage * CONSTANTS.lineAttackCritMultiplier : baseDamage;
+  }
 
-    this.activeAttacks.push(lineGraphic);
-
+  setupCleanup(lineGraphic) {
     this.scene.time.delayedCall(CONSTANTS.lineAttackDuration, () => {
       lineGraphic.destroy();
       this.activeAttacks = this.activeAttacks.filter(
         (attack) => attack !== lineGraphic
       );
     });
-
-    return attackLine;
   }
 
-  updateAttacks(offsetX, offsetY) {
+  updatePosition(offsetX, offsetY) {
     this.activeAttacks.forEach((attack) => {
       if (attack instanceof Phaser.GameObjects.Graphics) {
         attack.x += offsetX;
@@ -90,11 +109,4 @@ export default class Attack {
       }
     });
   }
-
-  destroy() {
-    this.activeAttacks.forEach(attack => {
-      if (attack?.destroy) attack.destroy();
-    });
-    this.activeAttacks = [];
-  }
-}
+} 

@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { CONSTANTS } from "../constants";
 import Joystick from "../joystick";
 import EnemyFactory from "../factories/EnemyFactory";
-import Attack from "../attack";
+import PlayerAttackManager from "../attacks/PlayerAttackManager";
 import Player from "../player";
 import playerSprite from '../trnasp.png';
 import enemySprite from '../enemy.png';
@@ -17,12 +17,11 @@ export default class GameScene extends Phaser.Scene {
     this.player = null;
     this.joystick = null;
     this.enemies = [];
-    this.attack = null;
+    this.attackManager = null;
     this.grid = null;
     this.obstacles = null;
     this.targetedEnemy = null;
     
-    // Swipe state
     this.swipeState = {
       startX: 0,
       startY: 0,
@@ -55,13 +54,18 @@ export default class GameScene extends Phaser.Scene {
 
   createGameObjects() {
     this.createPlayer();
-    
-    // Spawn initial enemies
+    this.spawnInitialEnemies();
+    this.setupPlayerSystems();
+  }
+
+  spawnInitialEnemies() {
     EnemyFactory.spawnEnemyAwayFromPlayer(this, EnemyFactory.ENEMY_TYPES.PURPLE);
     EnemyFactory.spawnEnemyAwayFromPlayer(this, EnemyFactory.ENEMY_TYPES.GREEN);
-    
+  }
+
+  setupPlayerSystems() {
     this.joystick = new Joystick(this, this.player);
-    this.attack = new Attack(this);
+    this.attackManager = new PlayerAttackManager(this, this.player);
   }
 
   setupCamera() {
@@ -119,7 +123,6 @@ export default class GameScene extends Phaser.Scene {
     let closestEnemy = null;
     let minDistance = Infinity;
     
-    // Update enemies and find closest one
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const enemy = this.enemies[i];
       if (enemy.sprite?.active) {
@@ -135,7 +138,6 @@ export default class GameScene extends Phaser.Scene {
       }
     }
 
-    // Update targeting
     this.enemies.forEach(enemy => {
       enemy.setTargetingVisible(enemy === closestEnemy);
     });
@@ -151,17 +153,16 @@ export default class GameScene extends Phaser.Scene {
   }
 
   updateAttacks() {
-    if (this.attack) {
-      this.attack.updateAttacks(0, 0);
+    if (this.attackManager) {
+      this.attackManager.updateAttacks(0, 0);
     }
   }
 
   performLineAttack() {
     const targetEnemy = this.findTargetedEnemy();
     if (targetEnemy) {
-      const startPosition = this.player.getPosition();
       const targetPosition = targetEnemy.getPosition();
-      this.attack.lineAttack(startPosition, targetPosition);
+      this.attackManager.performLineAttack(targetPosition);
     }
   }
 
@@ -193,7 +194,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   cleanupGameObjects() {
-    if (this.attack) this.attack.destroy();
+    if (this.attackManager) this.attackManager.destroy();
     this.enemies.forEach(enemy => enemy?.destroy?.());
     this.enemies = [];
     this.enemyCollisionGroup.clear(true, true);
