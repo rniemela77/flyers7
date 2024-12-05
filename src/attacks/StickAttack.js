@@ -1,21 +1,17 @@
-import Phaser from "phaser";
-import { CONSTANTS } from "../constants";
-import AttackController from "./AttackController";
+import Phaser from 'phaser';
+import { CONSTANTS } from '../constants';
+import BaseAttack from './BaseAttack';
 
-export default class StickAttack {
+export default class GreenAttack extends BaseAttack {
   constructor(scene, owner) {
-    this.scene = scene;
-    this.owner = owner;
-    this.activeAttacks = [];
-    this.attackController = new AttackController(scene, owner);
+    super(scene, owner);
     
     // Create the outline that will be used for telegraphing
     this.stickOutline = scene.add.rectangle(
       owner.getPosition().x,
       owner.getPosition().y,
       CONSTANTS.stickLength,
-      CONSTANTS.stickWidth,
-      CONSTANTS.stickColor
+      CONSTANTS.stickWidth
     );
     this.stickOutline.setStrokeStyle(2, CONSTANTS.stickColor);
     this.stickOutline.setFillStyle(0x000000, 0); // Make it transparent
@@ -39,9 +35,9 @@ export default class StickAttack {
     // Initially point at player
     const player = this.scene.player;
     if (player) {
-      const dx = player.getPosition().x - this.owner.getPosition().x;
-      const dy = player.getPosition().y - this.owner.getPosition().y;
-      this.targetRotation = Math.atan2(dy, dx);
+      const ownerPos = this.owner.getPosition();
+      const playerPos = player.getPosition();
+      this.targetRotation = this.getAngleBetween(ownerPos, playerPos);
       this.stickOutline.rotation = this.targetRotation;
     }
 
@@ -72,8 +68,6 @@ export default class StickAttack {
           this.growingStick = null;
         }
         this.performStickAttack();
-        
-        // Hide outline during attack
         this.stickOutline.setVisible(false);
         
         // Reset after attack duration
@@ -100,33 +94,25 @@ export default class StickAttack {
     attackStick.rotation = this.stickOutline.rotation;
 
     // Check for collision on this single frame
-    this.checkCollisionsForAttack(attackStick);
+    this.checkCollisions(attackStick);
 
-    // Add to active attacks for cleanup
+    // Add to active attacks and set up cleanup
     this.activeAttacks.push(attackStick);
-
-    // Remove the attack visual after brief feedback
-    this.scene.time.delayedCall(100, () => {
-      if (attackStick) {
-        attackStick.destroy();
-        this.activeAttacks = this.activeAttacks.filter(
-          (attack) => attack !== attackStick
-        );
-      }
-    });
+    this.cleanupAttack(attackStick, 100);
   }
 
-  checkCollisionsForAttack(attack) {
+  checkCollisions(attack) {
     if (!this.owner.sprite?.active) return;
 
     const targets = this.scene.player ? [this.scene.player] : [];
-    targets.forEach((target) => {
-      if (target?.getBounds && 
-          Phaser.Geom.Intersects.RectangleToRectangle(attack.getBounds(), target.getBounds())) {
-        const isDead = this.attackController.handleDamage(target, CONSTANTS.stickAttackDamage);
-        if (isDead && Array.isArray(this.scene.enemies)) {
-          this.scene.enemies = this.scene.enemies.filter(e => e !== target);
-        }
+    targets.forEach(target => {
+      if (!this.isValidTarget(target)) return;
+      
+      if (Phaser.Geom.Intersects.RectangleToRectangle(
+        attack.getBounds(),
+        target.getBounds()
+      )) {
+        this.handleCollision(target, CONSTANTS.stickAttackDamage);
       }
     });
   }
@@ -146,9 +132,9 @@ export default class StickAttack {
     // Calculate angle to player
     const player = this.scene.player;
     if (player) {
-      const dx = player.getPosition().x - position.x;
-      const dy = player.getPosition().y - position.y;
-      const targetAngle = Math.atan2(dy, dx);
+      const ownerPos = this.owner.getPosition();
+      const playerPos = player.getPosition();
+      const targetAngle = this.getAngleBetween(ownerPos, playerPos);
 
       // Smoothly rotate toward target angle
       let currentAngle = this.stickOutline.rotation;
@@ -192,41 +178,29 @@ export default class StickAttack {
       this.growingStick.x += offsetX;
       this.growingStick.y += offsetY;
     }
-    this.activeAttacks.forEach(attack => {
-      if (attack?.active) {
-        attack.x += offsetX;
-        attack.y += offsetY;
-      }
-    });
-  }
-
-  checkCollisions(targets) {
-    // No longer check collisions in update loop - damage is only dealt on first frame
-    return;
+    super.updatePosition(offsetX, offsetY);
   }
 
   destroy() {
-    if (this.stickOutline) {
-      this.stickOutline.destroy();
-    }
-    if (this.growingStick) {
-      this.growingStick.destroy();
-    }
-    this.activeAttacks.forEach(attack => {
-      if (attack?.active) {
-        attack.destroy();
-      }
-    });
-    this.activeAttacks = [];
+    super.destroy();
+    this.stickOutline?.destroy();
+    this.growingStick?.destroy();
   }
 
   getTrailPoints() {
-    if (this.trail1 && this.trail2) {
-        return [
-            { x: this.trail1.x, y: this.trail1.y },
-            { x: this.trail2.x, y: this.trail2.y }
-        ];
-    }
-    return null;
+    if (!this.stickOutline?.active) return [];
+    
+    const position = this.owner.getPosition();
+    const angle = this.stickOutline.rotation;
+    const length = CONSTANTS.stickLength;
+    
+    // Calculate end point of stick
+    const endX = position.x + Math.cos(angle) * length;
+    const endY = position.y + Math.sin(angle) * length;
+    
+    return [
+      { x: position.x, y: position.y },
+      { x: endX, y: endY }
+    ];
   }
 } 
