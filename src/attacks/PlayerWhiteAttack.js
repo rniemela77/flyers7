@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { CONSTANTS } from '../constants';
 import BaseAttack from './BaseAttack';
 
-export default class PlayerLineAttack extends BaseAttack {
+export default class PlayerWhiteAttack extends BaseAttack {
   constructor(scene, owner) {
     super(scene, owner);
   }
@@ -43,7 +43,7 @@ export default class PlayerLineAttack extends BaseAttack {
     lineGraphic.setDepth(1);
 
     // Check for crit before drawing
-    const isCrit = Math.random() < CONSTANTS.lineAttackCritChance;
+    const isCrit = Math.random() < CONSTANTS.whiteAttackCritChance;
     lineGraphic.isCrit = isCrit;
     
     if (isCrit) {
@@ -54,8 +54,8 @@ export default class PlayerLineAttack extends BaseAttack {
       lineGraphic.strokeLineShape(attackLine);
     }
     
-    // Draw red line on top
-    lineGraphic.lineStyle(2, 0xff0000);
+    // Draw white line on top
+    lineGraphic.lineStyle(2, 0xffffff);
     lineGraphic.strokeLineShape(attackLine);
 
     this.activeAttacks.push(lineGraphic);
@@ -86,14 +86,14 @@ export default class PlayerLineAttack extends BaseAttack {
 
   calculateDamage(isCrit) {
     const baseDamage = Phaser.Math.Between(
-      CONSTANTS.lineAttackDamageMin,
-      CONSTANTS.lineAttackDamageMax
+      CONSTANTS.whiteAttackDamageMin,
+      CONSTANTS.whiteAttackDamageMax
     );
-    return isCrit ? baseDamage * CONSTANTS.lineAttackCritMultiplier : baseDamage;
+    return isCrit ? baseDamage * CONSTANTS.whiteAttackCritMultiplier : baseDamage;
   }
 
   setupCleanup(lineGraphic) {
-    this.scene.time.delayedCall(CONSTANTS.lineAttackDuration, () => {
+    this.scene.time.delayedCall(CONSTANTS.whiteAttackDuration, () => {
       lineGraphic.destroy();
       this.activeAttacks = this.activeAttacks.filter(
         (attack) => attack !== lineGraphic

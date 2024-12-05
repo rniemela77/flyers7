@@ -1,4 +1,4 @@
-import PlayerLineAttack from './PlayerLineAttack';
+import PlayerWhiteAttack from './PlayerWhiteAttack';
 
 export default class PlayerAttackManager {
   constructor(scene, player) {
@@ -9,12 +9,12 @@ export default class PlayerAttackManager {
 
   initializeAttacks() {
     return {
-      lineAttack: new PlayerLineAttack(this.scene, this.player)
+      whiteAttack: new PlayerWhiteAttack(this.scene, this.player)
     };
   }
 
-  performLineAttack(targetPosition) {
-    return this.attacks.lineAttack.performAttack(targetPosition);
+  performWhiteAttack(targetPosition) {
+    return this.attacks.whiteAttack.performAttack(targetPosition);
   }
 
   updateAttacks(offsetX, offsetY) {

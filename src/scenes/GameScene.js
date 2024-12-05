@@ -132,14 +132,14 @@ export default class GameScene extends Phaser.Scene {
   }
 
   setupTimers() {
-    this.setupLineAttackTimer();
+    this.setupWhiteAttackTimer();
     this.setupEnemySpawnTimer();
   }
 
-  setupLineAttackTimer() {
-    this.lineAttackTimer = this.time.addEvent({
+  setupWhiteAttackTimer() {
+    this.whiteAttackTimer = this.time.addEvent({
       delay: 500,
-      callback: this.performLineAttack,
+      callback: this.performWhiteAttack,
       callbackScope: this,
       loop: true,
     });
@@ -208,11 +208,11 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
-  performLineAttack() {
+  performWhiteAttack() {
     const targetEnemy = this.findTargetedEnemy();
     if (targetEnemy) {
       const targetPosition = targetEnemy.getPosition();
-      this.attackManager.performLineAttack(targetPosition);
+      this.attackManager.performWhiteAttack(targetPosition);
     }
   }
 
@@ -230,7 +230,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   cleanupTimers() {
-    if (this.lineAttackTimer) this.lineAttackTimer.remove();
+    if (this.whiteAttackTimer) this.whiteAttackTimer.remove();
     if (this.enemySpawnTimer) this.enemySpawnTimer.remove();
   }
 

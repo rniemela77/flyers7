@@ -63,11 +63,11 @@ export const CONSTANTS = {
   fillYellowCircleDuration: 500,
   yellowCircleAttackDamage: 45,
   
-  lineAttackDamageMin: 15,
-  lineAttackDamageMax: 25,
-  lineAttackCritChance: 0.2,
-  lineAttackCritMultiplier: 1.5,
-  lineAttackDuration: 200,
+  whiteAttackDamageMin: 15,
+  whiteAttackDamageMax: 25,
+  whiteAttackCritChance: 0.2,
+  whiteAttackCritMultiplier: 1.5,
+  whiteAttackDuration: 200,
   
   purpleCircleRadius: window.innerWidth * 0.175,
   purpleCircleColor: 0x800080,
