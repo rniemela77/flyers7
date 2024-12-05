@@ -21,6 +21,13 @@ export const CONSTANTS = {
   enemyAttackInterval: 4000,
   enemyAttackDamage: 15,
   
+  purpleEnemySpeed: 1.2,
+  purpleEnemySpriteScale: 0.5,
+  purpleEnemyTint: 0xcc99ff,
+  
+  greenEnemySpriteScale: 0.3,
+  greenEnemyMaxHealth: 70,
+  
   healthBarWidth: window.innerWidth * 0.05,
   healthBarHeight: window.innerWidth * 0.01,
   healthBarOffset: window.innerWidth * -0.05,

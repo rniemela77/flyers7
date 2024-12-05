@@ -8,10 +8,10 @@ import EnemyMovement from "../components/EnemyMovement";
 export default class Enemy extends Character {
   constructor(scene, x, y, enemyType = 'green') {
     super(scene, x, y, {
-      maxHealth: CONSTANTS.enemyMaxHealth,
+      maxHealth: enemyType === 'green' ? CONSTANTS.greenEnemyMaxHealth : CONSTANTS.enemyMaxHealth,
       sprite: {
         key: 'enemy',
-        scale: CONSTANTS.playerSpriteScale,
+        scale: enemyType === 'purple' ? CONSTANTS.purpleEnemySpriteScale : CONSTANTS.greenEnemySpriteScale,
         depth: 10
       },
       physics: true,
@@ -28,6 +28,14 @@ export default class Enemy extends Character {
   initializeComponents(scene, enemyType) {
     this.setupTargetingOutline();
     this.movement = new EnemyMovement(this);
+    
+    if (enemyType === 'purple') {
+      this.sprite.setTint(CONSTANTS.purpleEnemyTint);
+      this.movement.speed = CONSTANTS.purpleEnemySpeed;
+    } else {
+      this.movement.speed = CONSTANTS.enemySpeed;
+    }
+    
     this.attackController = new AttackController(scene, this);
     this.createAttackByType(scene, enemyType);
   }
