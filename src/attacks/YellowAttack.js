@@ -1,11 +1,13 @@
 import Phaser from "phaser";
 import { CONSTANTS } from "../constants";
+import AttackController from "./AttackController";
 
 export default class YellowAttack {
   constructor(scene, owner) {
     this.scene = scene;
     this.owner = owner;
     this.activeAttacks = [];
+    this.attackController = new AttackController(scene, owner);
     
     this.yellowCircleOutline = scene.add.circle(
       owner.getPosition().x,
@@ -50,7 +52,7 @@ export default class YellowAttack {
       if (target.isVisible() && 
           Phaser.Geom.Intersects.CircleToCircle(attack, target.sprite)) {
         attack.hasDealtDamage = true;
-        const isDead = target.takeDamage(CONSTANTS.yellowCircleAttackDamage);
+        const isDead = this.attackController.handleDamage(target, CONSTANTS.yellowCircleAttackDamage);
         if (isDead) {
           this.scene.enemies = this.scene.enemies.filter(e => e !== target);
         }

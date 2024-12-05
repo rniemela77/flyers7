@@ -1,88 +1,76 @@
 export const CONSTANTS = {
-  // Camera settings
-  cameraZoom: window.innerWidth * 0.0018, // 0.2%
+  cameraZoom: window.innerWidth * 0.0018,
   
-  // Player constants
   playerMaxHealth: 100,
   playerSpriteScale: 0.3,
-  playerRotationOffset: 230, // Degrees to adjust player sprite rotation (MUST BE 230!)
-  playerMaxRotationSpeed: 0.1, // Maximum rotation speed in radians per frame
-  playerSpeed: 40, // Base movement speed for the player
+  playerRotationOffset: 230,
+  playerMaxRotationSpeed: 0.1,
+  playerSpeed: 40,
   
-  // Trail settings
-  trailSegmentSize: window.innerWidth * 0.002, // 0.2% of screen width for line thickness
-  trailFadeDuration: 1000, // Increased to 1 second for slower fade
-  trailColor: 0x00ffff, // Cyan color
-  maxTrailSegments: 48, // Doubled again for much longer trails
-  trailSpawnInterval: 16, // ~60fps for smooth line
-  trailOffset: window.innerWidth * 0.02, // Increased to 2% for much wider spacing
-  trailRotationOffset: 90, // Degrees to rotate the trail offset (90 = perpendicular to movement)
+  trailSegmentSize: window.innerWidth * 0.002,
+  trailFadeDuration: 1000,
+  trailColor: 0x00ffff,
+  maxTrailSegments: 48,
+  trailSpawnInterval: 16,
+  trailOffset: window.innerWidth * 0.02,
+  trailRotationOffset: 90,
   
-  // Enemy constants
   enemyMaxHealth: 200,
   enemySpeed: 2,
-  enemyAttackRange: window.innerWidth * 0.3, // 30%
+  enemyAttackRange: window.innerWidth * 0.3,
   enemyAttackInterval: 4000,
   enemyAttackDamage: 15,
   
-  // UI and HUD
-  healthBarWidth: window.innerWidth * 0.05, // 5%
-  healthBarHeight: window.innerWidth * 0.01, // 1%
-  healthBarOffset: window.innerWidth * -0.05, // 3% (increased from 1% to move bars lower)
+  healthBarWidth: window.innerWidth * 0.05,
+  healthBarHeight: window.innerWidth * 0.01,
+  healthBarOffset: window.innerWidth * -0.05,
   healthBarBackgroundColor: 0x000000,
   healthBarColor: 0xff0000,
-  dashCooldownBarColor: 0xffffff, // White color for dash cooldown
-  dashCooldownBarOffset: window.innerWidth * 0.015, // 1.5% (slightly below health bar)
+  dashCooldownBarColor: 0xffffff,
+  dashCooldownBarOffset: window.innerWidth * 0.015,
   
-  // Movement and controls
-  joystickRadius: window.innerWidth * 0.03, // 3%
+  joystickRadius: window.innerWidth * 0.03,
   joystickColor: 0x888888,
-  acceleration: 0.3, // Increased for even snappier response
-  deceleration: 0.15, // Slightly reduced for smoother stops
-  maxSpeed: 5, // Keep the same speed
-  joystickSensitivity: 0.015, // Increased for more responsive turning
-  deadzone: 0.05, // Reduced for better fine control
+  acceleration: 0.3,
+  deceleration: 0.15,
+  maxSpeed: 5,
+  joystickSensitivity: 0.015,
+  deadzone: 0.05,
   
-  // Evasion dash
-  dashSpeed: 3000, // Speed to cover 300px in 0.1s (300px / 0.1s = 3000px/s)
-  dashVelocity: 3000, // Matching velocity for consistent movement
-  dashDuration: 100, // Exactly 0.1 seconds
-  dashCooldown: 800, // Keep the quick cooldown
+  dashSpeed: 3000,
+  dashVelocity: 3000,
+  dashDuration: 100,
+  dashCooldown: 800,
   
-  // Basic shapes (for collision and visuals)
-  squareSize: window.innerWidth * 0.05, // 5%
+  squareSize: window.innerWidth * 0.05,
   squareColor: 0xff0000,
-  circleRadius: window.innerWidth * 0.025, // 2.5%
+  circleRadius: window.innerWidth * 0.025,
   circleColor: 0x0000ff,
   
-  // Yellow attack properties
   yellowCircleOutlineColor: 0xffff00,
   fillYellowCircleDelay: 3000,
   fillYellowCircleDuration: 500,
   yellowCircleAttackDamage: 45,
   
-  // Line attack properties
   lineAttackDamageMin: 15,
   lineAttackDamageMax: 25,
-  lineAttackCritChance: 0.2, // 20% chance to crit
-  lineAttackCritMultiplier: 1.5, // 50% more damage on crit
+  lineAttackCritChance: 0.2,
+  lineAttackCritMultiplier: 1.5,
   lineAttackDuration: 200,
   
-  // Purple attack properties
-  purpleCircleRadius: window.innerWidth * 0.175, // 17.5%
+  purpleCircleRadius: window.innerWidth * 0.175,
   purpleCircleColor: 0x800080,
-  purpleTelegraphDuration: 2000, // Reduced from 5500ms to 2000ms
+  purpleTelegraphDuration: 2000,
   purpleAttackDuration: 500,
-  purpleAttackCooldown: 4000, // Reduced from 7000ms to 4000ms
+  purpleAttackCooldown: 4000,
   purpleAttackDamage: 30,
   
-  // Stick attack properties
   stickAttackDamage: 10,
   stickRotationLerp: 0.02,
-  stickLength: window.innerWidth * 0.3, // 30%
-  stickWidth: window.innerWidth * 0.02, // 2%
+  stickLength: window.innerWidth * 0.3,
+  stickWidth: window.innerWidth * 0.02,
   stickColor: 0x00ff00,
-  stickTelegraphDuration: 1500, // Reduced from 3500ms to 1500ms
+  stickTelegraphDuration: 1500,
   stickAttackDuration: 500,
-  stickAttackCooldown: 3000, // Reduced from 6000ms to 3000ms
+  stickAttackCooldown: 3000
 };

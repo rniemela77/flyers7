@@ -1,11 +1,13 @@
 import Phaser from "phaser";
 import { CONSTANTS } from "../constants";
+import AttackController from "./AttackController";
 
 export default class StickAttack {
   constructor(scene, owner) {
     this.scene = scene;
     this.owner = owner;
     this.activeAttacks = [];
+    this.attackController = new AttackController(scene, owner);
     
     // Create the outline that will be used for telegraphing
     this.stickOutline = scene.add.rectangle(
@@ -121,7 +123,7 @@ export default class StickAttack {
     targets.forEach((target) => {
       if (target?.getBounds && 
           Phaser.Geom.Intersects.RectangleToRectangle(attack.getBounds(), target.getBounds())) {
-        const isDead = target.takeDamage(CONSTANTS.stickAttackDamage);
+        const isDead = this.attackController.handleDamage(target, CONSTANTS.stickAttackDamage);
         if (isDead && Array.isArray(this.scene.enemies)) {
           this.scene.enemies = this.scene.enemies.filter(e => e !== target);
         }
@@ -216,5 +218,15 @@ export default class StickAttack {
       }
     });
     this.activeAttacks = [];
+  }
+
+  getTrailPoints() {
+    if (this.trail1 && this.trail2) {
+        return [
+            { x: this.trail1.x, y: this.trail1.y },
+            { x: this.trail2.x, y: this.trail2.y }
+        ];
+    }
+    return null;
   }
 } 

@@ -27,6 +27,11 @@ export default class Enemy extends Character {
     this.targetingOutline.setStrokeStyle(2, 0xffffff);
     this.targetingOutline.setVisible(false);
 
+    // Add the connecting line with a darker blue color
+    this.connectingLine = scene.add.line(0, 0, 0, 0, 0, 0, 0x000066);
+    this.connectingLine.setLineWidth(2);
+    this.connectingLine.setDepth(9); // Set below the enemy sprite
+
     this.attackController = new AttackController(scene, this);
     
     // Add velocity properties
@@ -102,6 +107,17 @@ export default class Enemy extends Character {
       }
       if (this.stickAttack) {
         this.stickAttack.update();
+
+        // Update the connecting line position
+        const trailPoints = this.stickAttack.getTrailPoints();
+        if (trailPoints && trailPoints.length >= 2) {
+          this.connectingLine.setTo(
+            trailPoints[0].x,
+            trailPoints[0].y,
+            trailPoints[1].x,
+            trailPoints[1].y
+          );
+        }
       }
     }
   }
@@ -147,6 +163,7 @@ export default class Enemy extends Character {
   destroy() {
     super.destroy();
     this.targetingOutline.destroy();
+    this.connectingLine.destroy();
     if (this.purpleAttack) {
       this.purpleAttack.destroy();
     }
@@ -159,11 +176,27 @@ export default class Enemy extends Character {
     super.updatePosition(offsetX, offsetY);
     this.targetingOutline.x += offsetX;
     this.targetingOutline.y += offsetY;
+    // Update connecting line position
+    const startX = this.connectingLine.geom.x1;
+    const startY = this.connectingLine.geom.y1;
+    const endX = this.connectingLine.geom.x2;
+    const endY = this.connectingLine.geom.y2;
+    this.connectingLine.setTo(
+      startX + offsetX,
+      startY + offsetY,
+      endX + offsetX,
+      endY + offsetY
+    );
     if (this.purpleAttack) {
       this.purpleAttack.updatePosition(offsetX, offsetY);
     }
     if (this.stickAttack) {
       this.stickAttack.updatePosition(offsetX, offsetY);
     }
+  }
+
+  takeDamage(amount) {
+    const isDead = super.takeDamage(amount);
+    return isDead;
   }
 } 

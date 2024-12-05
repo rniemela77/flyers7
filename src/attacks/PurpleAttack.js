@@ -1,10 +1,12 @@
 import Phaser from "phaser";
 import { CONSTANTS } from "../constants";
+import AttackController from "./AttackController";
 
 export default class PurpleAttack {
   constructor(scene, owner) {
     this.scene = scene;
     this.owner = owner;
+    this.attackController = new AttackController(scene, owner);
     
     // Create the outline circle
     this.outline = scene.add.circle(
@@ -115,7 +117,7 @@ export default class PurpleAttack {
     targets.forEach((target) => {
       if (target?.getBounds && 
           Phaser.Geom.Intersects.CircleToRectangle(this.attackCircle, target.getBounds())) {
-        const isDead = target.takeDamage(CONSTANTS.purpleAttackDamage);
+        const isDead = this.attackController.handleDamage(target, CONSTANTS.purpleAttackDamage);
         if (isDead && Array.isArray(this.scene.enemies)) {
           this.scene.enemies = this.scene.enemies.filter(e => e !== target);
         }

@@ -8,6 +8,23 @@ export default class AttackController {
     this.activeAttacks = [];
   }
 
+  // Centralized method to handle damage and flash effect
+  handleDamage(target, damage, isCrit = false) {
+    if (!target?.sprite?.active) return false;
+
+    // Apply flash effect
+    target.sprite.setTintFill(0xffffff);
+    this.scene.time.delayedCall(100, () => {
+      if (target.sprite?.active) {
+        target.sprite.clearTint();
+      }
+    });
+
+    // Apply damage and return if target died
+    const isDead = target.takeDamage(damage, isCrit);
+    return isDead;
+  }
+
   lineAttack(target) {
     if (!target || !target.isVisible?.()) return null;
 
@@ -81,7 +98,7 @@ export default class AttackController {
 
     if (Phaser.Geom.Intersects.LineToCircle(attackLine, targetGeom)) {
       lineGraphic.hasDealtDamage = true;
-      const isDead = target.takeDamage(CONSTANTS.lineAttackDamage, lineGraphic.isCrit);
+      const isDead = this.handleDamage(target, CONSTANTS.lineAttackDamage, lineGraphic.isCrit);
       return isDead;
     }
     return false;
