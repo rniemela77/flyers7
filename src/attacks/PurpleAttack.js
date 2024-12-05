@@ -6,14 +6,25 @@ export default class PurpleAttack extends BaseAttack {
   constructor(scene, owner) {
     super(scene, owner);
     
-    // Create the outline circle
+    // Create the outline circle (always visible at full size)
     this.outline = this.createOutline('circle', {
       x: owner.getPosition().x,
       y: owner.getPosition().y,
       size: CONSTANTS.purpleCircleRadius,
       color: CONSTANTS.purpleCircleColor,
-      visible: false
+      visible: true,
+      strokeWidth: 4
     });
+
+    // Create the telegraph circle (grows from 0 to 100%)
+    this.telegraphCircle = this.scene.add.circle(
+      owner.getPosition().x,
+      owner.getPosition().y,
+      CONSTANTS.purpleCircleRadius
+    );
+    this.telegraphCircle.setFillStyle(CONSTANTS.purpleCircleColor, 0.3);
+    this.telegraphCircle.setVisible(false);
+    this.telegraphCircle.setDepth(1);
 
     // Create the attack circle
     this.attackCircle = this.scene.add.circle(
@@ -25,7 +36,6 @@ export default class PurpleAttack extends BaseAttack {
     this.attackCircle.setVisible(false);
     this.attackCircle.setDepth(1);
 
-    this.growingCircle = null;
     this.currentTween = null;
   }
 
@@ -38,40 +48,29 @@ export default class PurpleAttack extends BaseAttack {
       this.currentTween = null;
     }
 
-    // Clean up existing growing circle
-    if (this.growingCircle) {
-      this.growingCircle.destroy();
-    }
-
-    // Show outline and start telegraph
-    this.outline.setVisible(true);
+    // Show and reset telegraph circle
+    this.telegraphCircle.setVisible(true);
+    this.telegraphCircle.setScale(0);
     
     // Create growing effect
-    const position = this.owner.getPosition();
-    const { effect, tween } = this.createGrowingEffect({
-      x: position.x,
-      y: position.y,
-      endSize: CONSTANTS.purpleCircleRadius,
+    this.currentTween = this.scene.tweens.add({
+      targets: this.telegraphCircle,
+      scale: 1,
       duration: CONSTANTS.purpleTelegraphDuration,
-      color: CONSTANTS.purpleCircleColor,
+      ease: 'Linear',
       onComplete: () => {
+        this.telegraphCircle.setVisible(false);
         if (this.owner.sprite?.active) {
           this.performAttack();
         }
       }
     });
 
-    this.growingCircle = effect;
-    this.currentTween = tween;
-
     // Update positions
     this.updatePosition(0, 0);
   }
 
   performAttack() {
-    // Hide outline
-    this.outline.setVisible(false);
-    
     // Show and position attack circle
     this.attackCircle.setVisible(true);
     this.attackCircle.setAlpha(1);
@@ -115,18 +114,16 @@ export default class PurpleAttack extends BaseAttack {
     const position = this.owner.getPosition();
     this.outline.x = position.x;
     this.outline.y = position.y;
+    this.telegraphCircle.x = position.x;
+    this.telegraphCircle.y = position.y;
     this.attackCircle.x = position.x;
     this.attackCircle.y = position.y;
-    if (this.growingCircle?.active) {
-      this.growingCircle.x = position.x;
-      this.growingCircle.y = position.y;
-    }
   }
 
   destroy() {
     super.destroy();
     this.outline?.destroy();
+    this.telegraphCircle?.destroy();
     this.attackCircle?.destroy();
-    this.growingCircle?.destroy();
   }
 } 

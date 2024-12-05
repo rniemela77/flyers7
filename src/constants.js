@@ -74,9 +74,9 @@ export const CONSTANTS = {
   
   purpleCircleRadius: window.innerWidth * 0.175,
   purpleCircleColor: 0x800080,
-  purpleTelegraphDuration: 2000,
+  purpleTelegraphDuration: 1000,
   purpleAttackDuration: 500,
-  purpleAttackCooldown: 4000,
+  purpleAttackCooldown: 1000,
   purpleAttackDamage: 30,
   
   greenAttackDamage: 10,
