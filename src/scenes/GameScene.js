@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { CONSTANTS } from "../constants";
 import Joystick from "../joystick";
-import Enemy from "../characters/Enemy";
+import EnemyFactory from "../factories/EnemyFactory";
 import Attack from "../attack";
 import Player from "../player";
 import playerSprite from '../trnasp.png';
@@ -10,6 +10,10 @@ import enemySprite from '../enemy.png';
 export default class GameScene extends Phaser.Scene {
   constructor() {
     super({ key: "GameScene" });
+    this.initializeProperties();
+  }
+
+  initializeProperties() {
     this.player = null;
     this.joystick = null;
     this.enemies = [];
@@ -28,128 +32,100 @@ export default class GameScene extends Phaser.Scene {
   }
 
   preload() {
-    // Load player sprite using the imported asset
     this.load.image('player', playerSprite);
-    // Load enemy sprite
     this.load.image('enemy', enemySprite);
   }
 
   create() {
-    // Set world bounds
-    this.physics.world.setBounds(0, 0, 1000, 1000);
-    
-    // Create collision groups
-    this.enemyCollisionGroup = this.physics.add.group();
+    this.setupWorld();
+    this.createGameObjects();
+    this.setupCollisions();
+    this.setupCamera();
+    this.setupInputHandlers();
+    this.setupTimers();
+  }
 
+  setupWorld() {
+    this.physics.world.setBounds(0, 0, 1000, 1000);
+    this.enemyCollisionGroup = this.physics.add.group();
     this.createBackground();
     this.createBoundaryWalls();
     this.createObstacles();
+  }
+
+  createGameObjects() {
     this.createPlayer();
     
-    // Spawn one of each enemy type initially
-    this.createEnemy('purple');
-    this.createEnemy('green');
+    // Spawn initial enemies
+    EnemyFactory.spawnEnemyAwayFromPlayer(this, EnemyFactory.ENEMY_TYPES.PURPLE);
+    EnemyFactory.spawnEnemyAwayFromPlayer(this, EnemyFactory.ENEMY_TYPES.GREEN);
     
     this.joystick = new Joystick(this, this.player);
     this.attack = new Attack(this);
-    this.setupInputHandlers();
-    this.setupTimers();
+  }
 
-    // Set up camera to follow player with offset
-    const cameraOffsetY = -window.innerHeight * 0.14; // Position player at 1/4 from top
+  setupCamera() {
+    const cameraOffsetY = -window.innerHeight * 0.14;
     this.cameras.main.startFollow(this.player.sprite, true, 0.1, 0.1);
     this.cameras.main.setFollowOffset(0, cameraOffsetY);
     this.cameras.main.setZoom(CONSTANTS.cameraZoom);
+  }
 
-    // Set up collision groups once
+  setupCollisions() {
     this.physics.add.collider(this.enemyCollisionGroup, this.obstacles);
     this.physics.add.collider(this.enemyCollisionGroup, this.walls);
     this.physics.add.collider(this.enemyCollisionGroup, this.player.sprite);
   }
 
-  setupInputHandlers() {
-    this.input.on("pointerdown", (pointer) => {
-      // Start tracking motion
-      this.swipeState = {
-        startX: pointer.x,
-        startY: pointer.y,
-        startTime: this.time.now,
-        isTracking: true
-      };
-
-      // Create joystick
-      this.joystick.createJoystick.call(this.joystick, pointer);
-    });
-
-    this.input.on("pointermove", (pointer) => {
-      // Only handle joystick movement
-      if (this.joystick.joystick) {
-        this.joystick.moveJoystick.call(this.joystick, pointer);
-      }
-    });
-
-    this.input.on("pointerup", (pointer) => {
-      if (this.swipeState.isTracking) {
-        const dx = pointer.x - this.swipeState.startX;
-        const dy = pointer.y - this.swipeState.startY;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        const duration = this.time.now - this.swipeState.startTime;
-
-        // If it was a quick motion, trigger dash
-        if (distance > 30 && duration < 200) {
-          this.player.dash(dx / distance, dy / distance);
-        }
-      }
-
-      // Clean up
-      if (this.joystick.joystick) {
-        this.joystick.removeJoystick.call(this.joystick);
-      }
-      this.swipeState.isTracking = false;
-    });
+  setupTimers() {
+    this.setupLineAttackTimer();
+    this.setupEnemySpawnTimer();
   }
 
-  setupTimers() {
+  setupLineAttackTimer() {
     this.lineAttackTimer = this.time.addEvent({
       delay: 500,
       callback: this.performLineAttack,
       callbackScope: this,
       loop: true,
     });
+  }
 
-    // Spawn enemies alternating between types
-    this.lastSpawnedType = 'green';
+  setupEnemySpawnTimer() {
+    this.lastSpawnedType = EnemyFactory.ENEMY_TYPES.GREEN;
     this.enemySpawnTimer = this.time.addEvent({
       delay: 8000,
       callback: () => {
-        this.lastSpawnedType = this.lastSpawnedType === 'purple' ? 'green' : 'purple';
-        this.createEnemy(this.lastSpawnedType);
+        this.lastSpawnedType = EnemyFactory.getNextEnemyType(this.lastSpawnedType);
+        EnemyFactory.spawnEnemyAwayFromPlayer(this, this.lastSpawnedType);
       },
       loop: true,
     });
   }
 
   update() {
+    this.updatePlayerMovement();
+    this.updateEnemies();
+    this.updateAttacks();
+  }
+
+  updatePlayerMovement() {
     this.joystick.updateJoystickVelocity();
     this.joystick.applyJoystickVelocity();
     this.player.update();
+  }
 
-    // Update active enemies and find closest for targeting
+  updateEnemies() {
     let closestEnemy = null;
     let minDistance = Infinity;
     
+    // Update enemies and find closest one
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const enemy = this.enemies[i];
       if (enemy.sprite?.active) {
         enemy.update();
         
-        // Find closest enemy for targeting
-        const distance = Phaser.Math.Distance.Between(
-          this.player.sprite.x,
-          this.player.sprite.y,
-          enemy.sprite.x,
-          enemy.sprite.y
-        );
+        const distance = this.getDistanceToPlayer(enemy);
         if (distance < minDistance) {
           minDistance = distance;
           closestEnemy = enemy;
@@ -163,49 +139,25 @@ export default class GameScene extends Phaser.Scene {
     this.enemies.forEach(enemy => {
       enemy.setTargetingVisible(enemy === closestEnemy);
     });
+  }
 
-    // Update attack positions
+  getDistanceToPlayer(enemy) {
+    return Phaser.Math.Distance.Between(
+      this.player.sprite.x,
+      this.player.sprite.y,
+      enemy.sprite.x,
+      enemy.sprite.y
+    );
+  }
+
+  updateAttacks() {
     if (this.attack) {
       this.attack.updateAttacks(0, 0);
     }
   }
 
-  createPlayer() {
-    const x = 500;
-    const y = 500;
-    this.player = new Player(this, x, y);
-    this.physics.add.collider(this.player.sprite, this.obstacles);
-    this.physics.add.collider(this.player.sprite, this.walls);
-  }
-
-  createEnemy(enemyType) {
-    // Get player position
-    const playerPos = this.player.getPosition();
-    
-    // Generate a position at least 400 pixels away from the player
-    let x, y, distance;
-    do {
-      x = Phaser.Math.Between(100, 900);
-      y = Phaser.Math.Between(100, 900);
-      distance = Phaser.Math.Distance.Between(x, y, playerPos.x, playerPos.y);
-    } while (distance < 400);
-    
-    const enemy = new Enemy(this, x, y, enemyType);
-    this.enemies.push(enemy);
-    this.enemyCollisionGroup.add(enemy.sprite);
-  }
-
   performLineAttack() {
-    // Find closest enemy that is being targeted
-    let targetEnemy = null;
-    for (let i = 0; i < this.enemies.length; i++) {
-      const enemy = this.enemies[i];
-      if (enemy.isVisible() && enemy.targetingOutline.visible) {
-        targetEnemy = enemy;
-        break;
-      }
-    }
-
+    const targetEnemy = this.findTargetedEnemy();
     if (targetEnemy) {
       const startPosition = this.player.getPosition();
       const targetPosition = targetEnemy.getPosition();
@@ -213,29 +165,38 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
+  findTargetedEnemy() {
+    return this.enemies.find(enemy => 
+      enemy.isVisible() && enemy.targetingOutline.visible
+    );
+  }
+
   resetGame() {
+    this.cleanupTimers();
+    this.cleanupInput();
+    this.cleanupGameObjects();
+    this.scene.restart();
+  }
+
+  cleanupTimers() {
     if (this.lineAttackTimer) this.lineAttackTimer.remove();
     if (this.enemySpawnTimer) this.enemySpawnTimer.remove();
+  }
 
+  cleanupInput() {
     if (this.joystick) {
       this.input.off("pointerdown", this.joystick.createJoystick, this.joystick);
       this.input.off("pointermove", this.joystick.moveJoystick, this.joystick);
       this.input.off("pointerup", this.joystick.removeJoystick, this.joystick);
       this.joystick.removeJoystick();
     }
+  }
 
+  cleanupGameObjects() {
     if (this.attack) this.attack.destroy();
-
-    for (let i = this.enemies.length - 1; i >= 0; i--) {
-      const enemy = this.enemies[i];
-      if (enemy?.destroy) {
-        enemy.destroy();
-      }
-    }
+    this.enemies.forEach(enemy => enemy?.destroy?.());
     this.enemies = [];
     this.enemyCollisionGroup.clear(true, true);
-
-    this.scene.restart();
   }
 
   createBackground() {
@@ -315,45 +276,53 @@ export default class GameScene extends Phaser.Scene {
     });
   }
 
-  // Add helper function to create damage numbers
-  createDamageNumber(x, y, damage, entity) {
-    // Create the text
-    const text = this.add.text(
-      x - CONSTANTS.healthBarWidth/2, // Align with left side of health bar
-      y - CONSTANTS.healthBarOffset + 5, // Position slightly below health bar
-      `-${damage}`, 
-      {
-        fontSize: '12px',
-        color: '#ff0000'
-      }
-    );
-    text.setDepth(100); // Make sure it's above everything
-    text.setOrigin(0, 0.5); // Left-align the text (0 for x origin)
+  createPlayer() {
+    const x = 500;
+    const y = 500;
+    this.player = new Player(this, x, y);
+    this.physics.add.collider(this.player.sprite, this.obstacles);
+    this.physics.add.collider(this.player.sprite, this.walls);
+  }
 
-    // Store initial offset from entity
-    const offsetX = text.x - entity.sprite.x;
-    const offsetY = text.y - entity.sprite.y;
+  setupInputHandlers() {
+    this.input.on("pointerdown", (pointer) => {
+      // Start tracking motion
+      this.swipeState = {
+        startX: pointer.x,
+        startY: pointer.y,
+        startTime: this.time.now,
+        isTracking: true
+      };
 
-    // Create the tween for floating up and fading
-    this.tweens.add({
-      targets: text,
-      alpha: 0,
-      duration: 1000,
-      ease: 'Cubic.easeOut',
-      onComplete: () => {
-        text.destroy(); // Clean up when done
+      // Create joystick
+      this.joystick.createJoystick.call(this.joystick, pointer);
+    });
+
+    this.input.on("pointermove", (pointer) => {
+      // Only handle joystick movement
+      if (this.joystick.joystick) {
+        this.joystick.moveJoystick.call(this.joystick, pointer);
       }
     });
 
-    // Add update callback to follow entity
-    const updateCallback = () => {
-      if (text.active && entity.sprite?.active) {
-        text.x = entity.sprite.x + offsetX;
-        text.y = entity.sprite.y + offsetY - 2; // Small float up
-      } else {
-        this.events.off('update', updateCallback);
+    this.input.on("pointerup", (pointer) => {
+      if (this.swipeState.isTracking) {
+        const dx = pointer.x - this.swipeState.startX;
+        const dy = pointer.y - this.swipeState.startY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const duration = this.time.now - this.swipeState.startTime;
+
+        // If it was a quick motion, trigger dash
+        if (distance > 30 && duration < 200) {
+          this.player.dash(dx / distance, dy / distance);
+        }
       }
-    };
-    this.events.on('update', updateCallback);
+
+      // Clean up
+      if (this.joystick.joystick) {
+        this.joystick.removeJoystick.call(this.joystick);
+      }
+      this.swipeState.isTracking = false;
+    });
   }
 }
