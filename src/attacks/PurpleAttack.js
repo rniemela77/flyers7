@@ -27,10 +27,23 @@ export default class PurpleAttack extends BaseAttack {
 
     this.growingCircle = null;
     this.currentTween = null;
+    this.isDestroyed = false;
+    this.attackTimer = null;
+    this.cooldownTimer = null;
   }
 
   startAttackSequence() {
-    if (!this.owner.sprite?.active) return;
+    if (!this.owner.sprite?.active || this.isDestroyed) return;
+
+    // Clear any existing timers
+    if (this.attackTimer) {
+      this.attackTimer.remove();
+      this.attackTimer = null;
+    }
+    if (this.cooldownTimer) {
+      this.cooldownTimer.remove();
+      this.cooldownTimer = null;
+    }
 
     // Stop any existing tween
     if (this.currentTween) {
@@ -41,6 +54,7 @@ export default class PurpleAttack extends BaseAttack {
     // Clean up existing growing circle
     if (this.growingCircle) {
       this.growingCircle.destroy();
+      this.growingCircle = null;
     }
     
     // Create the growing circle manually
@@ -65,7 +79,7 @@ export default class PurpleAttack extends BaseAttack {
           this.growingCircle.destroy();
           this.growingCircle = null;
         }
-        if (this.owner.sprite?.active) {
+        if (this.owner.sprite?.active && !this.isDestroyed) {
           this.performAttack();
         }
       }
@@ -73,6 +87,8 @@ export default class PurpleAttack extends BaseAttack {
   }
 
   performAttack() {
+    if (!this.owner.sprite?.active || this.isDestroyed || !this.attackCircle) return;
+
     // Show and position attack circle
     this.attackCircle.setVisible(true);
     this.attackCircle.setAlpha(1);
@@ -82,20 +98,30 @@ export default class PurpleAttack extends BaseAttack {
     this.checkCollisions();
 
     // Hide attack circle after brief visual feedback
-    this.scene.time.delayedCall(100, () => {
-      this.attackCircle.setVisible(false);
-      
-      // Start next sequence after cooldown
-      this.scene.time.delayedCall(CONSTANTS.purpleAttackCooldown, () => {
-        if (this.owner.sprite?.active) {
-          this.startAttackSequence();
+    this.attackTimer = this.scene.time.addEvent({
+      delay: 100,
+      callback: () => {
+        if (this.attackCircle && !this.isDestroyed) {
+          this.attackCircle.setVisible(false);
+          
+          // Start next sequence after cooldown
+          if (!this.isDestroyed) {
+            this.cooldownTimer = this.scene.time.addEvent({
+              delay: CONSTANTS.purpleAttackCooldown,
+              callback: () => {
+                if (this.owner.sprite?.active && !this.isDestroyed) {
+                  this.startAttackSequence();
+                }
+              }
+            });
+          }
         }
-      });
+      }
     });
   }
 
   checkCollisions() {
-    if (!this.owner.sprite?.active) return;
+    if (!this.owner.sprite?.active || this.isDestroyed) return;
 
     const targets = this.scene.player ? [this.scene.player] : [];
     targets.forEach(target => {
@@ -120,13 +146,17 @@ export default class PurpleAttack extends BaseAttack {
   }
 
   updatePosition(offsetX, offsetY) {
-    if (!this.owner.sprite?.active) return;
+    if (!this.owner.sprite?.active || this.isDestroyed) return;
     
     const position = this.owner.getPosition();
-    this.outline.x = position.x;
-    this.outline.y = position.y;
-    this.attackCircle.x = position.x;
-    this.attackCircle.y = position.y;
+    if (this.outline) {
+      this.outline.x = position.x;
+      this.outline.y = position.y;
+    }
+    if (this.attackCircle) {
+      this.attackCircle.x = position.x;
+      this.attackCircle.y = position.y;
+    }
     if (this.growingCircle?.active) {
       this.growingCircle.x = position.x;
       this.growingCircle.y = position.y;
@@ -134,6 +164,18 @@ export default class PurpleAttack extends BaseAttack {
   }
 
   destroy() {
+    this.isDestroyed = true;
+
+    // Clear timers
+    if (this.attackTimer) {
+      this.attackTimer.remove();
+      this.attackTimer = null;
+    }
+    if (this.cooldownTimer) {
+      this.cooldownTimer.remove();
+      this.cooldownTimer = null;
+    }
+
     // Stop any ongoing tween
     if (this.currentTween) {
       this.currentTween.stop();
