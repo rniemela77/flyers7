@@ -8,7 +8,7 @@ import EnemyMovement from "../components/EnemyMovement";
 export default class Enemy extends Character {
   constructor(scene, x, y, enemyType = 'green') {
     super(scene, x, y, {
-      maxHealth: enemyType === 'green' ? CONSTANTS.greenEnemyMaxHealth : CONSTANTS.enemyMaxHealth,
+      maxHealth: CONSTANTS.enemyMaxHealth,
       sprite: {
         key: 'enemy',
         scale: enemyType === 'purple' ? CONSTANTS.purpleEnemySpriteScale : CONSTANTS.greenEnemySpriteScale,
