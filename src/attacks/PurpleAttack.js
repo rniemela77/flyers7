@@ -6,13 +6,13 @@ export default class PurpleAttack extends BaseAttack {
   constructor(scene, owner) {
     super(scene, owner);
     
-    // Create the outline circle
+    // Create the outline circle that's always visible
     this.outline = this.createOutline('circle', {
       x: owner.getPosition().x,
       y: owner.getPosition().y,
       size: CONSTANTS.purpleCircleRadius,
       color: CONSTANTS.purpleCircleColor,
-      visible: false
+      visible: true  // Always visible
     });
 
     // Create the attack circle
@@ -42,36 +42,37 @@ export default class PurpleAttack extends BaseAttack {
     if (this.growingCircle) {
       this.growingCircle.destroy();
     }
-
-    // Show outline and start telegraph
-    this.outline.setVisible(true);
     
-    // Create growing effect
+    // Create the growing circle manually
     const position = this.owner.getPosition();
-    const { effect, tween } = this.createGrowingEffect({
-      x: position.x,
-      y: position.y,
-      endSize: CONSTANTS.purpleCircleRadius,
+    this.growingCircle = this.scene.add.circle(
+      position.x,
+      position.y,
+      0,  // Start at radius 0
+      CONSTANTS.purpleCircleColor
+    );
+    this.growingCircle.setAlpha(0.3);
+    this.growingCircle.setDepth(1);
+
+    // Create the tween
+    this.currentTween = this.scene.tweens.add({
+      targets: this.growingCircle,
+      radius: CONSTANTS.purpleCircleRadius,
       duration: CONSTANTS.purpleTelegraphDuration,
-      color: CONSTANTS.purpleCircleColor,
+      ease: 'Linear',
       onComplete: () => {
+        if (this.growingCircle) {
+          this.growingCircle.destroy();
+          this.growingCircle = null;
+        }
         if (this.owner.sprite?.active) {
           this.performAttack();
         }
       }
     });
-
-    this.growingCircle = effect;
-    this.currentTween = tween;
-
-    // Update positions
-    this.updatePosition(0, 0);
   }
 
   performAttack() {
-    // Hide outline
-    this.outline.setVisible(false);
-    
     // Show and position attack circle
     this.attackCircle.setVisible(true);
     this.attackCircle.setAlpha(1);
@@ -124,9 +125,27 @@ export default class PurpleAttack extends BaseAttack {
   }
 
   destroy() {
+    // Stop any ongoing tween
+    if (this.currentTween) {
+      this.currentTween.stop();
+      this.currentTween = null;
+    }
+
+    // Clean up all graphics
+    if (this.outline) {
+      this.outline.destroy();
+      this.outline = null;
+    }
+    if (this.attackCircle) {
+      this.attackCircle.destroy();
+      this.attackCircle = null;
+    }
+    if (this.growingCircle) {
+      this.growingCircle.destroy();
+      this.growingCircle = null;
+    }
+
+    // Call parent's destroy to clean up other things
     super.destroy();
-    this.outline?.destroy();
-    this.attackCircle?.destroy();
-    this.growingCircle?.destroy();
   }
 } 
