@@ -31,8 +31,11 @@ export default class Enemy extends Character {
     
     if (enemyType === 'purple') {
       this.sprite.setTint(CONSTANTS.purpleEnemyTint);
+      this.originalTint = CONSTANTS.purpleEnemyTint;
       this.movement.speed = CONSTANTS.purpleEnemySpeed;
     } else {
+      this.sprite.setTint(CONSTANTS.greenEnemyTint);
+      this.originalTint = CONSTANTS.greenEnemyTint;
       this.movement.speed = CONSTANTS.enemySpeed;
     }
     
@@ -159,7 +162,16 @@ export default class Enemy extends Character {
     }
   }
 
-  takeDamage(amount) {
-    return super.takeDamage(amount);
+  takeDamage(amount, source = null) {
+    const died = super.takeDamage(amount, source);
+    
+    // Restore original tint after a brief delay
+    this.scene.time.delayedCall(100, () => {
+      if (this.sprite?.active) {
+        this.sprite.setTint(this.originalTint);
+      }
+    });
+    
+    return died;
   }
 } 

@@ -27,6 +27,7 @@ export const CONSTANTS = {
   
   greenEnemySpriteScale: 0.25,
   greenEnemyMaxHealth: 70,
+  greenEnemyTint: 0x99ffcc,
   
   healthBarWidth: window.innerWidth * 0.05,
   healthBarHeight: window.innerWidth * 0.01,
