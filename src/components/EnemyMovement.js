@@ -4,6 +4,7 @@ export default class EnemyMovement {
   constructor(enemy) {
     this.enemy = enemy;
     this.velocity = { x: 0, y: 0 };
+    this.speed = CONSTANTS.enemySpeed; // Default speed
   }
 
   update(player) {
@@ -17,8 +18,8 @@ export default class EnemyMovement {
     const distance = Math.sqrt(dx * dx + dy * dy);
     if (distance > 0) {
       // Update velocity based on direction to player
-      this.velocity.x = (dx / distance) * CONSTANTS.enemySpeed;
-      this.velocity.y = (dy / distance) * CONSTANTS.enemySpeed;
+      this.velocity.x = (dx / distance) * this.speed;
+      this.velocity.y = (dy / distance) * this.speed;
       
       // Apply velocity
       this.enemy.sprite.x += this.velocity.x;

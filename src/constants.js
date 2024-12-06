@@ -1,5 +1,5 @@
 export const CONSTANTS = {
-  cameraZoom: window.innerWidth * 0.0018,
+  cameraZoom: window.innerWidth * 0.0013,
   
   playerMaxHealth: 100,
   playerSpriteScale: 0.3,
@@ -21,11 +21,11 @@ export const CONSTANTS = {
   enemyAttackInterval: 4000,
   enemyAttackDamage: 15,
   
-  purpleEnemySpeed: 1.2,
+  purpleEnemySpeed: 0.8,
   purpleEnemySpriteScale: 0.5,
   purpleEnemyTint: 0xcc99ff,
   
-  greenEnemySpriteScale: 0.3,
+  greenEnemySpriteScale: 0.25,
   greenEnemyMaxHealth: 70,
   
   healthBarWidth: window.innerWidth * 0.05,
