@@ -99,11 +99,20 @@ export default class PurpleAttack extends BaseAttack {
 
     const targets = this.scene.player ? [this.scene.player] : [];
     targets.forEach(target => {
-      if (!this.isValidTarget(target)) return;
+      if (!this.isValidTarget(target) || !target.sprite.body) return;
+      
+      // Get the physics body bounds
+      const physicsBody = target.sprite.body;
+      const bodyBounds = new Phaser.Geom.Rectangle(
+        physicsBody.x,
+        physicsBody.y,
+        physicsBody.width,
+        physicsBody.height
+      );
       
       if (Phaser.Geom.Intersects.CircleToRectangle(
         this.attackCircle,
-        target.getBounds()
+        bodyBounds
       )) {
         this.handleCollision(target, CONSTANTS.purpleAttackDamage);
       }

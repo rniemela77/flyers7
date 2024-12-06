@@ -39,16 +39,15 @@ export default class PlayerWhiteAttack extends BaseAttack {
     const dirX = dx / distance;
     const dirY = dy / distance;
 
-    // Calculate intersection point at 50% of radius (shorter line)
-    const radius = CONSTANTS.circleRadius;
-    const impactX = targetPosition.x - dirX * (radius * 0.5);
-    const impactY = targetPosition.y - dirY * (radius * 0.5);
+    // Calculate end point at full range length
+    const endX = startPosition.x + dirX * CONSTANTS.whiteAttackRange;
+    const endY = startPosition.y + dirY * CONSTANTS.whiteAttackRange;
 
     const attackLine = new Phaser.Geom.Line(
       startPosition.x,
       startPosition.y,
-      impactX,
-      impactY
+      endX,
+      endY
     );
 
     const lineGraphic = this.createLineGraphic(attackLine);
@@ -100,15 +99,15 @@ export default class PlayerWhiteAttack extends BaseAttack {
     lineGraphic.isCrit = isCrit;
     
     if (isCrit) {
-      // Draw yellow glow
-      lineGraphic.lineStyle(4, 0xffff00, 0.4);
+      // Draw yellow glow for crit
+      lineGraphic.lineStyle(6, 0xffff00, 0.4);
       lineGraphic.strokeLineShape(attackLine);
-      lineGraphic.lineStyle(3, 0xffff00, 0.2);
+      lineGraphic.lineStyle(4, 0xffff00, 0.2);
       lineGraphic.strokeLineShape(attackLine);
     }
     
     // Draw white line on top
-    lineGraphic.lineStyle(2, 0xffffff);
+    lineGraphic.lineStyle(3, 0xffffff);
     lineGraphic.strokeLineShape(attackLine);
 
     this.activeAttacks.push(lineGraphic);
@@ -117,7 +116,7 @@ export default class PlayerWhiteAttack extends BaseAttack {
 
   checkCollisions(attackLine, isCrit) {
     this.scene.enemies.forEach(enemy => {
-      if (!this.isValidTarget(enemy)) return;
+      if (!this.isValidTarget(enemy) || !enemy.sprite.body) return;
 
       if (this.isLineIntersectingEnemy(attackLine, enemy)) {
         const damage = this.calculateDamage(isCrit);
@@ -127,13 +126,18 @@ export default class PlayerWhiteAttack extends BaseAttack {
   }
 
   isLineIntersectingEnemy(attackLine, enemy) {
-    return Phaser.Geom.Intersects.LineToCircle(
+    // Get the physics body bounds
+    const physicsBody = enemy.sprite.body;
+    const bodyBounds = new Phaser.Geom.Rectangle(
+      physicsBody.x,
+      physicsBody.y,
+      physicsBody.width,
+      physicsBody.height
+    );
+
+    return Phaser.Geom.Intersects.LineToRectangle(
       attackLine,
-      new Phaser.Geom.Circle(
-        enemy.getPosition().x,
-        enemy.getPosition().y,
-        enemy.getRadius()
-      )
+      bodyBounds
     );
   }
 
