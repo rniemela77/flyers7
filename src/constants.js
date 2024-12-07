@@ -5,7 +5,7 @@ export const CONSTANTS = {
   playerSpriteScale: 0.3,
   playerRotationOffset: 230,
   playerMaxRotationSpeed: 0.1,
-  playerSpeed: 40,
+  playerSpeed: 30,
   
   trailSegmentSize: window.innerWidth * 0.002,
   trailFadeDuration: 1000,
@@ -47,11 +47,13 @@ export const CONSTANTS = {
   
   joystickRadius: window.innerWidth * 0.03,
   joystickColor: 0x888888,
-  acceleration: 0.3,
-  deceleration: 0.15,
-  maxSpeed: 5,
-  joystickSensitivity: 0.015,
+  acceleration: 0.15,
+  deceleration: 0.08,
+  maxSpeed: 8,
+  joystickSensitivity: 0.02,
   deadzone: 0.05,
+  momentumMultiplier: 1.2,
+  driftFactor: 0.92,
   
   dashSpeed: 3000,
   dashVelocity: 3000,
