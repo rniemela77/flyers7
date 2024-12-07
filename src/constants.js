@@ -75,8 +75,8 @@ export const CONSTANTS = {
   whiteAttackDamageMax: 25,
   whiteAttackCritChance: 0.2,
   whiteAttackCritMultiplier: 1.5,
-  whiteAttackDuration: 200,
-  whiteAttackRange: window.innerWidth * 0.3,
+  whiteAttackDuration: 100,
+  whiteAttackRange: window.innerWidth * 0.5,
   whiteAttackRangeColor: 0xffffff,
   whiteAttackRangeAlpha: 0.1,
   
