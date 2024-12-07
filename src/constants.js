@@ -1,5 +1,5 @@
 export const CONSTANTS = {
-  cameraZoom: window.innerWidth * 0.0013,
+  cameraZoom: window.innerWidth * 0.0018,
   
   playerMaxHealth: 100,
   playerSpriteScale: 0.3,
@@ -84,13 +84,13 @@ export const CONSTANTS = {
   whiteAttackCritChance: 0.2,
   whiteAttackCritMultiplier: 1.5,
   whiteAttackDuration: 100,
-  whiteAttackRange: window.innerWidth * 0.5,
+  whiteAttackRange: 200,
   whiteAttackRangeColor: 0xffffff,
   whiteAttackRangeAlpha: 0.1,
   
-  purpleCircleRadius: window.innerWidth * 0.175,
+  purpleCircleRadius: window.innerWidth * 0.15,
   purpleCircleColor: 0x800080,
-  purpleTelegraphDuration: 1000,
+  purpleTelegraphDuration: 3000,
   purpleAttackDuration: 500,
   purpleAttackCooldown: 1000,
   purpleAttackDamage: 30,
