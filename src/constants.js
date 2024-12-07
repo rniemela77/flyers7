@@ -14,6 +14,14 @@ export const CONSTANTS = {
   trailSpawnInterval: 16,
   trailOffset: window.innerWidth * 0.02,
   trailRotationOffset: 90,
+  trailArrowLength: window.innerWidth * 0.015,
+  trailArrowWidth: window.innerWidth * 0.01,
+  
+  // Movement indicator settings
+  movementIndicatorColor: 0xffffff,
+  movementIndicatorArrowLength: window.innerWidth * 0.03,
+  movementIndicatorArrowWidth: window.innerWidth * 0.01,
+  movementIndicatorLineWidth: 2,
   
   enemyMaxHealth: 200,
   enemySpeed: 2,

@@ -8,8 +8,8 @@ class Joystick {
     this.scene = scene;
     this.player = player;
     
-    // Create the indicator line
-    this.indicatorLine = scene.add.line(0, 0, 0, 0, 0, 0, 0xffffff);
+    // Create the indicator as a Graphics object instead of a Line
+    this.indicatorLine = scene.add.graphics();
     this.indicatorLine.setDepth(1); // Make sure line is visible above ground
     
     // Initialize velocities
@@ -112,15 +112,38 @@ class Joystick {
     // Update indicator line position if moving
     if (Math.abs(this.velocityX) > CONSTANTS.deadzone || Math.abs(this.velocityY) > CONSTANTS.deadzone) {
       const playerPosition = this.player.getPosition();
-      this.indicatorLine.setTo(
-        playerPosition.x,
-        playerPosition.y,
-        playerPosition.x + this.lastLineLength * Math.cos(this.lastAngle),
-        playerPosition.y + this.lastLineLength * Math.sin(this.lastAngle)
-      );
+      const endX = playerPosition.x + this.lastLineLength * Math.cos(this.lastAngle);
+      const endY = playerPosition.y + this.lastLineLength * Math.sin(this.lastAngle);
+
+      // Draw the main line
+      this.indicatorLine.clear();
+      this.indicatorLine.lineStyle(CONSTANTS.movementIndicatorLineWidth, CONSTANTS.movementIndicatorColor);
+      this.indicatorLine.beginPath();
+      this.indicatorLine.moveTo(playerPosition.x, playerPosition.y);
+      this.indicatorLine.lineTo(endX, endY);
+      this.indicatorLine.strokePath();
+
+      // Draw the arrow head
+      const arrowLength = CONSTANTS.movementIndicatorArrowLength;
+      const arrowWidth = CONSTANTS.movementIndicatorArrowWidth;
+      const arrowAngle = Math.PI / 3; // 60 degrees for a wider arrow
+
+      // Calculate arrow points
+      const leftX = endX - arrowLength * Math.cos(this.lastAngle - arrowAngle);
+      const leftY = endY - arrowLength * Math.sin(this.lastAngle - arrowAngle);
+      const rightX = endX - arrowLength * Math.cos(this.lastAngle + arrowAngle);
+      const rightY = endY - arrowLength * Math.sin(this.lastAngle + arrowAngle);
+
+      // Draw arrow head
+      this.indicatorLine.beginPath();
+      this.indicatorLine.moveTo(endX, endY);
+      this.indicatorLine.lineTo(leftX, leftY);
+      this.indicatorLine.moveTo(endX, endY);
+      this.indicatorLine.lineTo(rightX, rightY);
+      this.indicatorLine.strokePath();
     } else {
       // Hide line if not moving
-      this.indicatorLine.setTo(0, 0, 0, 0);
+      this.indicatorLine.clear();
     }
   }
 
