@@ -28,12 +28,15 @@ const MAX_SPEED = 5;
 // Bar position constants
 const BAR_START = 200;
 const BAR_END = 600;
+const BAR_CENTER = (BAR_START + BAR_END) / 2;
 const CRITICAL_ZONE_WIDTH = 30;
 const BAR_HEIGHT = 30;
-const INDICATOR_HEIGHT = 40;  // Taller than the bar
+const INDICATOR_HEIGHT = 40;
+const INDICATOR_WIDTH = 4;  // Skinnier indicator
 
 // Timing constants
 const INDICATOR_DELAY = 300;  // Time in ms between each indicator spawn
+const FADE_DURATION = 200;   // Slower fade (2 seconds)
 
 // Color constants
 const COLOR_INDICATOR = 0xFFFFFF;  // White
@@ -49,12 +52,12 @@ function create() {
     // Create the progress bar background
     progressBar = this.add.rectangle(400, 300, BAR_END - BAR_START, BAR_HEIGHT, COLOR_BAR);
     
-    // Create the critical zone (orange area)
-    criticalZone = this.add.rectangle(500, 300, CRITICAL_ZONE_WIDTH, BAR_HEIGHT, COLOR_CRITICAL);
+    // Create the critical zone (orange area) - centered
+    criticalZone = this.add.rectangle(BAR_CENTER, 300, CRITICAL_ZONE_WIDTH, BAR_HEIGHT, COLOR_CRITICAL);
     
     // Create three indicators
     for (let i = 0; i < 3; i++) {
-        let indicator = this.add.rectangle(BAR_START, 300, 10, INDICATOR_HEIGHT, COLOR_INDICATOR);
+        let indicator = this.add.rectangle(BAR_START, 300, INDICATOR_WIDTH, INDICATOR_HEIGHT, COLOR_INDICATOR);
         indicator.visible = false;
         indicator.stopped = false;
         indicator.speed = BASE_SPEED;
@@ -128,8 +131,10 @@ function stopOldestIndicator() {
             indicator.stopped = true;
             
             // Check if in critical zone
-            if (indicator.x >= criticalZone.x - criticalZone.width/2 && 
-                indicator.x <= criticalZone.x + criticalZone.width/2) {
+            const isInCriticalZone = indicator.x >= criticalZone.x - criticalZone.width/2 && 
+                                   indicator.x <= criticalZone.x + criticalZone.width/2;
+            
+            if (isInCriticalZone) {
                 score += 100;
                 scoreText.setText('Score: ' + score);
                 
@@ -140,20 +145,32 @@ function stopOldestIndicator() {
                     duration: 100,
                     yoyo: true
                 });
+                
+                // Keep white color but lower opacity for success
+                this.tweens.add({
+                    targets: indicator,
+                    alpha: 0.3,
+                    duration: FADE_DURATION,
+                    onComplete: () => {
+                        indicator.visible = false;
+                        indicator.completed = true;
+                        indicator.alpha = 1;
+                    }
+                });
+            } else {
+                // Miss - turn grey and fade out
+                indicator.setFillStyle(COLOR_STOPPED);
+                this.tweens.add({
+                    targets: indicator,
+                    alpha: 0,
+                    duration: FADE_DURATION,
+                    onComplete: () => {
+                        indicator.visible = false;
+                        indicator.completed = true;
+                        indicator.alpha = 1;
+                    }
+                });
             }
-            
-            // Change color to grey and fade out
-            indicator.setFillStyle(COLOR_STOPPED);
-            this.tweens.add({
-                targets: indicator,
-                alpha: 0,
-                duration: 1000,
-                onComplete: () => {
-                    indicator.visible = false;
-                    indicator.completed = true;  // Mark as completed when fade out is done
-                    indicator.alpha = 1; // Reset alpha for next use
-                }
-            });
         }
     }
 }
