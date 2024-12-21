@@ -22,16 +22,24 @@ let scoreText;
 
 // Movement constants
 const BASE_SPEED = 0.5;
-const ACCELERATION_FACTOR = 1.01;
+const ACCELERATION_FACTOR = 1.5;
 const MAX_SPEED = 5;
 
 // Bar position constants
 const BAR_START = 200;
 const BAR_END = 600;
 const CRITICAL_ZONE_WIDTH = 30;
+const BAR_HEIGHT = 30;
+const INDICATOR_HEIGHT = 40;  // Taller than the bar
 
 // Timing constants
 const INDICATOR_DELAY = 300;  // Time in ms between each indicator spawn
+
+// Color constants
+const COLOR_INDICATOR = 0xFFFFFF;  // White
+const COLOR_CRITICAL = 0xFFA500;   // Orange
+const COLOR_BAR = 0x666666;        // Gray
+const COLOR_STOPPED = 0x888888;    // Darker gray for stopped indicators
 
 function preload() {
     // Load any assets if needed
@@ -39,14 +47,14 @@ function preload() {
 
 function create() {
     // Create the progress bar background
-    progressBar = this.add.rectangle(400, 300, BAR_END - BAR_START, 30, 0x666666);
+    progressBar = this.add.rectangle(400, 300, BAR_END - BAR_START, BAR_HEIGHT, COLOR_BAR);
     
-    // Create the critical zone (green area)
-    criticalZone = this.add.rectangle(500, 300, CRITICAL_ZONE_WIDTH, 30, 0x00ff00);
+    // Create the critical zone (orange area)
+    criticalZone = this.add.rectangle(500, 300, CRITICAL_ZONE_WIDTH, BAR_HEIGHT, COLOR_CRITICAL);
     
     // Create three indicators
     for (let i = 0; i < 3; i++) {
-        let indicator = this.add.rectangle(BAR_START, 300, 10, 30, 0xff0000);
+        let indicator = this.add.rectangle(BAR_START, 300, 10, INDICATOR_HEIGHT, COLOR_INDICATOR);
         indicator.visible = false;
         indicator.stopped = false;
         indicator.speed = BASE_SPEED;
@@ -135,7 +143,7 @@ function stopOldestIndicator() {
             }
             
             // Change color to grey and fade out
-            indicator.setFillStyle(0x888888);
+            indicator.setFillStyle(COLOR_STOPPED);
             this.tweens.add({
                 targets: indicator,
                 alpha: 0,
@@ -163,7 +171,7 @@ function startSequence() {
             indicator.speed = BASE_SPEED;
             indicator.travelTime = 0;
             indicator.completed = false;
-            indicator.setFillStyle(0xff0000);
+            indicator.setFillStyle(COLOR_INDICATOR);
             indicator.alpha = 1;
             
             // Start each indicator with a delay
