@@ -95,22 +95,14 @@ function create() {
     }).setOrigin(0.5);
     dodgeText.visible = false;
     
-    // Create the stop button
-    startButton = this.add.rectangle(700, 300, 150, 50, 0x0000ff);
-    startButton.setInteractive();
-    startButton.on('pointerdown', startSequence);
-    
     // Add score text
     scoreText = this.add.text(BAR_X - 100, 16, 'Score: 0', { fontSize: '32px', fill: '#fff' });
     
     // Add instruction text
-    this.add.text(700, 350, 'Click to Start!', { 
+    this.add.text(BAR_X - 100, 50, 'Click anywhere to start/stop!', { 
         fontSize: '24px', 
         fill: '#fff' 
-    }).setOrigin(0.5);
-
-    // Add click handler for stopping indicators
-    this.input.on('pointerdown', stopOldestIndicator, this);
+    });
 
     // Store scene reference
     const currentScene = this;
@@ -118,6 +110,13 @@ function create() {
     // Add swipe detection
     this.input.on('pointerdown', function(pointer) {
         swipeStartX = pointer.x;
+        
+        // Handle click for starting sequence or stopping indicator
+        if (!isActive) {
+            startSequence();
+        } else {
+            stopOldestIndicator.call(currentScene);
+        }
     });
 
     this.input.on('pointerup', function(pointer) {
