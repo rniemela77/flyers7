@@ -19,6 +19,11 @@ let isActive = false;
 let currentIndicatorIndex = 0;
 let score = 0;
 let scoreText;
+let playerCharacter;
+let enemyCharacter;
+let dodgeText;
+let isDodging = false;
+let swipeStartX = null;
 
 // Movement constants
 const BASE_SPEED = 0.5;
@@ -26,24 +31,34 @@ const ACCELERATION_FACTOR = 1.5;
 const MAX_SPEED = 4;
 
 // Bar position constants
-const BAR_START = 100;  // Top position
-const BAR_END = 500;    // Bottom position
+const BAR_START = 100;
+const BAR_END = 500;
 const BAR_CENTER = (BAR_START + BAR_END) / 2;
-const BAR_X = 400;      // Horizontal position of the vertical bar
+const BAR_X = 600;
 const CRITICAL_ZONE_HEIGHT = 30;
 const BAR_WIDTH = 30;
 const INDICATOR_WIDTH = 40;
-const INDICATOR_HEIGHT = 4;  // Skinnier indicator
+const INDICATOR_HEIGHT = 4;
+
+// Character constants
+const CHARACTER_SIZE = 50;
+const CHARACTER_X = 200;
+const PLAYER_Y = 400;
+const ENEMY_Y = 200;
 
 // Timing constants
-const INDICATOR_DELAY = 500;  // Time in ms between each indicator spawn
-const FADE_DURATION = 200;   // Fade duration
+const INDICATOR_DELAY = 500;
+const FADE_DURATION = 200;
+const DODGE_DURATION = 1000;  // 1 second dodge
+const MIN_SWIPE_DISTANCE = 50;  // Minimum distance for swipe detection
 
 // Color constants
-const COLOR_INDICATOR = 0xFFFFFF;  // White
-const COLOR_CRITICAL = 0xFFA500;   // Orange
-const COLOR_BAR = 0x383838;        // Gray
-const COLOR_STOPPED = 0x888888;    // Darker gray for stopped indicators
+const COLOR_INDICATOR = 0xFFFFFF;
+const COLOR_CRITICAL = 0xFFA500;
+const COLOR_BAR = 0x383838;
+const COLOR_STOPPED = 0x888888;
+const COLOR_PLAYER = 0x00FF00;
+const COLOR_ENEMY = 0xFF0000;
 
 function preload() {
     // Load any assets if needed
@@ -67,22 +82,74 @@ function create() {
         indicators.push(indicator);
     }
     
+    // Create player character
+    playerCharacter = this.add.rectangle(CHARACTER_X, PLAYER_Y, CHARACTER_SIZE, CHARACTER_SIZE, COLOR_PLAYER);
+    
+    // Create enemy character
+    enemyCharacter = this.add.rectangle(CHARACTER_X, ENEMY_Y, CHARACTER_SIZE, CHARACTER_SIZE, COLOR_ENEMY);
+    
+    // Create dodge text (hidden by default)
+    dodgeText = this.add.text(CHARACTER_X, PLAYER_Y - CHARACTER_SIZE, '*dodge*', {
+        fontSize: '24px',
+        fill: '#fff'
+    }).setOrigin(0.5);
+    dodgeText.visible = false;
+    
     // Create the stop button
-    startButton = this.add.rectangle(600, 300, 150, 50, 0x0000ff);
+    startButton = this.add.rectangle(700, 300, 150, 50, 0x0000ff);
     startButton.setInteractive();
     startButton.on('pointerdown', startSequence);
     
     // Add score text
-    scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '32px', fill: '#fff' });
+    scoreText = this.add.text(BAR_X - 100, 16, 'Score: 0', { fontSize: '32px', fill: '#fff' });
     
     // Add instruction text
-    this.add.text(600, 350, 'Click to Start!', { 
+    this.add.text(700, 350, 'Click to Start!', { 
         fontSize: '24px', 
         fill: '#fff' 
     }).setOrigin(0.5);
 
     // Add click handler for stopping indicators
     this.input.on('pointerdown', stopOldestIndicator, this);
+
+    // Store scene reference
+    const currentScene = this;
+
+    // Add swipe detection
+    this.input.on('pointerdown', function(pointer) {
+        swipeStartX = pointer.x;
+    });
+
+    this.input.on('pointerup', function(pointer) {
+        if (swipeStartX !== null && !isDodging) {
+            const swipeDistance = pointer.x - swipeStartX;
+            
+            if (Math.abs(swipeDistance) >= MIN_SWIPE_DISTANCE) {
+                executeDodge(currentScene, swipeDistance > 0 ? 'right' : 'left');
+            }
+        }
+        swipeStartX = null;
+    });
+}
+
+function executeDodge(scene, direction) {
+    if (isDodging) return;
+    
+    isDodging = true;
+    
+    // Show dodge text
+    dodgeText.setText(`*dodge ${direction}*`);
+    dodgeText.visible = true;
+    
+    // Make player semi-transparent
+    playerCharacter.setAlpha(0.5);
+    
+    // Reset after dodge duration using the scene's timer
+    scene.time.delayedCall(DODGE_DURATION, () => {
+        isDodging = false;
+        dodgeText.visible = false;
+        playerCharacter.setAlpha(1);
+    }, [], scene);  // Pass the scene context
 }
 
 function update() {
