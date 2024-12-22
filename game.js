@@ -23,25 +23,26 @@ let scoreText;
 // Movement constants
 const BASE_SPEED = 0.5;
 const ACCELERATION_FACTOR = 1.5;
-const MAX_SPEED = 5;
+const MAX_SPEED = 4;
 
 // Bar position constants
-const BAR_START = 200;
-const BAR_END = 600;
+const BAR_START = 100;  // Top position
+const BAR_END = 500;    // Bottom position
 const BAR_CENTER = (BAR_START + BAR_END) / 2;
-const CRITICAL_ZONE_WIDTH = 30;
-const BAR_HEIGHT = 30;
-const INDICATOR_HEIGHT = 40;
-const INDICATOR_WIDTH = 4;  // Skinnier indicator
+const BAR_X = 400;      // Horizontal position of the vertical bar
+const CRITICAL_ZONE_HEIGHT = 30;
+const BAR_WIDTH = 30;
+const INDICATOR_WIDTH = 40;
+const INDICATOR_HEIGHT = 4;  // Skinnier indicator
 
 // Timing constants
-const INDICATOR_DELAY = 300;  // Time in ms between each indicator spawn
-const FADE_DURATION = 200;   // Slower fade (2 seconds)
+const INDICATOR_DELAY = 500;  // Time in ms between each indicator spawn
+const FADE_DURATION = 200;   // Fade duration
 
 // Color constants
 const COLOR_INDICATOR = 0xFFFFFF;  // White
 const COLOR_CRITICAL = 0xFFA500;   // Orange
-const COLOR_BAR = 0x666666;        // Gray
+const COLOR_BAR = 0x383838;        // Gray
 const COLOR_STOPPED = 0x888888;    // Darker gray for stopped indicators
 
 function preload() {
@@ -49,15 +50,15 @@ function preload() {
 }
 
 function create() {
-    // Create the progress bar background
-    progressBar = this.add.rectangle(400, 300, BAR_END - BAR_START, BAR_HEIGHT, COLOR_BAR);
+    // Create the progress bar background (now vertical)
+    progressBar = this.add.rectangle(BAR_X, (BAR_START + BAR_END) / 2, BAR_WIDTH, BAR_END - BAR_START, COLOR_BAR);
     
-    // Create the critical zone (orange area) - centered
-    criticalZone = this.add.rectangle(BAR_CENTER, 300, CRITICAL_ZONE_WIDTH, BAR_HEIGHT, COLOR_CRITICAL);
+    // Create the critical zone (orange area) - centered vertically
+    criticalZone = this.add.rectangle(BAR_X, BAR_CENTER, BAR_WIDTH, CRITICAL_ZONE_HEIGHT, COLOR_CRITICAL);
     
     // Create three indicators
     for (let i = 0; i < 3; i++) {
-        let indicator = this.add.rectangle(BAR_START, 300, INDICATOR_WIDTH, INDICATOR_HEIGHT, COLOR_INDICATOR);
+        let indicator = this.add.rectangle(BAR_X, BAR_START, INDICATOR_WIDTH, INDICATOR_HEIGHT, COLOR_INDICATOR);
         indicator.visible = false;
         indicator.stopped = false;
         indicator.speed = BASE_SPEED;
@@ -67,7 +68,7 @@ function create() {
     }
     
     // Create the stop button
-    startButton = this.add.rectangle(400, 500, 150, 50, 0x0000ff);
+    startButton = this.add.rectangle(600, 300, 150, 50, 0x0000ff);
     startButton.setInteractive();
     startButton.on('pointerdown', startSequence);
     
@@ -75,7 +76,7 @@ function create() {
     scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '32px', fill: '#fff' });
     
     // Add instruction text
-    this.add.text(400, 550, 'Click to Start!', { 
+    this.add.text(600, 350, 'Click to Start!', { 
         fontSize: '24px', 
         fill: '#fff' 
     }).setOrigin(0.5);
@@ -103,11 +104,11 @@ function update() {
                         MAX_SPEED
                     );
                     
-                    // Move indicator with current speed
-                    indicator.x += indicator.speed;
+                    // Move indicator downward
+                    indicator.y += indicator.speed;
                     
-                    // Only hide indicator if it's completely past the bar end plus its own width
-                    if (indicator.x - indicator.width > BAR_END + 50) {
+                    // Only hide indicator if it's completely past the bar end plus its own height
+                    if (indicator.y - indicator.height > BAR_END + 50) {
                         indicator.visible = false;
                         indicator.completed = true;
                     }
@@ -131,8 +132,8 @@ function stopOldestIndicator() {
             indicator.stopped = true;
             
             // Check if in critical zone
-            const isInCriticalZone = indicator.x >= criticalZone.x - criticalZone.width/2 && 
-                                   indicator.x <= criticalZone.x + criticalZone.width/2;
+            const isInCriticalZone = indicator.y >= criticalZone.y - criticalZone.height/2 && 
+                                   indicator.y <= criticalZone.y + criticalZone.height/2;
             
             if (isInCriticalZone) {
                 score += 100;
@@ -141,7 +142,7 @@ function stopOldestIndicator() {
                 // Visual feedback for success
                 this.tweens.add({
                     targets: criticalZone,
-                    scaleY: 1.2,
+                    scaleX: 1.2,  // Scale horizontally now instead of vertically
                     duration: 100,
                     yoyo: true
                 });
@@ -182,7 +183,7 @@ function startSequence() {
         
         // Reset and start indicators
         indicators.forEach((indicator, index) => {
-            indicator.x = BAR_START;
+            indicator.y = BAR_START;
             indicator.visible = false;
             indicator.stopped = false;
             indicator.speed = BASE_SPEED;
