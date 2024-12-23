@@ -35,6 +35,13 @@ let enemyHealthBar;
 let enemyHealthBarBg;
 let attackTimerBar;
 let attackTimerBarBg;
+let isCounterActive = false;
+let counterTimer = null;
+let counterGlow = null;
+let counterText = null;
+const COUNTER_WINDOW_DURATION = 2000; // 2 seconds to use counter-attack
+const COUNTER_DAMAGE_MULTIPLIER = 2.5; // Counter-attacks deal 2.5x damage
+const COLOR_COUNTER_READY = 0xFFFF00; // Yellow glow for counter state
 
 // Movement constants
 const BASE_SPEED = 0.5;
@@ -361,6 +368,63 @@ function executeDodge(scene, direction) {
     });
 }
 
+function activateCounterWindow(scene) {
+    isCounterActive = true;
+    
+    // Clean up any existing counter visuals
+    cleanupCounterVisuals();
+    
+    // Add counter-ready visual effect
+    counterGlow = scene.add.rectangle(
+        playerCharacter.x,
+        playerCharacter.y,
+        CHARACTER_SIZE * 1.2,
+        CHARACTER_SIZE * 1.2,
+        COLOR_COUNTER_READY
+    );
+    counterGlow.setAlpha(0.3);
+    
+    // Pulse animation for counter glow
+    scene.tweens.add({
+        targets: counterGlow,
+        alpha: 0.5,
+        scale: 1.1,
+        duration: 500,
+        yoyo: true,
+        repeat: -1
+    });
+    
+    // Add "Counter Ready!" text
+    counterText = scene.add.text(
+        playerCharacter.x,
+        playerCharacter.y - CHARACTER_SIZE,
+        'Counter Ready!',
+        { fontSize: '24px', fill: '#ffff00' }
+    ).setOrigin(0.5);
+    
+    // Clear existing counter timer if any
+    if (counterTimer) {
+        counterTimer.destroy();
+    }
+    
+    // Set timer to deactivate counter window
+    counterTimer = scene.time.delayedCall(COUNTER_WINDOW_DURATION, () => {
+        cleanupCounterVisuals();
+        isCounterActive = false;
+    });
+}
+
+function cleanupCounterVisuals() {
+    if (counterGlow) {
+        counterGlow.destroy();
+        counterGlow = null;
+    }
+    if (counterText) {
+        counterText.destroy();
+        counterText = null;
+    }
+}
+
 function update() {
     if (isActive) {
         let allCompleted = true;
@@ -406,6 +470,12 @@ function update() {
         if (attackIndicator.y >= this.laneStopY) {
             handleAttackImpact(this);
         }
+    }
+    
+    // Update counter visuals position to follow player
+    if (isCounterActive && counterGlow && counterText) {
+        counterGlow.setPosition(playerCharacter.x, playerCharacter.y);
+        counterText.setPosition(playerCharacter.x, playerCharacter.y - CHARACTER_SIZE);
     }
 }
 
@@ -465,12 +535,44 @@ function stopOldestIndicator() {
             const isInCriticalZone = indicator.y >= criticalZone.y - criticalZone.height/2 && 
                                    indicator.y <= criticalZone.y + criticalZone.height/2;
             
+            let damageMultiplier = 1;
+            
+            // Apply counter-attack bonus if active
+            if (isCounterActive) {
+                damageMultiplier = COUNTER_DAMAGE_MULTIPLIER;
+                isCounterActive = false; // Consume the counter
+                
+                // Clear counter visuals and timer
+                cleanupCounterVisuals();
+                if (counterTimer) {
+                    counterTimer.destroy();
+                }
+                
+                // Add counter-attack effect
+                const counterEffect = this.add.text(
+                    enemyCharacter.x,
+                    enemyCharacter.y,
+                    'COUNTER!',
+                    { fontSize: '32px', fill: '#ffff00' }
+                ).setOrigin(0.5);
+                
+                this.tweens.add({
+                    targets: counterEffect,
+                    y: counterEffect.y - 50,
+                    alpha: 0,
+                    duration: 1000,
+                    ease: 'Power2',
+                    onComplete: () => counterEffect.destroy()
+                });
+            }
+            
             if (isInCriticalZone) {
-                score += 100;
+                score += 100 * damageMultiplier;
                 scoreText.setText('Score: ' + score);
                 
                 // Add "PERFECT!" text effect
-                const perfectText = this.add.text(criticalZone.x, criticalZone.y, 'PERFECT!', {
+                const perfectText = this.add.text(criticalZone.x, criticalZone.y, 
+                    damageMultiplier > 1 ? 'PERFECT COUNTER!' : 'PERFECT!', {
                     fontSize: '24px',
                     fill: '#ffff00'
                 }).setOrigin(0.5);
@@ -485,8 +587,27 @@ function stopOldestIndicator() {
                 });
 
                 // Damage enemy on critical hits
-                enemyHealth = Math.max(0, enemyHealth - 10);
+                const baseDamage = 10;
+                const totalDamage = Math.round(baseDamage * damageMultiplier);
+                enemyHealth = Math.max(0, enemyHealth - totalDamage);
                 updateEnemyHealthBar();
+                
+                // Show damage number
+                const damageText = this.add.text(
+                    enemyCharacter.x + 30,
+                    enemyCharacter.y,
+                    `-${totalDamage}`,
+                    { fontSize: '24px', fill: damageMultiplier > 1 ? '#ffff00' : '#ff0000' }
+                ).setOrigin(0.5);
+                
+                this.tweens.add({
+                    targets: damageText,
+                    y: damageText.y - 40,
+                    alpha: 0,
+                    duration: 800,
+                    ease: 'Power2',
+                    onComplete: () => damageText.destroy()
+                });
                 
                 // Visual feedback
                 this.tweens.add({
@@ -496,13 +617,14 @@ function stopOldestIndicator() {
                     yoyo: true
                 });
                 
-                // Shake enemy on hit
+                // Enhanced shake for counter attacks
+                const shakeIntensity = damageMultiplier > 1 ? 10 : 5;
                 this.tweens.add({
                     targets: enemyCharacter,
-                    x: CHARACTER_X - 5,
+                    x: CHARACTER_X - shakeIntensity,
                     yoyo: true,
                     duration: 50,
-                    repeat: 1
+                    repeat: damageMultiplier > 1 ? 2 : 1
                 });
                 
                 this.tweens.add({
@@ -697,6 +819,26 @@ function handleAttackImpact(scene) {
             yoyo: true,
             duration: 100,
             repeat: 3
+        });
+    } else {
+        // Successfully dodged - activate counter window
+        activateCounterWindow(scene);
+        
+        // Add "Perfect Dodge!" text
+        const perfectDodgeText = scene.add.text(
+            playerCharacter.x,
+            playerCharacter.y - CHARACTER_SIZE * 1.5,
+            'Perfect Dodge!',
+            { fontSize: '24px', fill: '#ffff00' }
+        ).setOrigin(0.5);
+        
+        scene.tweens.add({
+            targets: perfectDodgeText,
+            y: perfectDodgeText.y - 30,
+            alpha: 0,
+            duration: 1000,
+            ease: 'Power2',
+            onComplete: () => perfectDodgeText.destroy()
         });
     }
     
