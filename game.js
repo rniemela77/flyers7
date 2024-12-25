@@ -122,6 +122,45 @@ const ATTACK_TIMER_Y_OFFSET = 30;  // Distance below enemy
 const COLOR_TIMER_BAR = 0xFF6666;  // Light red
 const COLOR_TIMER_BAR_BG = 0x333333;  // Dark grey
 
+// Add after other constants
+const COMBO_DECAY_TIME = 2000;  // Time window to maintain combo (ms)
+const MAX_COMBO_MULTIPLIER = 5;  // Maximum combo multiplier
+const CRITICAL_ZONE_MIN_HEIGHT = 15;  // Minimum critical zone height during max combo
+const PERFECT_DODGE_BOOST_DURATION = 3000;  // Duration of attack speed boost after perfect dodge
+
+// Add after other let declarations
+let currentCombo = 0;
+let comboTimer = null;
+let comboText;
+let comboMultiplier = 1;
+let attackSpeedMultiplier = 1;
+let perfectDodgeBoostActive = false;
+
+// Add after other constants
+const PERFECT_DODGE_WINDOW = 300;  // ms window for perfect dodge timing
+const PERFECT_DODGE_SPEED_BOOST = 1.5;  // 50% faster attacks during boost
+
+// Add after other constants
+const XP_PER_HIT = 10;
+const XP_PER_PERFECT_DODGE = 20;
+const XP_PER_COUNTER = 30;
+const BASE_XP_TO_LEVEL = 100;
+const XP_SCALING_FACTOR = 1.5;
+
+// Add new variables
+let playerLevel = 1;
+let currentXP = 0;
+let xpToNextLevel = BASE_XP_TO_LEVEL;
+let levelText;
+let xpBar;
+let xpBarBg;
+let unlockedAbilities = {
+    doubleCounter: false,  // Level 2: Chance for two counter windows
+    comboShield: false,    // Level 3: Maintain combo through one hit
+    timeFreeze: false,     // Level 4: Chance to slow time during perfect dodges
+    chainCounter: false    // Level 5: Counter hits add to combo
+};
+
 function preload() {
     // Load any assets if needed
 }
@@ -339,6 +378,42 @@ function create() {
         fontSize: '18px', 
         fill: '#fff' 
     }).setOrigin(0.5);
+
+    // Add combo text
+    comboText = this.add.text(BAR_X - 100, 50, '', { 
+        fontSize: '28px', 
+        fill: '#ffff00',
+        stroke: '#000000',
+        strokeThickness: 4
+    });
+    comboText.visible = false;
+
+    // Add level and XP display
+    levelText = this.add.text(16, 60, 'Level: 1', { 
+        fontSize: '24px', 
+        fill: '#00ff00' 
+    });
+    
+    // Add XP bar
+    xpBarBg = this.add.rectangle(
+        16,
+        100,
+        200,
+        10,
+        0x333333
+    );
+    xpBarBg.setOrigin(0, 0.5);
+    
+    xpBar = this.add.rectangle(
+        16,
+        100,
+        0,
+        10,
+        0x00ff00
+    );
+    xpBar.setOrigin(0, 0.5);
+    
+    updateXPBar(this);
 }
 
 function executeDodge(scene, direction) {
@@ -412,6 +487,13 @@ function activateCounterWindow(scene) {
         cleanupCounterVisuals();
         isCounterActive = false;
     });
+
+    // Add double counter chance for level 2+
+    if (unlockedAbilities.doubleCounter && Math.random() < 0.3) {
+        scene.time.delayedCall(COUNTER_WINDOW_DURATION, () => {
+            activateCounterWindow(scene);  // Activate second counter window
+        });
+    }
 }
 
 function cleanupCounterVisuals() {
@@ -462,9 +544,9 @@ function update() {
         }
     }
 
-    // Handle attack indicator movement
+    // Handle attack indicator movement with speed multiplier
     if (isAttacking && attackIndicator.visible) {
-        attackIndicator.y += ATTACK_SPEED;
+        attackIndicator.y += ATTACK_SPEED * attackSpeedMultiplier;
         
         // Check if indicator has reached the end of the lane
         if (attackIndicator.y >= this.laneStopY) {
@@ -535,11 +617,11 @@ function stopOldestIndicator() {
             const isInCriticalZone = indicator.y >= criticalZone.y - criticalZone.height/2 && 
                                    indicator.y <= criticalZone.y + criticalZone.height/2;
             
-            let damageMultiplier = 1;
+            let damageMultiplier = comboMultiplier;  // Use combo multiplier as base
             
             // Apply counter-attack bonus if active
             if (isCounterActive) {
-                damageMultiplier = COUNTER_DAMAGE_MULTIPLIER;
+                damageMultiplier *= COUNTER_DAMAGE_MULTIPLIER;
                 isCounterActive = false; // Consume the counter
                 
                 // Clear counter visuals and timer
@@ -567,25 +649,31 @@ function stopOldestIndicator() {
             }
             
             if (isInCriticalZone) {
-                score += 100 * damageMultiplier;
+                gainXP(this, XP_PER_HIT);
+                updateCombo(this, true);  // Increment combo on successful hit
+                
+                const baseScore = 100;
+                const comboScore = Math.round(baseScore * damageMultiplier);
+                score += comboScore;
                 scoreText.setText('Score: ' + score);
                 
-                // Add "PERFECT!" text effect
-                const perfectText = this.add.text(criticalZone.x, criticalZone.y, 
-                    damageMultiplier > 1 ? 'PERFECT COUNTER!' : 'PERFECT!', {
-                    fontSize: '24px',
-                    fill: '#ffff00'
-                }).setOrigin(0.5);
+                // Show combo score popup
+                const scorePopup = this.add.text(
+                    criticalZone.x + 50,
+                    criticalZone.y,
+                    `+${comboScore}`,
+                    { fontSize: '24px', fill: '#ffff00' }
+                ).setOrigin(0.5);
                 
                 this.tweens.add({
-                    targets: perfectText,
-                    y: perfectText.y - 50,
+                    targets: scorePopup,
+                    y: scorePopup.y - 50,
                     alpha: 0,
                     duration: 1000,
                     ease: 'Power2',
-                    onComplete: () => perfectText.destroy()
+                    onComplete: () => scorePopup.destroy()
                 });
-
+                
                 // Damage enemy on critical hits
                 const baseDamage = 10;
                 const totalDamage = Math.round(baseDamage * damageMultiplier);
@@ -638,6 +726,7 @@ function stopOldestIndicator() {
                     }
                 });
             } else {
+                updateCombo(this, false);  // Reset combo on miss
                 // Miss - turn grey and fade out
                 indicator.setFillStyle(COLOR_STOPPED);
                 this.tweens.add({
@@ -779,7 +868,7 @@ function handleAttackImpact(scene) {
     leftDodgeZone.setFillStyle(DODGE_ZONE_COLOR, DODGE_ZONE_ALPHA);
     rightDodgeZone.setFillStyle(DODGE_ZONE_COLOR, DODGE_ZONE_ALPHA);
     
-    // Check if player successfully dodged based on position
+    // Check if player successfully dodged based on position and timing
     const playerOffset = Math.abs(playerCharacter.x - CHARACTER_X);
     const isInDodgeZone = playerOffset > CHARACTER_SIZE;
     const dodgedCorrectly = isInDodgeZone && 
@@ -787,9 +876,13 @@ function handleAttackImpact(scene) {
          (currentAttackDirection === 'right' && playerCharacter.x < CHARACTER_X) ||
          (currentAttackDirection === 'center' && isInDodgeZone));
     
+    // Check for perfect dodge timing
+    const isPerfectDodge = dodgedCorrectly && isDodging;
+    
     if (!dodgedCorrectly) {
         playerHealth = Math.max(0, playerHealth - DAMAGE_AMOUNT);
         healthText.setText(`Health: ${playerHealth}`);
+        resetCombo();  // Reset combo on taking damage
         
         // Add damage number effect
         const damageText = scene.add.text(
@@ -810,7 +903,6 @@ function handleAttackImpact(scene) {
             onComplete: () => damageText.destroy()
         });
 
-        // Add screen shake
         scene.cameras.main.shake(200, 0.005);
         
         scene.tweens.add({
@@ -824,22 +916,72 @@ function handleAttackImpact(scene) {
         // Successfully dodged - activate counter window
         activateCounterWindow(scene);
         
-        // Add "Perfect Dodge!" text
-        const perfectDodgeText = scene.add.text(
-            playerCharacter.x,
-            playerCharacter.y - CHARACTER_SIZE * 1.5,
-            'Perfect Dodge!',
-            { fontSize: '24px', fill: '#ffff00' }
-        ).setOrigin(0.5);
-        
-        scene.tweens.add({
-            targets: perfectDodgeText,
-            y: perfectDodgeText.y - 30,
-            alpha: 0,
-            duration: 1000,
-            ease: 'Power2',
-            onComplete: () => perfectDodgeText.destroy()
-        });
+        if (isPerfectDodge) {
+            gainXP(scene, XP_PER_PERFECT_DODGE);
+            // Activate perfect dodge boost
+            perfectDodgeBoostActive = true;
+            attackSpeedMultiplier = PERFECT_DODGE_SPEED_BOOST;
+            
+            // Add visual feedback for perfect dodge
+            const perfectDodgeText = scene.add.text(
+                playerCharacter.x,
+                playerCharacter.y - CHARACTER_SIZE * 1.5,
+                'PERFECT DODGE!',
+                { 
+                    fontSize: '32px', 
+                    fill: '#00ffff',
+                    stroke: '#000000',
+                    strokeThickness: 4 
+                }
+            ).setOrigin(0.5);
+            
+            // Add glow effect
+            const glow = scene.add.rectangle(
+                playerCharacter.x,
+                playerCharacter.y,
+                CHARACTER_SIZE * 2,
+                CHARACTER_SIZE * 2,
+                0x00ffff
+            );
+            glow.setAlpha(0.3);
+            
+            // Animate glow and text
+            scene.tweens.add({
+                targets: [glow, perfectDodgeText],
+                alpha: 0,
+                scaleX: 2,
+                scaleY: 2,
+                duration: 1000,
+                ease: 'Power2',
+                onComplete: () => {
+                    glow.destroy();
+                    perfectDodgeText.destroy();
+                }
+            });
+            
+            // Reset boost after duration
+            scene.time.delayedCall(PERFECT_DODGE_BOOST_DURATION, () => {
+                perfectDodgeBoostActive = false;
+                attackSpeedMultiplier = 1;
+            });
+        } else {
+            // Regular successful dodge
+            const dodgeText = scene.add.text(
+                playerCharacter.x,
+                playerCharacter.y - CHARACTER_SIZE * 1.5,
+                'Dodge!',
+                { fontSize: '24px', fill: '#ffff00' }
+            ).setOrigin(0.5);
+            
+            scene.tweens.add({
+                targets: dodgeText,
+                y: dodgeText.y - 30,
+                alpha: 0,
+                duration: 1000,
+                ease: 'Power2',
+                onComplete: () => dodgeText.destroy()
+            });
+        }
     }
     
     scheduleNextAttack(scene);
@@ -849,4 +991,171 @@ function updateEnemyHealthBar() {
     const barWidth = (enemyHealth / 100) * HEALTH_BAR_WIDTH;
     enemyHealthBar.setSize(barWidth, HEALTH_BAR_HEIGHT);
     enemyHealthBar.setX(enemyHealthBarBg.x - HEALTH_BAR_WIDTH/2);
+}
+
+function updateCombo(scene, success) {
+    if (success) {
+        currentCombo++;
+        comboMultiplier = Math.min(1 + (currentCombo * 0.2), MAX_COMBO_MULTIPLIER);
+        
+        // Update combo text with scaling effect
+        comboText.setText(`${currentCombo}x COMBO!`);
+        comboText.visible = true;
+        
+        scene.tweens.add({
+            targets: comboText,
+            scale: { from: 1.5, to: 1 },
+            duration: 200,
+            ease: 'Back.easeOut'
+        });
+        
+        // Adjust critical zone size based on combo
+        const shrinkFactor = Math.max(0.5, 1 - (currentCombo * 0.1));
+        const newHeight = Math.max(CRITICAL_ZONE_MIN_HEIGHT, CRITICAL_ZONE_HEIGHT * shrinkFactor);
+        criticalZone.setSize(BAR_WIDTH, newHeight);
+        
+        // Clear existing combo timer
+        if (comboTimer) comboTimer.destroy();
+        
+        // Set new combo timer
+        comboTimer = scene.time.delayedCall(COMBO_DECAY_TIME, () => {
+            resetCombo();
+        });
+    } else {
+        resetCombo();
+    }
+}
+
+function resetCombo() {
+    if (unlockedAbilities.comboShield && currentCombo > 0) {
+        // Use up combo shield instead of resetting
+        unlockedAbilities.comboShield = false;
+        return;
+    }
+    
+    currentCombo = 0;
+    comboMultiplier = 1;
+    comboText.visible = false;
+    criticalZone.setSize(BAR_WIDTH, CRITICAL_ZONE_HEIGHT);
+    if (comboTimer) {
+        comboTimer.destroy();
+        comboTimer = null;
+    }
+}
+
+function gainXP(scene, amount) {
+    currentXP += amount;
+    
+    while (currentXP >= xpToNextLevel) {
+        levelUp(scene);
+    }
+    
+    updateXPBar(scene);
+}
+
+function levelUp(scene) {
+    playerLevel++;
+    currentXP -= xpToNextLevel;
+    xpToNextLevel = Math.floor(BASE_XP_TO_LEVEL * Math.pow(XP_SCALING_FACTOR, playerLevel - 1));
+    
+    levelText.setText(`Level: ${playerLevel}`);
+    
+    // Level-up effect
+    const levelUpText = scene.add.text(
+        scene.cameras.main.centerX,
+        scene.cameras.main.centerY,
+        'LEVEL UP!',
+        { 
+            fontSize: '48px', 
+            fill: '#00ff00',
+            stroke: '#000000',
+            strokeThickness: 6
+        }
+    ).setOrigin(0.5);
+    
+    // Add level-specific unlock text
+    let unlockText = '';
+    switch(playerLevel) {
+        case 2:
+            unlockedAbilities.doubleCounter = true;
+            unlockText = 'Unlocked: Double Counter!';
+            break;
+        case 3:
+            unlockedAbilities.comboShield = true;
+            unlockText = 'Unlocked: Combo Shield!';
+            break;
+        case 4:
+            unlockedAbilities.timeFreeze = true;
+            unlockText = 'Unlocked: Time Freeze!';
+            break;
+        case 5:
+            unlockedAbilities.chainCounter = true;
+            unlockText = 'Unlocked: Chain Counter!';
+            break;
+    }
+    
+    if (unlockText) {
+        const abilityText = scene.add.text(
+            scene.cameras.main.centerX,
+            scene.cameras.main.centerY + 50,
+            unlockText,
+            { 
+                fontSize: '32px', 
+                fill: '#00ffff',
+                stroke: '#000000',
+                strokeThickness: 4
+            }
+        ).setOrigin(0.5);
+        
+        scene.tweens.add({
+            targets: [levelUpText, abilityText],
+            alpha: 0,
+            y: '-=50',
+            duration: 2000,
+            ease: 'Power2',
+            onComplete: () => {
+                levelUpText.destroy();
+                abilityText.destroy();
+            }
+        });
+    } else {
+        scene.tweens.add({
+            targets: levelUpText,
+            alpha: 0,
+            y: '-=50',
+            duration: 2000,
+            ease: 'Power2',
+            onComplete: () => levelUpText.destroy()
+        });
+    }
+    
+    // Screen flash effect
+    const flash = scene.add.rectangle(
+        0, 0,
+        scene.cameras.main.width,
+        scene.cameras.main.height,
+        0x00ff00
+    );
+    flash.setAlpha(0.3);
+    flash.setDepth(999);
+    
+    scene.tweens.add({
+        targets: flash,
+        alpha: 0,
+        duration: 500,
+        ease: 'Power2',
+        onComplete: () => flash.destroy()
+    });
+}
+
+function updateXPBar(scene) {
+    const progress = currentXP / xpToNextLevel;
+    const width = 200 * progress;
+    
+    scene.tweens.add({
+        targets: xpBar,
+        width: width,
+        duration: 200,
+        ease: 'Power1'
+    });
 }
