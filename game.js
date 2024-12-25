@@ -16,7 +16,7 @@ class MainScene extends Phaser.Scene {
         this.enemySize = 50;
         this.glowExtraSize = 20;
         this.playerSize = 50;
-        this.bulletSize = 10;
+        this.bulletSize = 100;
 
         // Positions
         this.enemyHeightRatio = 0.25;
@@ -29,6 +29,14 @@ class MainScene extends Phaser.Scene {
 
         // Movement
         this.bulletSpeed = 800;
+        this.playerDodgeDistance = 200;
+        this.playerDodgeDuration = 300;
+        this.minSwipeDistance = 50;
+        
+        // Input tracking
+        this.swipeStartX = 0;
+        this.swipeStartY = 0;
+        this.isPlayerMoving = false;
     }
 
     create() {
@@ -62,6 +70,24 @@ class MainScene extends Phaser.Scene {
 
         // Setup bullet group
         this.bullets = this.add.group();
+
+        // Setup input handling
+        this.input.on('pointerdown', (pointer) => {
+            this.swipeStartX = pointer.x;
+            this.swipeStartY = pointer.y;
+        });
+
+        this.input.on('pointerup', (pointer) => {
+            if (this.isPlayerMoving) return; // Don't allow dodging while already dodging
+
+            const swipeDistanceX = pointer.x - this.swipeStartX;
+            const swipeDistanceY = Math.abs(pointer.y - this.swipeStartY);
+            
+            // Only register horizontal swipes (ignore vertical ones)
+            if (Math.abs(swipeDistanceX) > this.minSwipeDistance && swipeDistanceY < this.minSwipeDistance) {
+                this.dodgePlayer(swipeDistanceX > 0 ? 'right' : 'left');
+            }
+        });
 
         // Start the attack cycle
         this.startAttackCycle();
@@ -123,6 +149,30 @@ class MainScene extends Phaser.Scene {
         // Destroy bullet when it goes off screen
         this.time.delayedCall(this.bulletLifetime, () => {
             bullet.destroy();
+        });
+    }
+
+    dodgePlayer(direction) {
+        if (this.isPlayerMoving) return;
+        
+        this.isPlayerMoving = true;
+        const targetX = this.player.x + (direction === 'right' ? this.playerDodgeDistance : -this.playerDodgeDistance);
+        
+        // Keep player within screen bounds
+        const boundedTargetX = Phaser.Math.Clamp(
+            targetX,
+            this.playerSize / 2,
+            window.innerWidth - this.playerSize / 2
+        );
+
+        this.tweens.add({
+            targets: this.player,
+            x: boundedTargetX,
+            duration: this.playerDodgeDuration,
+            ease: 'Cubic.Out',
+            onComplete: () => {
+                this.isPlayerMoving = false;
+            }
         });
     }
 }
