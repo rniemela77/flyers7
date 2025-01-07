@@ -17,9 +17,11 @@ const GAME_CONFIG = {
         enemy: 0xff0000,
         turret: 0x666666,
         aoeTurret: 0x9933cc,  // Purple color for AOE turret
+        slowTurret: 0x00ccff,  // Light blue color for slow turret
         resource: 0x0000ff,
         bullet: 0xff6666,
         aoeBullet: 0xff99ff,  // Light purple for AOE projectile
+        slowBullet: 0x66ffff,  // Light cyan for slow projectile
         aoeExplosion: 0xff66ff,  // Bright purple for explosion
         uiZone: 0x333333,
         cooldownBar: 0xffffff,
@@ -32,8 +34,10 @@ const GAME_CONFIG = {
         enemy: 20,
         turret: 20,
         aoeTurret: 25,  // Slightly larger than regular turret
+        slowTurret: 22,  // Medium size for slow turret
         bullet: 5,
         aoeBullet: 8,  // Larger projectile for AOE
+        slowBullet: 6,  // Medium size for slow projectile
         cooldownBarHeight: 4,
         aoeExplosion: 100,  // Size of AOE explosion
     },
@@ -42,6 +46,7 @@ const GAME_CONFIG = {
     ranges: {
         turret: 200,
         aoeTurret: 250,  // Longer range for AOE turret
+        slowTurret: 225,  // Medium range for slow turret
         orbitDistance: 0.4,
         followDistance: 0.5,
         aoeRadius: 300,  // Increased from 150 to 300 for much larger cone
@@ -52,16 +57,22 @@ const GAME_CONFIG = {
     mechanics: {
         turretCost: 20,
         aoeTurretCost: 40,  // More expensive than regular turret
+        slowTurretCost: 30,  // Medium cost for slow turret
         turretFireRate: 2000,
         aoeTurretFireRate: 1500,  // Faster fire rate for AOE turret
+        slowTurretFireRate: 1750,  // Medium fire rate for slow turret
         turretMoveSpeed: 40,
         aoeTurretMoveSpeed: 30,  // Slower movement for AOE turret
+        slowTurretMoveSpeed: 35,  // Medium movement speed for slow turret
         turretDrag: 50,
         turretAngularDrag: 50,
         bulletSpeed: 300,
         aoeBulletSpeed: 200,  // Slower projectile for AOE
+        slowBulletSpeed: 250,  // Medium speed for slow projectile
         bulletLifetime: 1000,
         aoeExplosionDuration: 300,  // Shorter duration for snappier feedback
+        slowDuration: 3000,  // How long the slow effect lasts
+        slowFactor: 0.5,  // How much to slow enemies (0.5 = 50% speed)
         coreSpeed: 200,
         enemyBaseSpeed: 30,
         enemySpeedIncreasePerWave: 5,
@@ -195,6 +206,15 @@ function create() {
         GAME_CONFIG.colors.aoeTurret
     );
     
+    // Add slow turret placement button
+    const slowTurretButton = this.add.rectangle(
+        gameWidth/2 + TURRET_BUTTON_SIZE * 2,  // Positioned further right
+        gameHeight - uiHeight/2,
+        TURRET_BUTTON_SIZE,
+        TURRET_BUTTON_SIZE,
+        GAME_CONFIG.colors.slowTurret
+    );
+    
     // Center the text in the buttons
     const turretText = this.add.text(
         gameWidth/2 - TURRET_BUTTON_SIZE,
@@ -219,14 +239,28 @@ function create() {
         }
     );
     aoeTurretText.setOrigin(0.5, 0.5);
+
+    const slowTurretText = this.add.text(
+        gameWidth/2 + TURRET_BUTTON_SIZE * 2,
+        gameHeight - uiHeight/2,
+        "Slow\n30",
+        { 
+            fontSize: Math.max(uiHeight * 0.2, 10) + "px",
+            fill: "#fff",
+            align: 'center'
+        }
+    );
+    slowTurretText.setOrigin(0.5, 0.5);
     
     turretButton.setInteractive({ draggable: true });
     aoeTurretButton.setInteractive({ draggable: true });
+    slowTurretButton.setInteractive({ draggable: true });
 
     // Track if we're currently placing a turret
     let placingTurret = null;
     let rangeCircle = null;
     let isPlacingAOE = false;  // Track which type we're placing
+    let isPlacingSlow = false;  // Track if placing slow turret
 
     // Handle drag start for regular turret
     turretButton.on("dragstart", (pointer) => {
@@ -279,6 +313,28 @@ function create() {
         }
     });
 
+    // Handle drag start for slow turret
+    slowTurretButton.on("dragstart", (pointer) => {
+        if (playerResources >= GAME_CONFIG.mechanics.slowTurretCost && !placingTurret) {
+            isPlacingAOE = false;
+            isPlacingSlow = true;
+            placingTurret = this.add.rectangle(
+                pointer.x,
+                pointer.y,
+                Math.max(30, GAME_CONFIG.sizes.slowTurret * scale * 2),
+                Math.max(30, GAME_CONFIG.sizes.slowTurret * scale * 2),
+                GAME_CONFIG.colors.slowTurret
+            );
+            
+            rangeCircle = this.add.circle(pointer.x, pointer.y, Math.max(100, GAME_CONFIG.ranges.slowTurret * scale));
+            rangeCircle.setStrokeStyle(
+                GAME_CONFIG.effects.rangePreviewLineWidth,
+                GAME_CONFIG.colors.slowTurret,
+                GAME_CONFIG.effects.rangePreviewAlpha
+            );
+        }
+    });
+
     // Handle drag
     turretButton.on("drag", (pointer) => {
         if (placingTurret) {
@@ -302,16 +358,37 @@ function create() {
         }
     });
 
+    slowTurretButton.on("drag", (pointer) => {
+        if (placingTurret) {
+            placingTurret.x = pointer.x;
+            placingTurret.y = pointer.y;
+            rangeCircle.x = pointer.x;
+            rangeCircle.y = pointer.y;
+        }
+    });
+
     // Handle drag end for both turret types
     const endDrag = (pointer, button) => {
         if (!placingTurret) return;
 
-        const cost = isPlacingAOE ? GAME_CONFIG.mechanics.aoeTurretCost : GAME_CONFIG.mechanics.turretCost;
-        const size = isPlacingAOE ? Math.max(30, GAME_CONFIG.sizes.aoeTurret * scale * 2) : TURRET_SIZE;
-        const color = isPlacingAOE ? GAME_CONFIG.colors.aoeTurret : GAME_CONFIG.colors.turret;
-        const range = isPlacingAOE ? Math.max(100, GAME_CONFIG.ranges.aoeTurret * scale) : TURRET_RANGE;
-        const moveSpeed = isPlacingAOE ? GAME_CONFIG.mechanics.aoeTurretMoveSpeed : GAME_CONFIG.mechanics.turretMoveSpeed;
-        const fireRate = isPlacingAOE ? GAME_CONFIG.mechanics.aoeTurretFireRate : GAME_CONFIG.mechanics.turretFireRate;
+        const cost = isPlacingAOE ? GAME_CONFIG.mechanics.aoeTurretCost : 
+                    isPlacingSlow ? GAME_CONFIG.mechanics.slowTurretCost :
+                    GAME_CONFIG.mechanics.turretCost;
+        const size = isPlacingAOE ? Math.max(30, GAME_CONFIG.sizes.aoeTurret * scale * 2) :
+                    isPlacingSlow ? Math.max(30, GAME_CONFIG.sizes.slowTurret * scale * 2) :
+                    TURRET_SIZE;
+        const color = isPlacingAOE ? GAME_CONFIG.colors.aoeTurret :
+                     isPlacingSlow ? GAME_CONFIG.colors.slowTurret :
+                     GAME_CONFIG.colors.turret;
+        const range = isPlacingAOE ? Math.max(100, GAME_CONFIG.ranges.aoeTurret * scale) :
+                     isPlacingSlow ? Math.max(100, GAME_CONFIG.ranges.slowTurret * scale) :
+                     TURRET_RANGE;
+        const moveSpeed = isPlacingAOE ? GAME_CONFIG.mechanics.aoeTurretMoveSpeed :
+                         isPlacingSlow ? GAME_CONFIG.mechanics.slowTurretMoveSpeed :
+                         GAME_CONFIG.mechanics.turretMoveSpeed;
+        const fireRate = isPlacingAOE ? GAME_CONFIG.mechanics.aoeTurretFireRate :
+                        isPlacingSlow ? GAME_CONFIG.mechanics.slowTurretFireRate :
+                        GAME_CONFIG.mechanics.turretFireRate;
 
         if (playerResources >= cost) {
             // Create the actual turret
@@ -325,6 +402,7 @@ function create() {
             turret.fireRate = fireRate;
             turret.lastFired = 0;
             turret.isAOE = isPlacingAOE;
+            turret.isSlowTurret = isPlacingSlow;
             
             // Add cooldown bar
             const cooldownBar = this.add.rectangle(
@@ -382,6 +460,7 @@ function create() {
 
     turretButton.on("dragend", endDrag);
     aoeTurretButton.on("dragend", endDrag);
+    slowTurretButton.on("dragend", endDrag);
 
     // Cancel placement with right click
     this.input.on("pointerdown", (pointer) => {
@@ -660,6 +739,70 @@ function update() {
                         onComplete: () => graphics.destroy()
                     });
 
+                } else if (turret.isSlowTurret) {
+                    // Slow turret shooting
+                    const bullet = this.add.circle(turret.x, turret.y, 
+                        Math.max(3, GAME_CONFIG.sizes.slowBullet * scale), 
+                        GAME_CONFIG.colors.slowBullet
+                    );
+                    this.physics.add.existing(bullet, false);
+                    bullet.body.setCollideWorldBounds(false);
+                    this.bullets.add(bullet);
+                    
+                    // Store target enemy for tracking
+                    bullet.targetEnemy = nearestEnemy.enemy;
+                    
+                    // Set bullet velocity towards enemy
+                    this.physics.moveToObject(bullet, nearestEnemy.enemy, GAME_CONFIG.mechanics.slowBulletSpeed);
+                    
+                    // Check for collision in update loop
+                    bullet.checkCollision = () => {
+                        if (bullet.targetEnemy.active) {  // If target still exists
+                            const dx = bullet.x - bullet.targetEnemy.x;
+                            const dy = bullet.y - bullet.targetEnemy.y;
+                            const distance = Math.sqrt(dx * dx + dy * dy);
+                            
+                            if (distance < ENEMY_SIZE) {  // If bullet is close enough to enemy
+                                // Apply slow effect
+                                if (!bullet.targetEnemy.isSlowed) {
+                                    bullet.targetEnemy.isSlowed = true;
+                                    bullet.targetEnemy.originalSpeed = bullet.targetEnemy.body.speed;
+                                    bullet.targetEnemy.body.speed *= GAME_CONFIG.mechanics.slowFactor;
+                                    
+                                    // Add visual indicator for slowed enemy
+                                    bullet.targetEnemy.setStrokeStyle(2, GAME_CONFIG.colors.slowBullet);
+                                    
+                                    // Reset slow effect after duration
+                                    this.time.delayedCall(GAME_CONFIG.mechanics.slowDuration, () => {
+                                        if (bullet.targetEnemy && bullet.targetEnemy.active) {
+                                            bullet.targetEnemy.isSlowed = false;
+                                            bullet.targetEnemy.body.speed = bullet.targetEnemy.originalSpeed;
+                                            bullet.targetEnemy.setStrokeStyle(0);
+                                        }
+                                    });
+                                }
+                                
+                                bullet.destroy();
+                                
+                                // Visual feedback
+                                const slowEffect = this.add.circle(bullet.targetEnemy.x, bullet.targetEnemy.y, ENEMY_SIZE * 1.5, GAME_CONFIG.colors.slowBullet);
+                                slowEffect.setAlpha(0.4);
+                                this.tweens.add({
+                                    targets: slowEffect,
+                                    alpha: 0,
+                                    scale: 2,
+                                    duration: 500,
+                                    onComplete: () => slowEffect.destroy()
+                                });
+                            }
+                        }
+                    };
+                    
+                    setTimeout(() => {
+                        if (bullet && !bullet.destroyed) {
+                            bullet.destroy();
+                        }
+                    }, GAME_CONFIG.mechanics.bulletLifetime);
                 } else {
                     // Regular turret shooting
                     const bullet = this.add.circle(turret.x, turret.y, BULLET_SIZE, GAME_CONFIG.colors.bullet);
