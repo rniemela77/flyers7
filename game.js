@@ -18,8 +18,8 @@ const GAME_CONFIG = {
         turret: 0x666666,
         resource: 0x0000ff,
         bullet: 0xff6666,
-        pulse: 0xffff00,
         uiZone: 0x333333,
+        cooldownBar: 0xffffff,
     },
     
     // Sizes (before scaling)
@@ -29,28 +29,47 @@ const GAME_CONFIG = {
         enemy: 20,
         turret: 20,
         bullet: 5,
+        cooldownBarHeight: 4,
     },
     
     // Ranges (before scaling)
     ranges: {
-        pulse: 200,
-        turret: 150,
+        turret: 200,
+        orbitDistance: 0.4,  // Percentage of turret range
+        followDistance: 0.5,  // Distance at which turrets start following core
     },
     
     // Game mechanics
     mechanics: {
         turretCost: 20,
         turretFireRate: 2000,
+        turretMoveSpeed: 40,
+        turretDrag: 50,
+        turretAngularDrag: 50,
         bulletSpeed: 300,
+        bulletLifetime: 1000,  // How long bullets exist before auto-destroying
         coreSpeed: 200,
-        enemyBaseSpeed: 50,
+        enemyBaseSpeed: 30,
         enemySpeedIncreasePerWave: 5,
         resourceValue: 10,
         enemyDamage: 10,
-        pulseScoreValue: 5,
         turretScoreValue: 10,
         waveDelay: 3000,
         initialCoreHealth: 100,
+        enemyKillScore: 10,
+    },
+    
+    // Visual effects
+    effects: {
+        turretShootScale: 1.1,
+        turretShootDuration: 50,
+        turretPlaceScale: 1.2,
+        turretPlaceDuration: 200,
+        cooldownBarOffset: 0.8,  // How far above turret the cooldown bar appears
+        rangeIndicatorAlpha: 0.4,
+        rangePreviewAlpha: 0.6,
+        rangeIndicatorLineWidth: 1,
+        rangePreviewLineWidth: 2,
     },
     
     // UI
@@ -59,6 +78,8 @@ const GAME_CONFIG = {
         baseFontSize: 20,
         uiHeightPercent: 0.15,
         maxUiHeight: 100,
+        scorePopupDuration: 1000,
+        scorePopupDistance: 50,
     }
 };
 
@@ -78,10 +99,9 @@ const scale = Math.min(
 const CORE_SIZE = Math.max(15, GAME_CONFIG.sizes.core * scale);
 const RESOURCE_SIZE = Math.max(10, GAME_CONFIG.sizes.resource * scale);
 const ENEMY_SIZE = Math.max(15, GAME_CONFIG.sizes.enemy * scale);
-const TURRET_SIZE = Math.max(15, GAME_CONFIG.sizes.turret * scale);
+const TURRET_SIZE = Math.max(30, GAME_CONFIG.sizes.turret * scale * 2);  // Doubled turret size
 const BULLET_SIZE = Math.max(3, GAME_CONFIG.sizes.bullet * scale);
-const PULSE_RANGE = Math.max(100, GAME_CONFIG.ranges.pulse * scale);
-const TURRET_RANGE = Math.max(75, GAME_CONFIG.ranges.turret * scale);
+const TURRET_RANGE = Math.max(100, GAME_CONFIG.ranges.turret * scale);
 const TURRET_BUTTON_SIZE = uiHeight;
 
 const config = {
@@ -123,7 +143,7 @@ let pulseCore;
 let resources;
 let enemies;
 let turrets;
-let playerResources = 0;
+let playerResources = 100;
 let score = 0;
 let wave = 1;
 let coreHealth = 100;
@@ -169,30 +189,24 @@ function create() {
     // Add core movement on click (only outside UI zone)
     this.input.on("pointerdown", (pointer) => {
         if (pointer.y < playHeight) {
-            this.physics.moveToObject(pulseCore, pointer, 200 * scale);
+            this.physics.moveToObject(pulseCore, pointer, GAME_CONFIG.mechanics.coreSpeed * scale);
         }
     });
 
     // Create groups for game objects
-    resources = this.physics.add.group();
-    enemies = this.physics.add.group();
-    turrets = this.physics.add.group();
-
-    // Add resource collectors at different positions
-    [
-        {x: gameWidth * 0.25, y: playHeight * 0.25},
-        {x: gameWidth * 0.75, y: playHeight * 0.25},
-        {x: gameWidth * 0.25, y: playHeight * 0.75},
-        {x: gameWidth * 0.75, y: playHeight * 0.75}
-    ].forEach(pos => {
-        const collector = this.add.circle(pos.x, pos.y, RESOURCE_SIZE, GAME_CONFIG.colors.resource);
-        this.physics.add.existing(collector);
-        resources.add(collector);
+    enemies = this.physics.add.group({
+        collideWorldBounds: true
     });
+    turrets = this.physics.add.group({
+        collideWorldBounds: true
+    });
+
+    // Add collisions between turrets
+    this.physics.add.collider(turrets, turrets);
 
     // Add HUD with scaled font sizes
     const fontSize = Math.max(20 * scale, 14);
-    this.resourceText = this.add.text(10, 10, "Resources: 0", {
+    this.resourceText = this.add.text(10, 10, "Resources: 100", {
         fontSize: fontSize + "px",
         fill: "#fff",
     });
@@ -215,7 +229,7 @@ function create() {
 
     // Handle drag start
     turretButton.on("dragstart", (pointer) => {
-        if (playerResources >= 20 && !placingTurret) {
+        if (playerResources >= GAME_CONFIG.mechanics.turretCost && !placingTurret) {
             // Create a turret that follows the mouse
             placingTurret = this.add.rectangle(
                 pointer.x,
@@ -225,13 +239,12 @@ function create() {
                 GAME_CONFIG.colors.turret
             );
             
-            // Add a preview range circle
-            rangeCircle = this.add.circle(
-                pointer.x,
-                pointer.y,
-                TURRET_RANGE,
+            // Add a preview range circle (outline only)
+            rangeCircle = this.add.circle(pointer.x, pointer.y, TURRET_RANGE);
+            rangeCircle.setStrokeStyle(
+                GAME_CONFIG.effects.rangePreviewLineWidth,
                 GAME_CONFIG.colors.turret,
-                0.1
+                GAME_CONFIG.effects.rangePreviewAlpha
             );
         }
     });
@@ -248,24 +261,49 @@ function create() {
 
     // Handle drag end
     turretButton.on("dragend", (pointer) => {
-        if (placingTurret && playerResources >= 20) {
+        if (placingTurret && playerResources >= GAME_CONFIG.mechanics.turretCost) {
             // Create the actual turret at the drop location
             const turret = this.add.rectangle(pointer.x, pointer.y, TURRET_SIZE, TURRET_SIZE, GAME_CONFIG.colors.turret);
             this.physics.add.existing(turret);
-            turret.fireRate = 2000;
+            turret.body.setCollideWorldBounds(true);
+            turret.body.setBoundsRectangle(new Phaser.Geom.Rectangle(0, 0, gameWidth, playHeight));
+            turret.body.setDrag(GAME_CONFIG.mechanics.turretDrag);
+            turret.body.setMaxVelocity(GAME_CONFIG.mechanics.turretMoveSpeed);
+            turret.body.setAngularDrag(GAME_CONFIG.mechanics.turretAngularDrag);
+            turret.fireRate = GAME_CONFIG.mechanics.turretFireRate;
             turret.lastFired = 0;
+            
+            // Add cooldown bar
+            const cooldownBar = this.add.rectangle(
+                pointer.x,
+                pointer.y - TURRET_SIZE * GAME_CONFIG.effects.cooldownBarOffset,
+                TURRET_SIZE,
+                GAME_CONFIG.sizes.cooldownBarHeight,
+                GAME_CONFIG.colors.cooldownBar
+            );
+            turret.cooldownBar = cooldownBar;
+            
+            // Add permanent range indicator (outline only)
+            const rangeIndicator = this.add.circle(pointer.x, pointer.y, TURRET_RANGE);
+            rangeIndicator.setStrokeStyle(
+                GAME_CONFIG.effects.rangeIndicatorLineWidth,
+                GAME_CONFIG.colors.turret,
+                GAME_CONFIG.effects.rangeIndicatorAlpha
+            );
+            turret.rangeIndicator = rangeIndicator;
+            
             turrets.add(turret);
             
             // Deduct resources
-            playerResources -= 20;
+            playerResources -= GAME_CONFIG.mechanics.turretCost;
             this.resourceText.setText(`Resources: ${playerResources}`);
             
             // Visual feedback
             this.tweens.add({
                 targets: turret,
-                scaleX: 1.2,
-                scaleY: 1.2,
-                duration: 200,
+                scaleX: GAME_CONFIG.effects.turretPlaceScale,
+                scaleY: GAME_CONFIG.effects.turretPlaceScale,
+                duration: GAME_CONFIG.effects.turretPlaceDuration,
                 yoyo: true
             });
         }
@@ -289,38 +327,6 @@ function create() {
         }
     });
 
-    // Add collision detection
-    this.physics.add.overlap(pulseCore, resources, (core, resource) => {
-        resource.destroy();
-        playerResources += 10;
-        this.resourceText.setText(`Resources: ${playerResources}`);
-        
-        // Spawn a new resource after collection
-        setTimeout(() => {
-            const newResource = this.add.circle(
-                Phaser.Math.Between(100, gameWidth - 20),
-                Phaser.Math.Between(100, playHeight - 20),  // Adjusted to stay in play area
-                RESOURCE_SIZE,
-                GAME_CONFIG.colors.resource
-            );
-            this.physics.add.existing(newResource);
-            resources.add(newResource);
-        }, 5000);
-
-        // Visual feedback
-        const collectText = this.add.text(resource.x, resource.y, '+10', {
-            fontSize: '16px',
-            fill: '#0ff'
-        });
-        this.tweens.add({
-            targets: collectText,
-            y: resource.y - 50,
-            alpha: 0,
-            duration: 1000,
-            onComplete: () => collectText.destroy()
-        });
-    });
-
     // Create a group for bullets
     this.bullets = this.physics.add.group();
 
@@ -328,19 +334,19 @@ function create() {
     this.physics.add.overlap(this.bullets, enemies, (bullet, enemy) => {
         bullet.destroy();
         enemy.destroy();
-        score += 10;
+        score += GAME_CONFIG.mechanics.enemyKillScore;
         this.scoreText.setText(`Score: ${score}`);
         
         // Visual feedback
-        const scoreText = this.add.text(enemy.x, enemy.y, '+10', {
+        const scoreText = this.add.text(enemy.x, enemy.y, '+' + GAME_CONFIG.mechanics.enemyKillScore, {
             fontSize: '16px',
             fill: '#ff0'
         });
         this.tweens.add({
             targets: scoreText,
-            y: enemy.y - 50,
+            y: enemy.y - GAME_CONFIG.ui.scorePopupDistance,
             alpha: 0,
-            duration: 1000,
+            duration: GAME_CONFIG.ui.scorePopupDuration,
             onComplete: () => scoreText.destroy()
         });
     });
@@ -370,72 +376,95 @@ function create() {
         }, 200);
     });
 
+    // Function to spawn a single enemy
+    const spawnEnemy = () => {
+        const spawnSide = Phaser.Math.Between(0, 3);
+        let x, y;
+        switch(spawnSide) {
+            case 0: x = Phaser.Math.Between(0, gameWidth); y = 0; break;  // Top
+            case 1: x = gameWidth; y = Phaser.Math.Between(0, playHeight); break;  // Right
+            case 2: x = Phaser.Math.Between(0, gameWidth); y = playHeight; break;  // Bottom (above UI)
+            case 3: x = 0; y = Phaser.Math.Between(0, playHeight); break;  // Left
+        }
+        
+        const enemy = this.add.rectangle(x, y, ENEMY_SIZE, ENEMY_SIZE, GAME_CONFIG.colors.enemy);
+        this.physics.add.existing(enemy);
+        enemy.body.setCollideWorldBounds(true);
+        enemy.body.setBoundsRectangle(new Phaser.Geom.Rectangle(0, 0, gameWidth, playHeight));
+        enemies.add(enemy);
+        
+        // Clamp target position to gameplay area
+        const targetY = Phaser.Math.Clamp(pulseCore.y, 0, playHeight);
+        const targetX = Phaser.Math.Clamp(pulseCore.x, 0, gameWidth);
+        this.physics.moveTo(enemy, targetX, targetY, 
+            GAME_CONFIG.mechanics.enemyBaseSpeed + wave * GAME_CONFIG.mechanics.enemySpeedIncreasePerWave);
+        
+        wave++;
+        this.waveText.setText(`Wave: ${wave}`);
+    };
+
+    // Spawn first enemy immediately
+    spawnEnemy();
+
     // Spawn enemies with increasing difficulty
     this.time.addEvent({
         delay: 3000,
-        callback: () => {
-            const enemyCount = Math.min(3 + Math.floor(wave/2), 8);
-            for (let i = 0; i < enemyCount; i++) {
-                const spawnSide = Phaser.Math.Between(0, 3);
-                let x, y;
-                switch(spawnSide) {
-                    case 0: x = Phaser.Math.Between(0, gameWidth); y = 0; break;  // Top
-                    case 1: x = gameWidth; y = Phaser.Math.Between(0, playHeight); break;  // Right
-                    case 2: x = Phaser.Math.Between(0, gameWidth); y = playHeight; break;  // Bottom (above UI)
-                    case 3: x = 0; y = Phaser.Math.Between(0, playHeight); break;  // Left
-                }
-                
-                const enemy = this.add.rectangle(x, y, ENEMY_SIZE, ENEMY_SIZE, GAME_CONFIG.colors.enemy);
-                this.physics.add.existing(enemy);
-                enemy.body.setCollideWorldBounds(true);
-                enemy.body.setBoundsRectangle(new Phaser.Geom.Rectangle(0, 0, gameWidth, playHeight));
-                enemies.add(enemy);
-                
-                // Clamp target position to gameplay area
-                const targetY = Phaser.Math.Clamp(pulseCore.y, 0, playHeight);
-                const targetX = Phaser.Math.Clamp(pulseCore.x, 0, gameWidth);
-                this.physics.moveTo(enemy, targetX, targetY, 50 + wave * 5);
-            }
-            
-            wave++;
-            this.waveText.setText(`Wave: ${wave}`);
-        },
+        callback: spawnEnemy,
         loop: true
     });
 }
 
 function update() {
-    // Emit pulses periodically
-    if (this.time.now % 2000 < 50) {
-        const pulse = this.add.circle(pulseCore.x, pulseCore.y, 10, GAME_CONFIG.colors.pulse);
-        this.tweens.add({
-            targets: pulse,
-            radius: 200,
-            alpha: 0,
-            duration: 1000,
-            onComplete: () => pulse.destroy(),
-        });
-
-        // Damage enemies in pulse range
-        enemies.getChildren().forEach((enemy) => {
-            if (Phaser.Math.Distance.Between(pulseCore.x, pulseCore.y, enemy.x, enemy.y) < PULSE_RANGE) {
-                enemy.destroy();
-                score += 5;
-                this.scoreText.setText(`Score: ${score}`);
-            }
-        });
-    }
-
     // Update enemy movement targets
     enemies.getChildren().forEach((enemy) => {
         const targetY = Phaser.Math.Clamp(pulseCore.y, 0, playHeight);
         const targetX = Phaser.Math.Clamp(pulseCore.x, 0, gameWidth);
-        this.physics.moveTo(enemy, targetX, targetY, 50 + wave * 5);
+        this.physics.moveTo(enemy, targetX, targetY, 
+            GAME_CONFIG.mechanics.enemyBaseSpeed + wave * GAME_CONFIG.mechanics.enemySpeedIncreasePerWave);
+    });
+
+    // Update turret positions - make them orbit around the core
+    turrets.getChildren().forEach((turret) => {
+        // Calculate angle to core
+        const dx = pulseCore.x - turret.x;
+        const dy = pulseCore.y - turret.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        // If turret is too far from core, move it closer
+        if (distance > TURRET_RANGE * GAME_CONFIG.ranges.followDistance) {
+            this.physics.moveTo(turret, pulseCore.x, pulseCore.y, GAME_CONFIG.mechanics.turretMoveSpeed);
+        } else {
+            // When close enough, give it a slight orbital motion
+            const angle = Math.atan2(dy, dx);
+            const orbitAngle = angle + Math.PI / 2;  // Perpendicular to core direction
+            const orbitX = pulseCore.x + Math.cos(orbitAngle) * TURRET_RANGE * GAME_CONFIG.ranges.orbitDistance;
+            const orbitY = pulseCore.y + Math.sin(orbitAngle) * TURRET_RANGE * GAME_CONFIG.ranges.orbitDistance;
+            this.physics.moveTo(turret, orbitX, orbitY, GAME_CONFIG.mechanics.turretMoveSpeed);
+        }
+
+        // Update range indicator position
+        if (turret.rangeIndicator) {
+            turret.rangeIndicator.x = turret.x;
+            turret.rangeIndicator.y = turret.y;
+        }
     });
 
     // Turret shooting
     const currentTime = this.time.now;
     turrets.getChildren().forEach((turret) => {
+        // Update cooldown bar position and width
+        if (turret.cooldownBar) {
+            turret.cooldownBar.x = turret.x;
+            turret.cooldownBar.y = turret.y - TURRET_SIZE * 0.8;
+            
+            // Calculate cooldown progress (0 to 1)
+            const timeSinceLastShot = currentTime - turret.lastFired;
+            const cooldownProgress = Math.min(timeSinceLastShot / turret.fireRate, 1);
+            
+            // Update bar width based on cooldown (starts full width, shrinks to 0)
+            turret.cooldownBar.width = TURRET_SIZE * (1 - cooldownProgress);
+        }
+
         if (currentTime - turret.lastFired >= turret.fireRate) {
             const nearestEnemy = enemies.getChildren().reduce((closest, enemy) => {
                 const distance = Phaser.Math.Distance.Between(turret.x, turret.y, enemy.x, enemy.y);
@@ -448,10 +477,8 @@ function update() {
             if (nearestEnemy && nearestEnemy.distance < TURRET_RANGE) {
                 const bullet = this.add.circle(turret.x, turret.y, BULLET_SIZE, GAME_CONFIG.colors.bullet);
                 this.physics.add.existing(bullet);
-                this.bullets.add(bullet);  // Add bullet to the bullets group
-                this.physics.moveToObject(bullet, nearestEnemy.enemy, 300);
-                
-                // Remove old collision check since we now handle it in the group overlap
+                this.bullets.add(bullet);
+                this.physics.moveToObject(bullet, nearestEnemy.enemy, GAME_CONFIG.mechanics.bulletSpeed);
                 
                 setTimeout(() => {
                     if (bullet && !bullet.destroyed) {
@@ -460,12 +487,17 @@ function update() {
                 }, 1000);
                 turret.lastFired = currentTime;
 
+                // Reset cooldown bar to full width when firing
+                if (turret.cooldownBar) {
+                    turret.cooldownBar.width = TURRET_SIZE;
+                }
+
                 // Visual feedback for shooting
                 this.tweens.add({
                     targets: turret,
-                    scaleX: 1.1,
-                    scaleY: 1.1,
-                    duration: 50,
+                    scaleX: GAME_CONFIG.effects.turretShootScale,
+                    scaleY: GAME_CONFIG.effects.turretShootScale,
+                    duration: GAME_CONFIG.effects.turretShootDuration,
                     yoyo: true
                 });
             }
