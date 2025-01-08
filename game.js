@@ -82,6 +82,18 @@ const GAME_CONFIG = {
         waveDelay: 3000,
         initialCoreHealth: 100,
         enemyKillScore: 10,
+        turretMaxHealth: 100,  // Base turret health
+        aoeTurretMaxHealth: 150,  // AOE turret has more health
+        slowTurretMaxHealth: 125,  // Slow turret medium health
+        enemyAttackRate: 1000,  // Time between enemy attacks in ms
+        damageNumberSpeed: 100,  // Speed at which damage numbers float up
+        damageNumberLifetime: 1000,  // How long damage numbers stay visible
+        damageNumberDistance: 30,  // How far damage numbers float up
+        enemyBaseHealth: 50,  // Base health for enemies
+        enemyHealthIncreasePerWave: 10,  // Health increase per wave
+        turretDamage: 20,  // Regular turret damage
+        aoeTurretDamage: 30,  // AOE turret damage
+        slowTurretDamage: 15,  // Slow turret damage
     },
     
     // Visual effects
@@ -172,6 +184,30 @@ let playerResources = 100;
 let score = 0;
 let wave = 1;
 let coreHealth = 100;
+
+// Add helper function to create floating damage numbers
+const createDamageNumber = (scene, x, y, damage, color = '#ff0000') => {
+    const text = scene.add.text(x, y, `-${damage}`, {
+        fontSize: '16px',
+        fill: color,
+        stroke: '#000000',
+        strokeThickness: 2
+    }).setOrigin(0.5, 0.5);
+    
+    // Add some random horizontal spread
+    const randomX = (Math.random() - 0.5) * 20;
+    
+    // Animate the damage number floating up and fading out
+    scene.tweens.add({
+        targets: text,
+        y: y - GAME_CONFIG.mechanics.damageNumberDistance,
+        x: x + randomX,
+        alpha: 0,
+        duration: GAME_CONFIG.mechanics.damageNumberLifetime,
+        ease: 'Cubic.out',
+        onComplete: () => text.destroy()
+    });
+};
 
 function preload() {
     // No assets needed for this version
@@ -393,7 +429,7 @@ function create() {
         if (playerResources >= cost) {
             // Create the actual turret
             const turret = this.add.rectangle(pointer.x, pointer.y, size, size, color);
-            this.physics.add.existing(turret);
+            this.physics.add.existing(turret, false);
             turret.body.setCollideWorldBounds(true);
             turret.body.setBoundsRectangle(new Phaser.Geom.Rectangle(0, 0, gameWidth, playHeight));
             turret.body.setDrag(GAME_CONFIG.mechanics.turretDrag);
@@ -404,12 +440,46 @@ function create() {
             turret.isAOE = isPlacingAOE;
             turret.isSlowTurret = isPlacingSlow;
             
+            // Add health to turret
+            turret.maxHealth = isPlacingAOE ? GAME_CONFIG.mechanics.aoeTurretMaxHealth :
+                              isPlacingSlow ? GAME_CONFIG.mechanics.slowTurretMaxHealth :
+                              GAME_CONFIG.mechanics.turretMaxHealth;
+            turret.health = turret.maxHealth;
+            turret.lastDamaged = 0;  // Track last time turret was damaged
+            
+            // Add health bar
+            const healthBarWidth = size;
+            const healthBarHeight = 4;
+            const healthBarY = pointer.y - size * 0.7;
+            
+            const healthBarBackground = this.add.rectangle(
+                pointer.x,
+                healthBarY,
+                healthBarWidth,
+                healthBarHeight,
+                0xff0000
+            );
+            const healthBarFill = this.add.rectangle(
+                pointer.x,
+                healthBarY,
+                healthBarWidth,
+                healthBarHeight,
+                0x00ff00
+            );
+            
+            turret.healthBarBackground = healthBarBackground;
+            turret.healthBarFill = healthBarFill;
+            
             // Add cooldown bar
+            const cooldownBarWidth = size;
+            const cooldownBarHeight = GAME_CONFIG.sizes.cooldownBarHeight;
+            const cooldownBarY = pointer.y + size * 0.7;  // Position below turret
+            
             const cooldownBar = this.add.rectangle(
                 pointer.x,
-                pointer.y - size * GAME_CONFIG.effects.cooldownBarOffset,
-                size,
-                GAME_CONFIG.sizes.cooldownBarHeight,
+                cooldownBarY,
+                cooldownBarWidth,
+                cooldownBarHeight,
                 GAME_CONFIG.colors.cooldownBar
             );
             turret.cooldownBar = cooldownBar;
@@ -502,14 +572,21 @@ function create() {
 
     // Create groups for game objects
     enemies = this.physics.add.group({
-        collideWorldBounds: true
+        collideWorldBounds: true,
+        bounceX: 0.5,
+        bounceY: 0.5
     });
     turrets = this.physics.add.group({
-        collideWorldBounds: true
+        collideWorldBounds: true,
+        immovable: true  // Turrets don't get pushed by enemies
     });
 
     // Add collisions between turrets
     this.physics.add.collider(turrets, turrets);
+    
+    // Add collisions between enemies and turrets, and enemies with each other
+    this.physics.add.collider(enemies, turrets);
+    this.physics.add.collider(enemies, enemies);
 
     // Add HUD with scaled font sizes
     const fontSize = Math.max(20 * scale, 14);
@@ -542,10 +619,41 @@ function create() {
         }
         
         const enemy = this.add.rectangle(x, y, ENEMY_SIZE, ENEMY_SIZE, GAME_CONFIG.colors.enemy);
-        this.physics.add.existing(enemy, false);  // false = dynamic body
+        this.physics.add.existing(enemy, false);
         enemy.body.setCollideWorldBounds(true);
         enemy.body.setBoundsRectangle(new Phaser.Geom.Rectangle(0, 0, gameWidth, playHeight));
-        enemy.body.setImmovable(false);  // Allow it to be affected by collisions
+        enemy.body.setMass(1);
+        enemy.body.setFriction(0);
+        enemy.body.setBounce(0.5);
+        enemy.body.setDrag(100);
+        
+        // Add health to enemy
+        enemy.maxHealth = GAME_CONFIG.mechanics.enemyBaseHealth + (wave - 1) * GAME_CONFIG.mechanics.enemyHealthIncreasePerWave;
+        enemy.health = enemy.maxHealth;
+        
+        // Add health bar
+        const healthBarWidth = ENEMY_SIZE;
+        const healthBarHeight = 3;
+        const healthBarY = y - ENEMY_SIZE * 0.7;
+        
+        const healthBarBackground = this.add.rectangle(
+            x,
+            healthBarY,
+            healthBarWidth,
+            healthBarHeight,
+            0xff0000
+        );
+        const healthBarFill = this.add.rectangle(
+            x,
+            healthBarY,
+            healthBarWidth,
+            healthBarHeight,
+            0x00ff00
+        );
+        
+        enemy.healthBarBackground = healthBarBackground;
+        enemy.healthBarFill = healthBarFill;
+        
         enemies.add(enemy);
         
         // Clamp target position to gameplay area
@@ -579,10 +687,83 @@ function create() {
 function update() {
     // Update enemy movement targets
     enemies.getChildren().forEach((enemy) => {
-        const targetY = Phaser.Math.Clamp(pulseCore.y, 0, playHeight);
-        const targetX = Phaser.Math.Clamp(pulseCore.x, 0, gameWidth);
-        this.physics.moveTo(enemy, targetX, targetY, 
+        // Update health bar positions
+        if (enemy.healthBarBackground) {
+            enemy.healthBarBackground.x = enemy.x;
+            enemy.healthBarBackground.y = enemy.y - enemy.height * 0.7;
+        }
+        if (enemy.healthBarFill) {
+            enemy.healthBarFill.x = enemy.x;
+            enemy.healthBarFill.y = enemy.y - enemy.height * 0.7;
+        }
+
+        // Find nearest turret or target core if no turrets
+        let nearestTarget = null;
+        let shortestDistance = Infinity;
+        
+        turrets.getChildren().forEach((turret) => {
+            const dx = turret.x - enemy.x;
+            const dy = turret.y - enemy.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance < shortestDistance) {
+                shortestDistance = distance;
+                nearestTarget = turret;
+            }
+        });
+        
+        // If no turrets or all turrets destroyed, target core
+        if (!nearestTarget) {
+            const targetY = Phaser.Math.Clamp(pulseCore.y, 0, playHeight);
+            const targetX = Phaser.Math.Clamp(pulseCore.x, 0, gameWidth);
+            this.physics.moveTo(enemy, targetX, targetY, 
+                GAME_CONFIG.mechanics.enemyBaseSpeed + wave * GAME_CONFIG.mechanics.enemySpeedIncreasePerWave);
+            return;
+        }
+        
+        // Move towards nearest turret
+        this.physics.moveTo(enemy, nearestTarget.x, nearestTarget.y,
             GAME_CONFIG.mechanics.enemyBaseSpeed + wave * GAME_CONFIG.mechanics.enemySpeedIncreasePerWave);
+        
+        // Check if close enough to attack
+        const attackRange = ENEMY_SIZE + TURRET_SIZE * 0.75;
+        const dx = nearestTarget.x - enemy.x;
+        const dy = nearestTarget.y - enemy.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance < attackRange) {
+            const currentTime = this.time.now;
+            if (!enemy.lastAttack || currentTime - enemy.lastAttack >= GAME_CONFIG.mechanics.enemyAttackRate) {
+                // Attack the turret
+                nearestTarget.health -= GAME_CONFIG.mechanics.enemyDamage;
+                enemy.lastAttack = currentTime;
+                
+                // Create floating damage number
+                createDamageNumber(this, nearestTarget.x, nearestTarget.y, GAME_CONFIG.mechanics.enemyDamage);
+                
+                // Update health bar
+                const healthPercent = Math.max(0, nearestTarget.health / nearestTarget.maxHealth);
+                nearestTarget.healthBarFill.width = nearestTarget.width * healthPercent;
+                
+                // Visual feedback for damage
+                nearestTarget.setAlpha(0.5);
+                this.tweens.add({
+                    targets: nearestTarget,
+                    alpha: 1,
+                    duration: 100
+                });
+                
+                // Destroy turret if health depleted
+                if (nearestTarget.health <= 0) {
+                    if (nearestTarget.healthBarBackground) nearestTarget.healthBarBackground.destroy();
+                    if (nearestTarget.healthBarFill) nearestTarget.healthBarFill.destroy();
+                    if (nearestTarget.cooldownBar) nearestTarget.cooldownBar.destroy();
+                    if (nearestTarget.rangeIndicator) nearestTarget.rangeIndicator.destroy();
+                    if (nearestTarget.aoeIndicator) nearestTarget.aoeIndicator.destroy();
+                    nearestTarget.destroy();
+                }
+            }
+        }
     });
 
     // Check bullet collisions
@@ -592,29 +773,75 @@ function update() {
         }
     });
 
-    // Update turret positions - make them orbit around the core
-    turrets.getChildren().forEach((turret) => {
-        // Calculate angle to core
+    // Update turret positions - make them arrange around the core
+    turrets.getChildren().forEach((turret, index) => {
+        // Calculate current angle and distance to core
         const dx = pulseCore.x - turret.x;
         const dy = pulseCore.y - turret.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
         
-        // If turret is too far from core, move it closer
-        if (distance > TURRET_RANGE * GAME_CONFIG.ranges.followDistance) {
-            this.physics.moveTo(turret, pulseCore.x, pulseCore.y, GAME_CONFIG.mechanics.turretMoveSpeed);
+        // Calculate ideal position in formation
+        const totalTurrets = turrets.getChildren().length;
+        const angleStep = (2 * Math.PI) / totalTurrets;
+        const idealAngle = index * angleStep;
+        const idealDistance = TURRET_RANGE * GAME_CONFIG.ranges.orbitDistance;
+        
+        const idealX = pulseCore.x + Math.cos(idealAngle) * idealDistance;
+        const idealY = pulseCore.y + Math.sin(idealAngle) * idealDistance;
+        
+        // Calculate repulsion from other turrets
+        let repulsionX = 0;
+        let repulsionY = 0;
+        const minDistance = TURRET_SIZE * 2; // Increased minimum distance
+        
+        turrets.getChildren().forEach((otherTurret) => {
+            if (otherTurret !== turret) {
+                const otherDx = turret.x - otherTurret.x;
+                const otherDy = turret.y - otherTurret.y;
+                const otherDistance = Math.sqrt(otherDx * otherDx + otherDy * otherDy);
+                
+                if (otherDistance < minDistance) {
+                    const repulsionForce = (minDistance - otherDistance) / minDistance * 30;
+                    repulsionX += (otherDx / otherDistance) * repulsionForce;
+                    repulsionY += (otherDy / otherDistance) * repulsionForce;
+                }
+            }
+        });
+        
+        // Move towards ideal position with dampening
+        const toIdealX = idealX - turret.x;
+        const toIdealY = idealY - turret.y;
+        const distanceToIdeal = Math.sqrt(toIdealX * toIdealX + toIdealY * toIdealY);
+        
+        if (distanceToIdeal > 5) {  // Only move if we're not very close to ideal position
+            const moveSpeed = Math.min(GAME_CONFIG.mechanics.turretMoveSpeed, distanceToIdeal * 2);
+            const targetVelX = (toIdealX / distanceToIdeal) * moveSpeed;
+            const targetVelY = (toIdealY / distanceToIdeal) * moveSpeed;
+            
+            // Apply movement with repulsion
+            turret.body.setVelocity(
+                targetVelX + repulsionX,
+                targetVelY + repulsionY
+            );
         } else {
-            // When close enough, give it a slight orbital motion
-            const angle = Math.atan2(dy, dx);
-            const orbitAngle = angle + Math.PI / 2;  // Perpendicular to core direction
-            const orbitX = pulseCore.x + Math.cos(orbitAngle) * TURRET_RANGE * GAME_CONFIG.ranges.orbitDistance;
-            const orbitY = pulseCore.y + Math.sin(orbitAngle) * TURRET_RANGE * GAME_CONFIG.ranges.orbitDistance;
-            this.physics.moveTo(turret, orbitX, orbitY, GAME_CONFIG.mechanics.turretMoveSpeed);
+            // If very close to ideal position, stop moving
+            turret.body.setVelocity(0, 0);
         }
 
         // Update range indicator position
         if (turret.rangeIndicator) {
             turret.rangeIndicator.x = turret.x;
             turret.rangeIndicator.y = turret.y;
+        }
+
+        // Update health bar position
+        if (turret.healthBarBackground) {
+            turret.healthBarBackground.x = turret.x;
+            turret.healthBarBackground.y = turret.y - turret.height * 0.7;
+        }
+        if (turret.healthBarFill) {
+            turret.healthBarFill.x = turret.x;
+            turret.healthBarFill.y = turret.y - turret.height * 0.7;
         }
     });
 
@@ -624,7 +851,7 @@ function update() {
         // Update cooldown bar position and width
         if (turret.cooldownBar) {
             turret.cooldownBar.x = turret.x;
-            turret.cooldownBar.y = turret.y - (turret.isAOE ? Math.max(30, GAME_CONFIG.sizes.aoeTurret * scale * 2) : TURRET_SIZE) * GAME_CONFIG.effects.cooldownBarOffset;
+            turret.cooldownBar.y = turret.y + (turret.isAOE ? Math.max(30, GAME_CONFIG.sizes.aoeTurret * scale * 2) : TURRET_SIZE) * 0.7;
             
             // Calculate cooldown progress (0 to 1)
             const timeSinceLastShot = currentTime - turret.lastFired;
@@ -695,8 +922,30 @@ function update() {
                         // Check if enemy is within cone angle and range
                         const angleDiff = Math.abs(Phaser.Math.Angle.Wrap(enemyAngle - angle));
                         if (enemyDistance <= coneLength && angleDiff <= coneAngle / 2) {
-                            enemiesToDestroy.push(enemy);
-                            enemiesHit++;
+                            const damage = GAME_CONFIG.mechanics.aoeTurretDamage;
+                            enemy.health -= damage;
+                            
+                            // Create floating damage number
+                            createDamageNumber(this, enemy.x, enemy.y, damage, '#ff99ff');
+                            
+                            // Update health bar
+                            const healthPercent = Math.max(0, enemy.health / enemy.maxHealth);
+                            enemy.healthBarFill.width = enemy.width * healthPercent;
+                            
+                            // Visual feedback
+                            enemy.setAlpha(0.5);
+                            this.tweens.add({
+                                targets: enemy,
+                                alpha: 1,
+                                duration: 100
+                            });
+                            
+                            if (enemy.health <= 0) {
+                                if (enemy.healthBarBackground) enemy.healthBarBackground.destroy();
+                                if (enemy.healthBarFill) enemy.healthBarFill.destroy();
+                                enemiesToDestroy.push(enemy);
+                                enemiesHit++;
+                            }
                         }
                     });
 
@@ -763,37 +1012,33 @@ function update() {
                             const distance = Math.sqrt(dx * dx + dy * dy);
                             
                             if (distance < ENEMY_SIZE) {  // If bullet is close enough to enemy
-                                // Apply slow effect
-                                if (!bullet.targetEnemy.isSlowed) {
-                                    bullet.targetEnemy.isSlowed = true;
-                                    bullet.targetEnemy.originalSpeed = bullet.targetEnemy.body.speed;
-                                    bullet.targetEnemy.body.speed *= GAME_CONFIG.mechanics.slowFactor;
-                                    
-                                    // Add visual indicator for slowed enemy
-                                    bullet.targetEnemy.setStrokeStyle(2, GAME_CONFIG.colors.slowBullet);
-                                    
-                                    // Reset slow effect after duration
-                                    this.time.delayedCall(GAME_CONFIG.mechanics.slowDuration, () => {
-                                        if (bullet.targetEnemy && bullet.targetEnemy.active) {
-                                            bullet.targetEnemy.isSlowed = false;
-                                            bullet.targetEnemy.body.speed = bullet.targetEnemy.originalSpeed;
-                                            bullet.targetEnemy.setStrokeStyle(0);
-                                        }
-                                    });
+                                const damage = GAME_CONFIG.mechanics.slowTurretDamage;
+                                bullet.targetEnemy.health -= damage;
+                                
+                                // Create floating damage number
+                                createDamageNumber(this, bullet.targetEnemy.x, bullet.targetEnemy.y, damage);
+                                
+                                // Update health bar
+                                const healthPercent = Math.max(0, bullet.targetEnemy.health / bullet.targetEnemy.maxHealth);
+                                bullet.targetEnemy.healthBarFill.width = bullet.targetEnemy.width * healthPercent;
+                                
+                                // Visual feedback
+                                bullet.targetEnemy.setAlpha(0.5);
+                                this.tweens.add({
+                                    targets: bullet.targetEnemy,
+                                    alpha: 1,
+                                    duration: 100
+                                });
+                                
+                                if (bullet.targetEnemy.health <= 0) {
+                                    if (bullet.targetEnemy.healthBarBackground) bullet.targetEnemy.healthBarBackground.destroy();
+                                    if (bullet.targetEnemy.healthBarFill) bullet.targetEnemy.healthBarFill.destroy();
+                                    bullet.targetEnemy.destroy();
+                                    score += GAME_CONFIG.mechanics.enemyKillScore;
+                                    this.scoreText.setText(`Score: ${score}`);
                                 }
                                 
                                 bullet.destroy();
-                                
-                                // Visual feedback
-                                const slowEffect = this.add.circle(bullet.targetEnemy.x, bullet.targetEnemy.y, ENEMY_SIZE * 1.5, GAME_CONFIG.colors.slowBullet);
-                                slowEffect.setAlpha(0.4);
-                                this.tweens.add({
-                                    targets: slowEffect,
-                                    alpha: 0,
-                                    scale: 2,
-                                    duration: 500,
-                                    onComplete: () => slowEffect.destroy()
-                                });
                             }
                         }
                     };
@@ -824,23 +1069,33 @@ function update() {
                             const distance = Math.sqrt(dx * dx + dy * dy);
                             
                             if (distance < ENEMY_SIZE) {  // If bullet is close enough to enemy
-                                bullet.targetEnemy.destroy();
-                                bullet.destroy();
-                                score += GAME_CONFIG.mechanics.enemyKillScore;
-                                this.scoreText.setText(`Score: ${score}`);
+                                const damage = GAME_CONFIG.mechanics.turretDamage;
+                                bullet.targetEnemy.health -= damage;
+                                
+                                // Create floating damage number
+                                createDamageNumber(this, bullet.targetEnemy.x, bullet.targetEnemy.y, damage);
+                                
+                                // Update health bar
+                                const healthPercent = Math.max(0, bullet.targetEnemy.health / bullet.targetEnemy.maxHealth);
+                                bullet.targetEnemy.healthBarFill.width = bullet.targetEnemy.width * healthPercent;
                                 
                                 // Visual feedback
-                                const scoreText = this.add.text(bullet.targetEnemy.x, bullet.targetEnemy.y, '+' + GAME_CONFIG.mechanics.enemyKillScore, {
-                                    fontSize: '16px',
-                                    fill: '#ff0'
-                                });
+                                bullet.targetEnemy.setAlpha(0.5);
                                 this.tweens.add({
-                                    targets: scoreText,
-                                    y: bullet.targetEnemy.y - GAME_CONFIG.ui.scorePopupDistance,
-                                    alpha: 0,
-                                    duration: GAME_CONFIG.ui.scorePopupDuration,
-                                    onComplete: () => scoreText.destroy()
+                                    targets: bullet.targetEnemy,
+                                    alpha: 1,
+                                    duration: 100
                                 });
+                                
+                                if (bullet.targetEnemy.health <= 0) {
+                                    if (bullet.targetEnemy.healthBarBackground) bullet.targetEnemy.healthBarBackground.destroy();
+                                    if (bullet.targetEnemy.healthBarFill) bullet.targetEnemy.healthBarFill.destroy();
+                                    bullet.targetEnemy.destroy();
+                                    score += GAME_CONFIG.mechanics.enemyKillScore;
+                                    this.scoreText.setText(`Score: ${score}`);
+                                }
+                                
+                                bullet.destroy();
                             }
                         }
                     };
