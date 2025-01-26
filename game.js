@@ -20,10 +20,20 @@ class MainScene extends Phaser.Scene {
         // Trail settings
         this.trailInterval = 100;
         this.trailFadeDuration = 800;
+
+        // Enemy settings
+        this.enemies = [];
+
+        // Bullet settings
+        this.BULLET_SPEED = 400;
+        this.PLAYER_SHOOT_DELAY = 250;
+        this.ENEMY_SHOOT_DELAY = 1000;
+        this.lastPlayerShot = 0;
     }
 
     create() {
         this.createParallaxBackground();
+        this.createBullets();
         this.createPlayer();
         this.createEnemy();
         this.createUI();
@@ -67,6 +77,19 @@ class MainScene extends Phaser.Scene {
         });
     }
 
+    createBullets() {
+        // Create bullet groups
+        this.playerBullets = this.physics.add.group({
+            classType: Phaser.GameObjects.Rectangle,
+            runChildUpdate: true
+        });
+
+        this.enemyBullets = this.physics.add.group({
+            classType: Phaser.GameObjects.Rectangle,
+            runChildUpdate: true
+        });
+    }
+
     createPlayer() {
         // Position player near bottom
         const startY = this.scale.height * 0.75;
@@ -99,6 +122,9 @@ class MainScene extends Phaser.Scene {
         // Trail array
         this.trail = [];
         this.lastTrailTime = 0;
+
+        // Add shooting key
+        this.shootKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     }
 
     createArrow(x, y, isLeft) {
@@ -115,26 +141,37 @@ class MainScene extends Phaser.Scene {
     }
 
     createEnemy() {
-        // Enemy near top
-        const startY = this.scale.height * 0.25;
-        this.enemy = this.add.container(this.worldWidth / 2, startY);
+        // Create two enemies at different positions
+        const enemyPositions = [
+            { x: this.worldWidth / 3, y: this.scale.height * 0.25 },
+            { x: this.worldWidth * 2/3, y: this.scale.height * 0.15 }
+        ];
 
-        // Enemy shape
-        const enemyBody = this.add.triangle(
-            0, 0,
-            0, 24,    // bottom
-            16, -24,  // top right
-            -16, -24, // top left
-            0xff4444
-        ).setOrigin(-0.5, -0.5);
+        enemyPositions.forEach(pos => {
+            const enemy = this.add.container(pos.x, pos.y);
 
-        this.enemy.add(enemyBody);
+            // Enemy shape
+            const enemyBody = this.add.triangle(
+                0, 0,
+                0, 24,    // bottom
+                16, -24,  // top right
+                -16, -24, // top left
+                0xff4444
+            ).setOrigin(-0.5, -0.5);
 
-        // Enemy physics
-        this.physics.world.enable(this.enemy);
-        this.enemy.body.setCollideWorldBounds(true);
-        this.enemy.body.setVelocityX(150);
-        this.enemy.body.setSize(32, 48);
+            enemy.add(enemyBody);
+
+            // Enemy physics
+            this.physics.world.enable(enemy);
+            enemy.body.setCollideWorldBounds(true);
+            enemy.body.setVelocityX(150);
+            enemy.body.setSize(32, 48);
+
+            // Add shooting properties
+            enemy.lastShot = 0;
+
+            this.enemies.push(enemy);
+        });
     }
 
     createUI() {
@@ -196,6 +233,8 @@ class MainScene extends Phaser.Scene {
         this.updatePlayerMovement();
         this.updateEnemyMovement();
         this.updateTrail();
+        this.updateShooting();
+        this.cleanupBullets();
     }
 
     updateParallaxBackground() {
@@ -254,19 +293,21 @@ class MainScene extends Phaser.Scene {
     }
 
     updateEnemyMovement() {
-        // Simple horizontal chasing logic
-        const dist = Math.abs(this.enemy.x - this.player.x);
+        this.enemies.forEach(enemy => {
+            // Simple horizontal chasing logic
+            const dist = Math.abs(enemy.x - this.player.x);
 
-        if (dist > 300) {
-            const direction = (this.enemy.x < this.player.x) ? 1 : -1;
-            this.enemy.body.setVelocityX(150 * direction);
-        } else {
-            if (this.enemy.body.velocity.x > 0 && this.enemy.x >= this.player.x + 200) {
-                this.enemy.body.setVelocityX(-150);
-            } else if (this.enemy.body.velocity.x < 0 && this.enemy.x <= this.player.x - 200) {
-                this.enemy.body.setVelocityX(150);
+            if (dist > 300) {
+                const direction = (enemy.x < this.player.x) ? 1 : -1;
+                enemy.body.setVelocityX(150 * direction);
+            } else {
+                if (enemy.body.velocity.x > 0 && enemy.x >= this.player.x + 200) {
+                    enemy.body.setVelocityX(-150);
+                } else if (enemy.body.velocity.x < 0 && enemy.x <= this.player.x - 200) {
+                    enemy.body.setVelocityX(150);
+                }
             }
-        }
+        });
     }
 
     updateTrail() {
@@ -289,6 +330,62 @@ class MainScene extends Phaser.Scene {
                 dot.setAlpha(1 - (age / this.trailFadeDuration));
             }
         }
+    }
+
+    updateShooting() {
+        const now = this.time.now;
+
+        // Player shooting (automatic)
+        if (now - this.lastPlayerShot > this.PLAYER_SHOOT_DELAY) {
+            this.shootPlayerBullet();
+            this.lastPlayerShot = now;
+        }
+
+        // Enemy shooting
+        this.enemies.forEach(enemy => {
+            if (now - enemy.lastShot > this.ENEMY_SHOOT_DELAY) {
+                this.shootEnemyBullet(enemy);
+                enemy.lastShot = now;
+            }
+        });
+    }
+
+    shootPlayerBullet() {
+        const bullet = this.playerBullets.create(this.player.x + 16, this.player.y + 32, null, null, false);
+        if (bullet) {
+            bullet.setFillStyle(0xff8888);
+            bullet.setSize(4, 12);
+            this.physics.world.enable(bullet);
+            bullet.body.setSize(4, 12);
+            bullet.body.setVelocityY(-this.BULLET_SPEED);
+            bullet.setActive(true);
+            bullet.setVisible(true);
+        }
+    }
+
+    shootEnemyBullet(enemy) {
+        const bullet = this.enemyBullets.create(enemy.x + 16, enemy.y + 32, null, null, false);
+        if (bullet) {
+            bullet.setFillStyle(0xff8888);
+            bullet.setSize(4, 12);
+            this.physics.world.enable(bullet);
+            bullet.body.setSize(4, 12);
+            bullet.body.setVelocityY(this.BULLET_SPEED);
+            bullet.setActive(true);
+            bullet.setVisible(true);
+        }
+    }
+
+    cleanupBullets() {
+        // Remove bullets that are out of bounds
+        const cleanup = (bullet) => {
+            if (bullet.y < 0 || bullet.y > this.scale.height) {
+                bullet.destroy();
+            }
+        };
+
+        this.playerBullets.children.each(cleanup);
+        this.enemyBullets.children.each(cleanup);
     }
 }
 
