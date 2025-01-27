@@ -403,6 +403,10 @@ const config = {
         default: 'arcade',
         arcade: {
             debug: true,
+            debugShowBody: true,
+            debugShowVelocity: true,
+            debugBodyColor: 0xffffff33,
+            debugVelocityColor: 0x562A2A33,
             fps: 60
         }
     },
