@@ -23,6 +23,8 @@ class MainScene extends Phaser.Scene {
 
         // Enemy settings
         this.enemies = [];
+        this.currentTarget = null;
+        this.targetIndicator = null;
 
         // Bullet settings
         this.BULLET_SPEED = 400;
@@ -150,22 +152,26 @@ class MainScene extends Phaser.Scene {
         enemyPositions.forEach(pos => {
             const enemy = this.add.container(pos.x, pos.y);
 
-            // Enemy shape
+            // Enemy shape - centered triangle
             const enemyBody = this.add.triangle(
                 0, 0,
-                0, 24,    // bottom
-                16, -24,  // top right
-                -16, -24, // top left
+                0, 24,
+                16, -24,
+                -16, -24,
                 0xff4444
-            ).setOrigin(-0.5, -0.5);
+            ).setOrigin(0, 0);  // Changed to center both horizontally and vertically
 
-            enemy.add(enemyBody);
+            // Add debug center point
+            const centerPoint = this.add.circle(0, 0, 2, 0x00ff00);
+
+            enemy.add([enemyBody, centerPoint]);
 
             // Enemy physics
             this.physics.world.enable(enemy);
             enemy.body.setCollideWorldBounds(true);
             enemy.body.setVelocityX(150);
             enemy.body.setSize(32, 48);
+            enemy.body.setOffset(-16, -24);  // Center the physics body
 
             // Add shooting properties
             enemy.lastShot = 0;
@@ -293,6 +299,25 @@ class MainScene extends Phaser.Scene {
     }
 
     updateEnemyMovement() {
+        // Update targeting first
+        const newTarget = this.findClosestEnemy();
+        if (newTarget !== this.currentTarget) {
+            // Remove old target indicator
+            if (this.targetIndicator) {
+                this.targetIndicator.destroy();
+            }
+            
+            // Create new target indicator
+            if (newTarget) {
+                // Create the indicator centered on the container
+                this.targetIndicator = this.add.rectangle(0, 0, 40, 40, 0xffffff, 0);
+                this.targetIndicator.setStrokeStyle(1, 0xffffff, 0.8);
+                newTarget.add(this.targetIndicator);
+            }
+            
+            this.currentTarget = newTarget;
+        }
+
         this.enemies.forEach(enemy => {
             // Simple horizontal chasing logic
             const dist = Math.abs(enemy.x - this.player.x);
@@ -314,7 +339,8 @@ class MainScene extends Phaser.Scene {
         const now = this.time.now;
 
         if (now - this.lastTrailTime >= this.trailInterval) {
-            const dot = this.add.circle(this.player.x + 16, this.player.y + 32, 3, 0x4488ff);
+            const dot = this.add.circle(this.player.body.x + 16, this.player.body.y + 44, 3, 0x4488ff);
+        
             dot.creationTime = now;
             this.trail.push(dot);
             this.lastTrailTime = now;
@@ -351,12 +377,17 @@ class MainScene extends Phaser.Scene {
     }
 
     shootPlayerBullet() {
-        const bullet = this.playerBullets.create(this.player.x + 16, this.player.y + 32, null, null, false);
+        // Calculate the center position of the player's physics body
+        const bulletX = this.player.x + this.player.body.halfWidth;
+        const bulletY = this.player.y + this.player.body.halfHeight - 24; // Offset up by 24px to fire from ship's tip
+
+        const bullet = this.playerBullets.create(bulletX, bulletY, null, null, false);
         if (bullet) {
             bullet.setFillStyle(0xff8888);
             bullet.setSize(4, 12);
             this.physics.world.enable(bullet);
             bullet.body.setSize(4, 12);
+            bullet.setOrigin(0.5, 0.5);  // Center the bullet
             bullet.body.setVelocityY(-this.BULLET_SPEED);
             bullet.setActive(true);
             bullet.setVisible(true);
@@ -364,12 +395,13 @@ class MainScene extends Phaser.Scene {
     }
 
     shootEnemyBullet(enemy) {
-        const bullet = this.enemyBullets.create(enemy.x + 16, enemy.y + 32, null, null, false);
+        const bullet = this.enemyBullets.create(enemy.x, enemy.y, null, null, false);
         if (bullet) {
             bullet.setFillStyle(0xff8888);
             bullet.setSize(4, 12);
             this.physics.world.enable(bullet);
             bullet.body.setSize(4, 12);
+            bullet.setOrigin(0.5, 0.5);  // Center the bullet
             bullet.body.setVelocityY(this.BULLET_SPEED);
             bullet.setActive(true);
             bullet.setVisible(true);
@@ -386,6 +418,16 @@ class MainScene extends Phaser.Scene {
 
         this.playerBullets.children.each(cleanup);
         this.enemyBullets.children.each(cleanup);
+    }
+
+    findClosestEnemy() {
+        if (this.enemies.length === 0) return null;
+        
+        return this.enemies.reduce((closest, current) => {
+            const closestDist = Math.abs(closest.x - this.player.x);
+            const currentDist = Math.abs(current.x - this.player.x);
+            return currentDist < closestDist ? current : closest;
+        });
     }
 }
 
