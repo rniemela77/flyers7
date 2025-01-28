@@ -1,468 +1,327 @@
-class MainScene extends Phaser.Scene {
-    constructor() {
-        super('MainScene');
-
-        // Basic game settings
-        this.score = 0;
-        this.health = 3;
-        this.maxHealth = 5;
-        this.worldWidth = 2400;
-
-        // Player movement constants
-        this.PLAYER_SPEED = 600;
-        this.PLAYER_ACCELERATION = 600;
-        this.PLAYER_DECELERATION = 400;
-
-        // Touch drag thresholds
-        this.DRAG_THRESHOLD = 20;
-        this.DRAG_MAX_DISTANCE = 200;
-
-        // Trail settings
-        this.trailInterval = 100;
-        this.trailFadeDuration = 800;
-
-        // Enemy settings
-        this.enemies = [];
-        this.currentTarget = null;
-        this.targetIndicator = null;
-
-        // Bullet settings
-        this.BULLET_SPEED = 400;
-        this.PLAYER_SHOOT_DELAY = 250;
-        this.ENEMY_SHOOT_DELAY = 1000;
-        this.lastPlayerShot = 0;
-    }
-
-    create() {
-        this.createParallaxBackground();
-        this.createBullets();
-        this.createPlayer();
-        this.createEnemy();
-        this.createUI();
-        this.createInput();
-
-        // Setup world bounds
-        this.physics.world.setBounds(0, 0, this.worldWidth, this.scale.height);
-
-        // Camera
-        this.cameras.main.setBounds(0, 0, this.worldWidth, this.scale.height);
-        this.cameras.main.startFollow(this.player, true, 0.1, 0);
-    }
-
-    // ----------------------
-    // CREATE / INIT METHODS
-    // ----------------------
-
-    createParallaxBackground() {
-        // Store layers for updating
-        this.bgLayers = [];
-
-        // Three layers of stars
-        const layerConfigs = [
-            { count: 100, speed: 0.1, maxSize: 1 },
-            { count: 50,  speed: 0.2, maxSize: 2 },
-            { count: 25,  speed: 0.4, maxSize: 3 }
-        ];
-
-        layerConfigs.forEach(config => {
-            const stars = [];
-            for (let i = 0; i < config.count; i++) {
-                stars.push({
-                    x: Phaser.Math.Between(0, this.worldWidth),
-                    y: Phaser.Math.Between(0, this.scale.height),
-                    size: Phaser.Math.Between(1, config.maxSize),
-                    alpha: Phaser.Math.FloatBetween(0.3, 0.8)
-                });
-            }
-            const graphics = this.add.graphics();
-            this.bgLayers.push({ stars, graphics, speed: config.speed });
-        });
-    }
-
-    createBullets() {
-        // Create bullet groups
-        this.playerBullets = this.physics.add.group({
-            classType: Phaser.GameObjects.Rectangle,
-            runChildUpdate: true
-        });
-
-        this.enemyBullets = this.physics.add.group({
-            classType: Phaser.GameObjects.Rectangle,
-            runChildUpdate: true
-        });
-    }
-
-    createPlayer() {
-        // Position player near bottom
-        const startY = this.scale.height * 0.75;
-        this.player = this.add.container(this.worldWidth / 2, startY);
-
-        // Player shape
-        const shipBody = this.add.triangle(
-            0, 0,
-            0, -24,   // top
-            16, 24,   // bottom right
-            -16, 24,  // bottom left
-            0xccddff
-        ).setOrigin(-0.5, -0.5);
-
-        // Physics
-        this.physics.world.enable(this.player);
-        this.player.body.setCollideWorldBounds(true);
-        this.player.body.setMaxVelocity(this.PLAYER_SPEED, 0);
-        this.player.body.setDrag(this.PLAYER_DECELERATION, 0);
-        this.player.body.setSize(32, 48);
-
-
-        // Arrows for feedback
-        this.leftArrow = this.createArrow(-40, 0, true);
-        this.rightArrow = this.createArrow(40, 0, false);
-
-        // Combine
-        this.player.add([shipBody, this.leftArrow, this.rightArrow]);
-
-        // Trail array
-        this.trail = [];
-        this.lastTrailTime = 0;
-
-        // Add shooting key
-        this.shootKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
-    }
-
-    createArrow(x, y, isLeft) {
-        // Simple arrow shape
-        const arrow = this.add.triangle(
-            x, y,
-            0, 0,
-            0, 16,
-            isLeft ? -16 : 16, 8,
-            0x4488ff
-        ).setOrigin(-1, -0.5);
-        arrow.setAlpha(0);
-        return arrow;
-    }
-
-    createEnemy() {
-        // Create two enemies at different positions
-        const enemyPositions = [
-            { x: this.worldWidth / 3, y: this.scale.height * 0.25 },
-            { x: this.worldWidth * 2/3, y: this.scale.height * 0.15 }
-        ];
-
-        enemyPositions.forEach(pos => {
-            const enemy = this.add.container(pos.x, pos.y);
-
-            // Enemy shape - centered triangle
-            const enemyBody = this.add.triangle(
-                0, 0,
-                0, 24,
-                16, -24,
-                -16, -24,
-                0xff4444
-            ).setOrigin(0, 0);  // Changed to center both horizontally and vertically
-
-            // Add debug center point
-            const centerPoint = this.add.circle(0, 0, 2, 0x00ff00);
-
-            enemy.add([enemyBody, centerPoint]);
-
-            // Enemy physics
-            this.physics.world.enable(enemy);
-            enemy.body.setCollideWorldBounds(true);
-            enemy.body.setVelocityX(150);
-            enemy.body.setSize(32, 48);
-            enemy.body.setOffset(-16, -24);  // Center the physics body
-
-            // Add shooting properties
-            enemy.lastShot = 0;
-
-            this.enemies.push(enemy);
-        });
-    }
-
-    createUI() {
-        // HUD text
-        const style = { fontSize: '20px', fill: '#fff' };
-        this.scoreText = this.add.text(16, 16, 'Score: 0', style).setScrollFactor(0);
-        this.healthText = this.add.text(16, 40, 'Health: 3', style).setScrollFactor(0);
-    }
-
-    createInput() {
-        // Keyboard
-        this.cursors = this.input.keyboard.createCursorKeys();
-
-        // Touch setup
-        this.touchInput = {
-            isDown: false,
-            startX: 0,
-            currentX: 0,
-            lastX: 0,
-            velocity: 0
-        };
-
-        // Touch events
-        this.input.on('pointerdown', pointer => {
-            this.touchInput.isDown = true;
-            this.touchInput.startX = pointer.x;
-            this.touchInput.currentX = pointer.x;
-            this.touchInput.lastX = pointer.x;
-            this.touchInput.velocity = 0;
-        });
-
-        this.input.on('pointermove', pointer => {
-            if (this.touchInput.isDown) {
-                this.touchInput.lastX = this.touchInput.currentX;
-                this.touchInput.currentX = pointer.x;
-                this.touchInput.velocity = this.touchInput.currentX - this.touchInput.lastX;
-            }
-        });
-
-        this.input.on('pointerup', () => {
-            this.touchInput.isDown = false;
-            if (Math.abs(this.touchInput.velocity) > 5) {
-                const impulse = Phaser.Math.Clamp(
-                    this.touchInput.velocity * 20,
-                    -this.PLAYER_SPEED,
-                    this.PLAYER_SPEED
-                );
-                this.player.body.setVelocityX(impulse);
-            }
-        });
-    }
-
-    // ----------
-    // UPDATE
-    // ----------
-
-    update() {
-        this.updateParallaxBackground();
-        this.updatePlayerMovement();
-        this.updateEnemyMovement();
-        this.updateTrail();
-        this.updateShooting();
-        this.cleanupBullets();
-    }
-
-    updateParallaxBackground() {
-        const cameraX = this.cameras.main.scrollX;
-
-        this.bgLayers.forEach(layer => {
-            layer.graphics.clear();
-            layer.graphics.fillStyle(0xffffff);
-
-            layer.stars.forEach(star => {
-                const parallaxX = (star.x - cameraX * layer.speed) % this.worldWidth;
-                const wrappedX = parallaxX < 0 ? this.worldWidth + parallaxX : parallaxX;
-                layer.graphics.fillCircle(wrappedX, star.y, star.size);
-                layer.graphics.alpha = star.alpha;
-            });
-        });
-    }
-
-    updatePlayerMovement() {
-        let movingLeft = false;
-        let movingRight = false;
-
-        if (this.cursors.left.isDown) {
-            this.player.body.setAccelerationX(-this.PLAYER_ACCELERATION);
-            movingLeft = true;
-        } else if (this.cursors.right.isDown) {
-            this.player.body.setAccelerationX(this.PLAYER_ACCELERATION);
-            movingRight = true;
-        } else if (this.touchInput.isDown) {
-            const drag = this.touchInput.currentX - this.touchInput.startX;
-            const absDrag = Math.abs(drag);
-
-            if (absDrag > this.DRAG_THRESHOLD) {
-                const accelFactor = Phaser.Math.Clamp(
-                    absDrag / this.DRAG_MAX_DISTANCE,
-                    0,
-                    1
-                );
-                const targetAccel = this.PLAYER_ACCELERATION * accelFactor * Math.sign(drag);
-                this.player.body.setAccelerationX(targetAccel + (this.touchInput.velocity * 2));
-                movingLeft = (drag < 0);
-                movingRight = (drag > 0);
-            } else {
-                this.player.body.setAccelerationX(0);
-            }
-        } else {
-            this.player.body.setAccelerationX(0);
-        }
-
-        // Arrows show movement intensity
-        const speedRatio = Math.abs(this.player.body.velocity.x) / this.PLAYER_SPEED;
-        const arrowAlpha = (ratio) => 0.3 + 0.7 * ratio;
-
-        this.leftArrow.setAlpha(movingLeft ? arrowAlpha(speedRatio) : 0);
-        this.rightArrow.setAlpha(movingRight ? arrowAlpha(speedRatio) : 0);
-    }
-
-    updateEnemyMovement() {
-        // Update targeting first
-        const newTarget = this.findClosestEnemy();
-        if (newTarget !== this.currentTarget) {
-            // Remove old target indicator
-            if (this.targetIndicator) {
-                this.targetIndicator.destroy();
-            }
-            
-            // Create new target indicator
-            if (newTarget) {
-                // Create the indicator centered on the container
-                this.targetIndicator = this.add.rectangle(0, 0, 40, 40, 0xffffff, 0);
-                this.targetIndicator.setStrokeStyle(1, 0xffffff, 0.8);
-                newTarget.add(this.targetIndicator);
-            }
-            
-            this.currentTarget = newTarget;
-        }
-
-        this.enemies.forEach(enemy => {
-            // Simple horizontal chasing logic
-            const dist = Math.abs(enemy.x - this.player.x);
-
-            if (dist > 300) {
-                const direction = (enemy.x < this.player.x) ? 1 : -1;
-                enemy.body.setVelocityX(150 * direction);
-            } else {
-                if (enemy.body.velocity.x > 0 && enemy.x >= this.player.x + 200) {
-                    enemy.body.setVelocityX(-150);
-                } else if (enemy.body.velocity.x < 0 && enemy.x <= this.player.x - 200) {
-                    enemy.body.setVelocityX(150);
-                }
-            }
-        });
-    }
-
-    updateTrail() {
-        const now = this.time.now;
-
-        if (now - this.lastTrailTime >= this.trailInterval) {
-            const dot = this.add.circle(this.player.body.x + 16, this.player.body.y + 44, 3, 0x4488ff);
-        
-            dot.creationTime = now;
-            this.trail.push(dot);
-            this.lastTrailTime = now;
-        }
-
-        for (let i = this.trail.length - 1; i >= 0; i--) {
-            const dot = this.trail[i];
-            const age = now - dot.creationTime;
-            if (age >= this.trailFadeDuration) {
-                dot.destroy();
-                this.trail.splice(i, 1);
-            } else {
-                dot.setAlpha(1 - (age / this.trailFadeDuration));
-            }
-        }
-    }
-
-    updateShooting() {
-        const now = this.time.now;
-
-        // Player shooting (automatic)
-        if (now - this.lastPlayerShot > this.PLAYER_SHOOT_DELAY) {
-            this.shootPlayerBullet();
-            this.lastPlayerShot = now;
-        }
-
-        // Enemy shooting
-        this.enemies.forEach(enemy => {
-            if (now - enemy.lastShot > this.ENEMY_SHOOT_DELAY) {
-                this.shootEnemyBullet(enemy);
-                enemy.lastShot = now;
-            }
-        });
-    }
-
-    shootPlayerBullet() {
-        // Calculate the center position of the player's physics body
-        const bulletX = this.player.x + this.player.body.halfWidth;
-        const bulletY = this.player.y + this.player.body.halfHeight - 24; // Offset up by 24px to fire from ship's tip
-
-        const bullet = this.playerBullets.create(bulletX, bulletY, null, null, false);
-        if (bullet) {
-            bullet.setFillStyle(0xff8888);
-            bullet.setSize(4, 12);
-            this.physics.world.enable(bullet);
-            bullet.body.setSize(4, 12);
-            bullet.setOrigin(0.5, 0.5);  // Center the bullet
-            bullet.body.setVelocityY(-this.BULLET_SPEED);
-            bullet.setActive(true);
-            bullet.setVisible(true);
-        }
-    }
-
-    shootEnemyBullet(enemy) {
-        const bullet = this.enemyBullets.create(enemy.x, enemy.y, null, null, false);
-        if (bullet) {
-            bullet.setFillStyle(0xff8888);
-            bullet.setSize(4, 12);
-            this.physics.world.enable(bullet);
-            bullet.body.setSize(4, 12);
-            bullet.setOrigin(0.5, 0.5);  // Center the bullet
-            bullet.body.setVelocityY(this.BULLET_SPEED);
-            bullet.setActive(true);
-            bullet.setVisible(true);
-        }
-    }
-
-    cleanupBullets() {
-        // Remove bullets that are out of bounds
-        const cleanup = (bullet) => {
-            if (bullet.y < 0 || bullet.y > this.scale.height) {
-                bullet.destroy();
-            }
-        };
-
-        this.playerBullets.children.each(cleanup);
-        this.enemyBullets.children.each(cleanup);
-    }
-
-    findClosestEnemy() {
-        if (this.enemies.length === 0) return null;
-        
-        return this.enemies.reduce((closest, current) => {
-            const closestDist = Math.abs(closest.x - this.player.x);
-            const currentDist = Math.abs(current.x - this.player.x);
-            return currentDist < closestDist ? current : closest;
-        });
-    }
-}
-
-// Game config
 const config = {
     type: Phaser.AUTO,
     scale: {
         mode: Phaser.Scale.RESIZE,
-        width: '100%',
-        height: '100%',
-        parent: 'game'
+        width: window.innerWidth,
+        height: window.innerHeight,
+        autoCenter: Phaser.Scale.CENTER_BOTH
     },
-    backgroundColor: '#000000',
     physics: {
         default: 'arcade',
         arcade: {
-            debug: true,
-            debugShowBody: true,
-            debugShowVelocity: true,
-            debugBodyColor: 0xffffff33,
-            debugVelocityColor: 0x562A2A33,
-            fps: 60
-        }
+            gravity: { y: 300 },
+            debug: false,
+        },
     },
-    scene: [MainScene]
+    scene: {
+        preload,
+        create,
+        update,
+    },
 };
-
-// Launch game
+  
+let player;
+let hookPoints;
+let currentHookPoint = null;
+let hookActive = false;
+let ropeGraphics;
+let aimGraphics;
+let cursors;
+let canGrapple = true;
+let isDragging = false;
+let dragStartPoint = { x: 0, y: 0 };
+let hookAngle = 0;
+const HOOK_RANGE = 400;
+const HOOK_SPEED = 2000;
+const WORLD_HEIGHT = 10000; // Very tall world
+const CHUNK_HEIGHT = 600; // Height of each chunk of hook points
+let highestPoint = 0; // Track player's highest point
+let lastGeneratedY = 0; // Track last generated hook point height
+  
+// Hook projectile
+let hookProjectile;
+let isHookFlying = false;
+  
 const game = new Phaser.Game(config);
-
-// Adjust camera/world bounds on resize
-window.addEventListener('resize', () => {
-    const scene = game.scene.scenes[0];
-    if (scene) {
-        scene.cameras.main.setBounds(0, 0, scene.worldWidth, window.innerHeight);
-        scene.physics.world.setBounds(0, 0, scene.worldWidth, window.innerHeight);
+  
+function generateHookPointsInRange(scene, startY, endY) {
+    const points = [];
+    const VERTICAL_SPACING = 200; // Consistent vertical spacing
+    const numRows = Math.ceil((endY - startY) / VERTICAL_SPACING);
+    const gameWidth = game.config.width; // Get current game width
+    
+    // Generate points row by row
+    for (let row = 0; row < numRows; row++) {
+        const y = startY + (row * VERTICAL_SPACING);
+        
+        // Add 2-3 points per row for good coverage
+        const pointsInRow = Phaser.Math.Between(2, 3);
+        
+        for (let i = 0; i < pointsInRow; i++) {
+            let x;
+            if (pointsInRow === 2) {
+                // If 2 points, place them on opposite sides
+                x = (i === 0) ? 
+                    Phaser.Math.Between(50, gameWidth/3) : 
+                    Phaser.Math.Between(2 * gameWidth/3, gameWidth - 50);
+            } else {
+                // If 3 points, spread them left, middle, and right
+                if (i === 0) x = Phaser.Math.Between(50, gameWidth/3);
+                else if (i === 1) x = Phaser.Math.Between(gameWidth/3, 2 * gameWidth/3);
+                else x = Phaser.Math.Between(2 * gameWidth/3, gameWidth - 50);
+            }
+            
+            // Add some slight vertical randomness but maintain general spacing
+            const randomY = y + Phaser.Math.Between(-30, 30);
+            points.push({ x, y: randomY });
+        }
     }
+    
+    points.forEach(point => {
+        hookPoints.create(point.x, point.y, 'hookPoint');
+    });
+    
+    lastGeneratedY = endY;
+}
+  
+function preload() {
+    // Replace with actual file paths
+    this.load.image('player', 'assets/player.png');
+    this.load.image('hookPoint', 'assets/anchor.png');
+    this.load.image('hook', 'assets/anchor.png'); // Reusing anchor for hook projectile
+}
+  
+function create() {
+    // Set world bounds - use width from game config
+    this.physics.world.setBounds(0, 0, game.config.width, WORLD_HEIGHT);
+    
+    // Create static hook points
+    hookPoints = this.physics.add.staticGroup();
+    
+    // Generate hook points starting from the very bottom
+    const initialStart = WORLD_HEIGHT - CHUNK_HEIGHT * 3;
+    const initialEnd = WORLD_HEIGHT;
+    
+    // Generate initial chunks from bottom up
+    generateHookPointsInRange(this, initialEnd - CHUNK_HEIGHT, initialEnd); // Bottom chunk
+    generateHookPointsInRange(this, initialEnd - CHUNK_HEIGHT * 2, initialEnd - CHUNK_HEIGHT); // Middle chunk
+    generateHookPointsInRange(this, initialEnd - CHUNK_HEIGHT * 3, initialEnd - CHUNK_HEIGHT * 2); // Top chunk
+    
+    // Create player at the bottom of the screen
+    const startY = WORLD_HEIGHT - 100;
+    player = this.physics.add.sprite(game.config.width / 2, startY, 'player');
+    player.setCollideWorldBounds(true);
+    player.setBounce(0.1);
+    player.setDrag(30);
+    player.setMaxVelocity(1000, 1200);
+  
+    // Set up camera to follow player
+    this.cameras.main.setBounds(0, 0, game.config.width, WORLD_HEIGHT);
+    this.cameras.main.startFollow(player, true, 0.1, 0.1);
+    this.cameras.main.setDeadzone(50, 100);
+  
+    // Set initial camera position to show player at bottom
+    this.cameras.main.scrollY = WORLD_HEIGHT - game.config.height;
+  
+    // Create hook projectile
+    hookProjectile = this.physics.add.sprite(0, 0, 'hook');
+    hookProjectile.setVisible(false);
+    hookProjectile.setScale(0.5); // Make the hook smaller
+  
+    // Add collision between hook and hook points
+    this.physics.add.overlap(hookProjectile, hookPoints, (hook, point) => {
+        if (isHookFlying) {
+            isHookFlying = false;
+            hookProjectile.setVisible(false);
+            hookActive = true;
+            currentHookPoint = point;
+            
+            // Initial boost toward hook point
+            const dx = point.x - player.x;
+            const dy = point.y - player.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const boostSpeed = Math.min(700, dist * 2);
+            
+            player.setVelocity(
+                (dx / dist) * boostSpeed,
+                (dy / dist) * boostSpeed
+            );
+        }
+    });
+  
+    // Graphics for rope and aim line
+    ropeGraphics = this.add.graphics({ lineStyle: { width: 2, color: 0xffffff } });
+    aimGraphics = this.add.graphics({ lineStyle: { width: 2, color: 0x00ff00 } });
+  
+    // Make graphics follow camera
+    ropeGraphics.setScrollFactor(1);
+    aimGraphics.setScrollFactor(1);
+  
+    // Add keyboard controls
+    cursors = this.input.keyboard.createCursorKeys();
+  
+    // Drag to aim system
+    this.input.on('pointerdown', (pointer) => {
+      if (!hookActive && canGrapple && !isHookFlying) {
+        isDragging = true;
+        // Store screen coordinates instead of world coordinates
+        dragStartPoint.x = pointer.x;
+        dragStartPoint.y = pointer.y;
+      } else if (!isHookFlying) {
+        hookActive = false;
+        currentHookPoint = null;
+      }
+    });
+  
+    this.input.on('pointermove', (pointer) => {
+      if (isDragging) {
+        // Calculate angle based on screen-space coordinates
+        const playerScreenX = player.x - this.cameras.main.scrollX;
+        const playerScreenY = player.y - this.cameras.main.scrollY;
+        
+        // Get the drag vector relative to player's screen position
+        const dx = (pointer.x - dragStartPoint.x);
+        const dy = (pointer.y - dragStartPoint.y);
+        hookAngle = Math.atan2(dy, dx);
+      }
+    });
+  
+    this.input.on('pointerup', () => {
+      if (isDragging) {
+        isDragging = false;
+        
+        // Launch hook projectile
+        hookProjectile.setPosition(player.x, player.y);
+        hookProjectile.setVisible(true);
+        isHookFlying = true;
+        
+        // Set hook velocity in the aimed direction
+        const dirX = Math.cos(hookAngle);
+        const dirY = Math.sin(hookAngle);
+        hookProjectile.setVelocity(
+          dirX * HOOK_SPEED,
+          dirY * HOOK_SPEED
+        );
+        
+        // Start a timer to reset hook if it doesn't hit anything
+        this.time.delayedCall(500, () => {
+          if (isHookFlying) {
+            isHookFlying = false;
+            hookProjectile.setVisible(false);
+          }
+        });
+      }
+    });
+}
+  
+function update() {
+    ropeGraphics.clear();
+    aimGraphics.clear();
+  
+    // Track highest point reached and generate new chunks
+    if (player.y < highestPoint || highestPoint === 0) {
+        highestPoint = player.y;
+        
+        // Generate new hook points when player is closer to the top of generated area
+        if (highestPoint < lastGeneratedY - (CHUNK_HEIGHT * 2)) {
+            const newChunkEnd = lastGeneratedY - CHUNK_HEIGHT;
+            const newChunkStart = newChunkEnd - CHUNK_HEIGHT;
+            generateHookPointsInRange(this, newChunkStart, newChunkEnd);
+        }
+    }
+  
+    // Clean up old hook points that are far below
+    hookPoints.getChildren().forEach(point => {
+        if (point.y > player.y + CHUNK_HEIGHT * 3) {
+            point.destroy();
+        }
+    });
+  
+    // Draw aim line while dragging (adjusted for camera)
+    if (isDragging && !hookActive) {
+      const lineLength = 100;
+      aimGraphics.lineStyle(2, 0x00ff00);
+      aimGraphics.beginPath();
+      aimGraphics.moveTo(player.x, player.y);
+      aimGraphics.lineTo(
+        player.x + Math.cos(hookAngle) * lineLength,
+        player.y + Math.sin(hookAngle) * lineLength
+      );
+      aimGraphics.stroke();
+      
+      aimGraphics.lineStyle(1, 0x00ff00, 0.3);
+      aimGraphics.strokeCircle(player.x, player.y, HOOK_RANGE);
+    }
+  
+    // Reset hook if it goes too far
+    if (isHookFlying) {
+      const dist = Phaser.Math.Distance.Between(player.x, player.y, hookProjectile.x, hookProjectile.y);
+      if (dist > HOOK_RANGE) {
+        isHookFlying = false;
+        hookProjectile.setVisible(false);
+      }
+      
+      // Draw rope to hook projectile while it's flying
+      ropeGraphics.lineStyle(2, 0xffffff);
+      ropeGraphics.lineBetween(player.x, player.y, hookProjectile.x, hookProjectile.y);
+    }
+  
+    // More responsive horizontal movement
+    if (!hookActive) {
+      if (cursors.left.isDown) {
+        player.setVelocityX(player.body.velocity.x - 40);
+      } else if (cursors.right.isDown) {
+        player.setVelocityX(player.body.velocity.x + 40);
+      }
+    }
+  
+    if (hookActive && currentHookPoint) {
+      // Draw rope from player to current hook point
+      ropeGraphics.lineStyle(2, 0xffffff);
+      ropeGraphics.lineBetween(player.x, player.y, currentHookPoint.x, currentHookPoint.y);
+  
+      // Calculate direction toward hook point
+      const dx = currentHookPoint.x - player.x;
+      const dy = currentHookPoint.y - player.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+  
+      // Dynamic pull strength based on distance
+      const pullStrength = 0.025;
+      player.body.velocity.x += dx * pullStrength;
+      player.body.velocity.y += dy * pullStrength;
+  
+      // Enhanced horizontal control while swinging
+      if (cursors.left.isDown) {
+        player.body.velocity.x -= 30;
+      } else if (cursors.right.isDown) {
+        player.body.velocity.x += 30;
+      }
+  
+      // Rope length limiting
+      const maxRopeLength = 350;
+      if (dist > maxRopeLength) {
+        const pushFactor = (dist - maxRopeLength) * 0.15;
+        const elasticity = 0.7;
+        player.body.velocity.x -= (dx / dist) * pushFactor * elasticity;
+        player.body.velocity.y -= (dy / dist) * pushFactor * elasticity;
+      }
+  
+      // Speed cap with direction preservation
+      const maxSpeed = 1200;
+      const currentSpeed = Math.sqrt(
+        player.body.velocity.x * player.body.velocity.x +
+        player.body.velocity.y * player.body.velocity.y
+      );
+      if (currentSpeed > maxSpeed) {
+        const reduction = maxSpeed / currentSpeed;
+        player.body.velocity.x *= reduction;
+        player.body.velocity.y *= reduction;
+      }
+    }
+}
+  
+// Add resize handler
+window.addEventListener('resize', () => {
+    game.scale.resize(window.innerWidth, window.innerHeight);
 });
+  
