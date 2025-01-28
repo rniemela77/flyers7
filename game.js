@@ -42,6 +42,13 @@ let lastGeneratedY = 0; // Track last generated hook point height
 let hookProjectile;
 let isHookFlying = false;
   
+// Add new variables at the top with other declarations
+let springForce = 0;
+let springVelocity = 0;
+const SPRING_CONSTANT = 0.005;
+const SPRING_DAMPING = 0.98;
+const SPRING_LENGTH = 200;
+  
 const game = new Phaser.Game(config);
   
 function generateHookPointsInRange(scene, startY, endY) {
@@ -136,11 +143,20 @@ function create() {
             hookActive = true;
             currentHookPoint = point;
             
-            // Initial boost toward hook point
+            // Add screen shake and flash effect on connection
+            addScreenShake(this, 2);
+            point.setTint(0xffff00);
+            this.time.delayedCall(100, () => point.clearTint());
+            
+            // Initial boost toward hook point with spring setup
             const dx = point.x - player.x;
             const dy = point.y - player.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
             const boostSpeed = Math.min(700, dist * 2);
+            
+            // Set initial spring values
+            springForce = 0;
+            springVelocity = 0;
             
             player.setVelocity(
                 (dx / dist) * boostSpeed,
@@ -190,6 +206,9 @@ function create() {
       if (isDragging) {
         isDragging = false;
         
+        // Add screen shake on launch
+        addScreenShake(this, 1);
+        
         // Launch hook projectile
         hookProjectile.setPosition(player.x, player.y);
         hookProjectile.setVisible(true);
@@ -210,6 +229,24 @@ function create() {
             hookProjectile.setVisible(false);
           }
         });
+      } else if (hookActive) {
+        // Add release boost based on current velocity
+        const speed = Math.sqrt(
+            player.body.velocity.x * player.body.velocity.x +
+            player.body.velocity.y * player.body.velocity.y
+        );
+        
+        if (speed > 400) {
+            const boostMultiplier = 1.2;
+            player.setVelocity(
+                player.body.velocity.x * boostMultiplier,
+                player.body.velocity.y * boostMultiplier
+            );
+            addScreenShake(this, speed / 400); // Shake based on speed
+        }
+        
+        hookActive = false;
+        currentHookPoint = null;
       }
     });
 }
@@ -276,47 +313,77 @@ function update() {
     }
   
     if (hookActive && currentHookPoint) {
-      // Draw rope from player to current hook point
-      ropeGraphics.lineStyle(2, 0xffffff);
-      ropeGraphics.lineBetween(player.x, player.y, currentHookPoint.x, currentHookPoint.y);
-  
-      // Calculate direction toward hook point
-      const dx = currentHookPoint.x - player.x;
-      const dy = currentHookPoint.y - player.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-  
-      // Dynamic pull strength based on distance
-      const pullStrength = 0.025;
-      player.body.velocity.x += dx * pullStrength;
-      player.body.velocity.y += dy * pullStrength;
-  
-      // Enhanced horizontal control while swinging
-      if (cursors.left.isDown) {
-        player.body.velocity.x -= 30;
-      } else if (cursors.right.isDown) {
-        player.body.velocity.x += 30;
-      }
-  
-      // Rope length limiting
-      const maxRopeLength = 350;
-      if (dist > maxRopeLength) {
-        const pushFactor = (dist - maxRopeLength) * 0.15;
-        const elasticity = 0.7;
-        player.body.velocity.x -= (dx / dist) * pushFactor * elasticity;
-        player.body.velocity.y -= (dy / dist) * pushFactor * elasticity;
-      }
-  
-      // Speed cap with direction preservation
-      const maxSpeed = 1200;
-      const currentSpeed = Math.sqrt(
-        player.body.velocity.x * player.body.velocity.x +
-        player.body.velocity.y * player.body.velocity.y
-      );
-      if (currentSpeed > maxSpeed) {
-        const reduction = maxSpeed / currentSpeed;
-        player.body.velocity.x *= reduction;
-        player.body.velocity.y *= reduction;
-      }
+        // Draw rope with spring effect
+        const dx = currentHookPoint.x - player.x;
+        const dy = currentHookPoint.y - player.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        
+        // Calculate spring physics
+        const stretch = dist - SPRING_LENGTH;
+        springForce = stretch * SPRING_CONSTANT;
+        springVelocity += springForce;
+        springVelocity *= SPRING_DAMPING;
+        
+        // Apply spring effect to rope visual with reduced offset
+        const springOffset = springVelocity * 10; // Reduced from 20
+        
+        // Calculate curve control point with limited offset
+        const maxOffset = dist * 0.3; // Limit offset to 30% of rope length
+        const actualOffset = Math.min(Math.abs(springOffset), maxOffset) * Math.sign(springOffset);
+        
+        // Calculate midpoint with smoother curve
+        const midX = (player.x + currentHookPoint.x) / 2 + (dy / dist) * actualOffset;
+        const midY = (player.y + currentHookPoint.y) / 2 - (dx / dist) * actualOffset;
+        
+        // Draw curved rope using proper Phaser methods
+        ropeGraphics.clear();
+        ropeGraphics.lineStyle(2, 0xffffff);
+        ropeGraphics.beginPath();
+        ropeGraphics.moveTo(player.x, player.y);
+        
+        // Draw multiple line segments to create curve effect
+        const segments = 16;
+        for (let i = 1; i <= segments; i++) {
+            const t = i / segments;
+            // Modified curve calculation for more natural sag
+            const tx = player.x + (midX - player.x) * 2 * t * (1 - t) + (currentHookPoint.x - player.x) * (t * t);
+            const ty = player.y + (midY - player.y) * 2 * t * (1 - t) + (currentHookPoint.y - player.y) * (t * t) + (Math.sin(t * Math.PI) * 5); // Added slight natural sag
+            ropeGraphics.lineTo(tx, ty);
+        }
+        ropeGraphics.strokePath();
+        
+        // Dynamic pull strength based on distance and spring
+        const pullStrength = 0.025 * (1 + Math.abs(springVelocity) * 0.1);
+        player.body.velocity.x += dx * pullStrength;
+        player.body.velocity.y += dy * pullStrength;
+        
+        // Enhanced horizontal control while swinging
+        if (cursors.left.isDown) {
+          player.body.velocity.x -= 30;
+        } else if (cursors.right.isDown) {
+          player.body.velocity.x += 30;
+        }
+        
+        // Rope length limiting with spring effect
+        const maxRopeLength = 350;
+        if (dist > maxRopeLength) {
+          const pushFactor = (dist - maxRopeLength) * 0.15;
+          const elasticity = 0.7 + Math.abs(springVelocity) * 0.1;
+          player.body.velocity.x -= (dx / dist) * pushFactor * elasticity;
+          player.body.velocity.y -= (dy / dist) * pushFactor * elasticity;
+        }
+        
+        // Speed cap with direction preservation
+        const maxSpeed = 1200;
+        const currentSpeed = Math.sqrt(
+          player.body.velocity.x * player.body.velocity.x +
+          player.body.velocity.y * player.body.velocity.y
+        );
+        if (currentSpeed > maxSpeed) {
+          const reduction = maxSpeed / currentSpeed;
+          player.body.velocity.x *= reduction;
+          player.body.velocity.y *= reduction;
+        }
     }
 }
   
@@ -324,4 +391,14 @@ function update() {
 window.addEventListener('resize', () => {
     game.scale.resize(window.innerWidth, window.innerHeight);
 });
+  
+// Add shake function after the game creation
+function addScreenShake(scene, intensity = 1) {
+    const duration = 100;
+    const ease = 'Cubic.easeOut';
+    const fromRight = Phaser.Math.Between(-1, 1) * intensity;
+    const fromBottom = Phaser.Math.Between(-1, 1) * intensity;
+
+    scene.cameras.main.shake(duration, 0.005 * intensity);
+}
   
