@@ -1,404 +1,688 @@
 const config = {
     type: Phaser.AUTO,
-    scale: {
-        mode: Phaser.Scale.RESIZE,
-        width: window.innerWidth,
-        height: window.innerHeight,
-        autoCenter: Phaser.Scale.CENTER_BOTH
-    },
+    width: 800,
+    height: 600,
     physics: {
         default: 'arcade',
         arcade: {
-            gravity: { y: 300 },
-            debug: false,
-        },
+            debug: false
+        }
     },
     scene: {
-        preload,
-        create,
-        update,
-    },
+        preload: preload,
+        create: create,
+        update: update
+    }
 };
-  
-let player;
-let hookPoints;
-let currentHookPoint = null;
-let hookActive = false;
-let ropeGraphics;
-let aimGraphics;
-let cursors;
-let canGrapple = true;
-let isDragging = false;
-let dragStartPoint = { x: 0, y: 0 };
-let hookAngle = 0;
-const HOOK_RANGE = 400;
-const HOOK_SPEED = 2000;
-const WORLD_HEIGHT = 10000; // Very tall world
-const CHUNK_HEIGHT = 600; // Height of each chunk of hook points
-let highestPoint = 0; // Track player's highest point
-let lastGeneratedY = 0; // Track last generated hook point height
-  
-// Hook projectile
-let hookProjectile;
-let isHookFlying = false;
-  
-// Add new variables at the top with other declarations
-let springForce = 0;
-let springVelocity = 0;
-const SPRING_CONSTANT = 0.005;
-const SPRING_DAMPING = 0.98;
-const SPRING_LENGTH = 200;
-  
+
 const game = new Phaser.Game(config);
-  
-function generateHookPointsInRange(scene, startY, endY) {
-    const points = [];
-    const VERTICAL_SPACING = 200; // Consistent vertical spacing
-    const numRows = Math.ceil((endY - startY) / VERTICAL_SPACING);
-    const gameWidth = game.config.width; // Get current game width
+
+let playerUnits;
+let enemyUnits;
+let selectionRect;
+let selectionStart = { x: 0, y: 0 };
+let selectedUnits = [];
+let graphics;
+let attackMoveIndicator;
+let groupSelectionRect;
+
+function preload() {
+    // We'll use simple shapes for now, so no assets needed
+}
+
+function create() {
+    graphics = this.add.graphics();
+    attackMoveIndicator = this.add.graphics();
+    groupSelectionRect = this.add.graphics();
     
-    // Generate points row by row
-    for (let row = 0; row < numRows; row++) {
-        const y = startY + (row * VERTICAL_SPACING);
+    // Create player units group with collision
+    playerUnits = this.physics.add.group({
+        bounceX: 0.1,
+        bounceY: 0.1,
+        collideWorldBounds: true,
+        dragX: 0.9,
+        dragY: 0.9
+    });
+    
+    // Create enemy units group with collision
+    enemyUnits = this.physics.add.group({
+        bounceX: 0.1,
+        bounceY: 0.1,
+        collideWorldBounds: true,
+        dragX: 0.9,
+        dragY: 0.9
+    });
+    
+    // Spawn initial units
+    spawnUnits(this, playerUnits, 5, 100, 300, 0x00ff00);
+    spawnUnits(this, enemyUnits, 5, 700, 300, 0xff0000);
+    
+    // Store scene reference for combat handling
+    this.combatEffects = this.add.graphics();
+    
+    // Enable collisions between units with some separation
+    this.physics.add.collider(playerUnits, playerUnits, separateUnits);
+    this.physics.add.collider(enemyUnits, enemyUnits, separateUnits);
+    this.physics.add.collider(playerUnits, enemyUnits, handleCombat.bind(this));
+    
+    // Track drag state
+    this.dragStart = null;
+    
+    // Input handling for drag and tap
+    this.input.on('pointerdown', (pointer) => {
+        this.dragStart = { x: pointer.x, y: pointer.y, time: pointer.time };
+    });
+    
+    this.input.on('pointermove', (pointer) => {
+        if (this.dragStart && selectedUnits.length > 0) {
+            // Draw drag line
+            graphics.clear();
+            graphics.lineStyle(2, 0xff0000);
+            graphics.beginPath();
+            graphics.moveTo(this.dragStart.x, this.dragStart.y);
+            graphics.lineTo(pointer.x, pointer.y);
+            graphics.strokePath();
+        }
+    });
+    
+    this.input.on('pointerup', (pointer) => {
+        if (!this.dragStart) return;
         
-        // Add 2-3 points per row for good coverage
-        const pointsInRow = Phaser.Math.Between(2, 3);
+        const dragDistance = Phaser.Math.Distance.Between(
+            this.dragStart.x, this.dragStart.y,
+            pointer.x, pointer.y
+        );
         
-        for (let i = 0; i < pointsInRow; i++) {
-            let x;
-            if (pointsInRow === 2) {
-                // If 2 points, place them on opposite sides
-                x = (i === 0) ? 
-                    Phaser.Math.Between(50, gameWidth/3) : 
-                    Phaser.Math.Between(2 * gameWidth/3, gameWidth - 50);
-            } else {
-                // If 3 points, spread them left, middle, and right
-                if (i === 0) x = Phaser.Math.Between(50, gameWidth/3);
-                else if (i === 1) x = Phaser.Math.Between(gameWidth/3, 2 * gameWidth/3);
-                else x = Phaser.Math.Between(2 * gameWidth/3, gameWidth - 50);
+        const dragTime = pointer.time - this.dragStart.time;
+        
+        if (dragDistance > 10 && dragTime > 50) {
+            // This was a drag - handle as attack-move if units are selected
+            if (selectedUnits.length > 0) {
+                moveSelectedUnits(pointer.x, pointer.y, true);
+            }
+        } else {
+            // This was a tap - handle selection
+            handleTapSelection(pointer);
+        }
+        
+        // Clear drag visuals
+        graphics.clear();
+        this.dragStart = null;
+    });
+}
+
+function handleTapSelection(pointer) {
+    // Get all units at the clicked position
+    const clickedPlayerUnits = getUnitsAtPosition(playerUnits, pointer.x, pointer.y, 50);
+    
+    if (clickedPlayerUnits.length > 0) {
+        // Get the center of the clicked units
+        const clickedCenter = getGroupCenter(clickedPlayerUnits);
+        
+        // If we already have these units selected, deselect them
+        if (selectedUnits.length > 0 && 
+            clickedPlayerUnits.some(unit => selectedUnits.includes(unit))) {
+            clearSelection();
+        } else {
+            // Otherwise, select the new squad
+            clearSelection();
+            
+            // Find all units within squad range of this center
+            const squadRadius = 150;
+            playerUnits.getChildren().forEach(unit => {
+                if (!unit || !unit.active || !unit.body) return;
+                
+                const distanceToCenter = Phaser.Math.Distance.Between(
+                    unit.x, unit.y,
+                    clickedCenter.x, clickedCenter.y
+                );
+                if (distanceToCenter <= squadRadius) {
+                    selectUnit(unit);
+                }
+            });
+            
+            updateGroupSelectionRect();
+        }
+    } else {
+        // Clicked empty space - deselect
+        clearSelection();
+    }
+}
+
+function getUnitsAtPosition(group, x, y, radius = 50) {
+    const units = [];
+    group.getChildren().forEach(unit => {
+        if (!unit || !unit.active || !unit.body) return;
+        
+        const distance = Phaser.Math.Distance.Between(unit.x, unit.y, x, y);
+        if (distance <= radius) {
+            units.push(unit);
+        }
+    });
+    return units;
+}
+
+function getGroupCenter(units) {
+    // Filter out any invalid units first
+    const validUnits = units.filter(unit => unit && unit.active && unit.body);
+    
+    if (!validUnits.length) return { x: 0, y: 0 };
+    
+    let minX = Infinity, minY = Infinity;
+    let maxX = -Infinity, maxY = -Infinity;
+    
+    validUnits.forEach(unit => {
+        minX = Math.min(minX, unit.x);
+        minY = Math.min(minY, unit.y);
+        maxX = Math.max(maxX, unit.x);
+        maxY = Math.max(maxY, unit.y);
+    });
+    
+    return {
+        x: (minX + maxX) / 2,
+        y: (minY + maxY) / 2
+    };
+}
+
+function updateGroupSelectionRect() {
+    groupSelectionRect.clear();
+    
+    // Clean up any destroyed units from selection
+    selectedUnits = selectedUnits.filter(unit => {
+        return unit && unit.active && unit.body && typeof unit.x === 'number' && typeof unit.y === 'number';
+    });
+    
+    if (selectedUnits.length === 0) return;
+    
+    // Calculate bounds of selected units
+    let minX = Infinity, minY = Infinity;
+    let maxX = -Infinity, maxY = -Infinity;
+    
+    selectedUnits.forEach(unit => {
+        // Skip invalid units
+        if (!unit || !unit.active) return;
+        
+        // Use unit position and size directly instead of body bounds
+        const halfWidth = unit.width / 2;
+        const halfHeight = unit.height / 2;
+        
+        minX = Math.min(minX, unit.x - halfWidth);
+        minY = Math.min(minY, unit.y - halfHeight);
+        maxX = Math.max(maxX, unit.x + halfWidth);
+        maxY = Math.max(maxY, unit.y + halfHeight);
+    });
+    
+    // Only draw if we have valid bounds
+    if (minX === Infinity || minY === Infinity || maxX === -Infinity || maxY === -Infinity) {
+        return;
+    }
+    
+    // Add padding
+    const padding = 15;
+    minX -= padding;
+    minY -= padding;
+    maxX += padding;
+    maxY += padding;
+    
+    // Draw selection rectangle with rounded corners
+    groupSelectionRect.clear();
+    groupSelectionRect.lineStyle(2, 0xffffff, 0.8);
+    
+    // Draw main rectangle
+    groupSelectionRect.strokeRoundedRect(
+        minX, minY,
+        maxX - minX,
+        maxY - minY,
+        8 // corner radius
+    );
+    
+    // Add a subtle glow effect
+    groupSelectionRect.lineStyle(4, 0xffffff, 0.2);
+    groupSelectionRect.strokeRoundedRect(
+        minX - 2, minY - 2,
+        maxX - minX + 4,
+        maxY - minY + 4,
+        10
+    );
+}
+
+function spawnUnits(scene, group, count, x, y, color) {
+    for (let i = 0; i < count; i++) {
+        const unit = scene.add.rectangle(
+            x + Phaser.Math.Between(-50, 50),
+            y + Phaser.Math.Between(-50, 50),
+            20,
+            20,
+            color
+        );
+        
+        scene.physics.add.existing(unit);
+        
+        // Configure physics body
+        unit.body.setCollideWorldBounds(true);
+        unit.body.setBounce(0.1);
+        unit.body.setMass(1);
+        unit.body.setFriction(0.9);
+        unit.body.setDrag(0.9);
+        
+        // Set a circular body for better unit movement
+        const bodyRadius = 12;
+        unit.body.setCircle(bodyRadius, 
+            (unit.width - bodyRadius * 2) / 2, 
+            (unit.height - bodyRadius * 2) / 2
+        );
+        
+        // Add custom properties
+        unit.health = 100;
+        unit.damage = 10;
+        unit.attackRange = 50;
+        unit.lastAttack = 0;
+        unit.attackCooldown = 1000;
+        unit.isAttackMoving = false;
+        unit.targetX = null;
+        unit.targetY = null;
+        unit.attackMoveRange = 200;
+        
+        // Add selection indicator (initially invisible)
+        unit.selectionCircle = scene.add.circle(unit.x, unit.y, 15, 0xffff00, 0);
+        
+        group.add(unit);
+    }
+}
+
+function selectUnit(unit) {
+    selectedUnits.push(unit);
+    unit.selectionCircle.setAlpha(1);
+}
+
+function clearSelection() {
+    selectedUnits.forEach(unit => {
+        if (unit && unit.active && unit.selectionCircle) {
+            unit.selectionCircle.setAlpha(0);
+        }
+    });
+    selectedUnits = [];
+    groupSelectionRect.clear();
+}
+
+function getFormationOffset(index, totalUnits) {
+    // Create a much tighter formation
+    const spacing = 15; // Reduced spacing between units
+    const columns = Math.ceil(Math.sqrt(totalUnits));
+    const rows = Math.ceil(totalUnits / columns);
+    const col = index % columns;
+    const row = Math.floor(index / columns);
+    
+    // Center the formation around (0,0)
+    return {
+        x: (col - (columns - 1) / 2) * spacing,
+        y: (row - (rows - 1) / 2) * spacing
+    };
+}
+
+function moveSelectedUnits(targetX, targetY, isAttackMove = false) {
+    // Filter out any destroyed units first
+    selectedUnits = selectedUnits.filter(unit => unit && unit.active && unit.body);
+    
+    if (selectedUnits.length === 0) return;
+    
+    const squadCenter = getGroupCenter(selectedUnits);
+    
+    selectedUnits.forEach((unit, index) => {
+        if (!unit || !unit.active || !unit.body) return;
+        
+        // Get formation position relative to target center
+        const offset = getFormationOffset(index, selectedUnits.length);
+        const formationX = targetX + offset.x;
+        const formationY = targetY + offset.y;
+        
+        // Set movement properties
+        unit.isAttackMoving = isAttackMove;
+        unit.targetX = formationX;
+        unit.targetY = formationY;
+        unit.squadCenter = squadCenter;
+        
+        // Calculate direction and set initial velocity
+        const angle = Phaser.Math.Angle.Between(unit.x, unit.y, formationX, formationY);
+        const speed = 100;
+        unit.body.setVelocity(
+            Math.cos(angle) * speed,
+            Math.sin(angle) * speed
+        );
+    });
+    
+    if (isAttackMove) {
+        showAttackMoveIndicator(targetX, targetY);
+    }
+}
+
+function attackMoveToLocation(x, y) {
+    moveSelectedUnits(x, y, true);
+}
+
+function showAttackMoveIndicator(x, y) {
+    attackMoveIndicator.clear();
+    attackMoveIndicator.lineStyle(2, 0xff0000);
+    
+    // Draw an X at the target location
+    const size = 20;
+    attackMoveIndicator.beginPath();
+    attackMoveIndicator.moveTo(x - size, y - size);
+    attackMoveIndicator.lineTo(x + size, y + size);
+    attackMoveIndicator.moveTo(x + size, y - size);
+    attackMoveIndicator.lineTo(x - size, y + size);
+    attackMoveIndicator.strokePath();
+    
+    // Fade out the indicator
+    attackMoveIndicator.alpha = 1;
+    game.scene.scenes[0].tweens.add({
+        targets: attackMoveIndicator,
+        alpha: 0,
+        duration: 1000,
+        ease: 'Power2'
+    });
+}
+
+function handleCombat(playerUnit, enemyUnit) {
+    // First check if either unit is already destroyed
+    if (!playerUnit || !playerUnit.active || !enemyUnit || !enemyUnit.active) return;
+    
+    const currentTime = game.getTime();
+    
+    // Player unit attacks enemy
+    if (currentTime - playerUnit.lastAttack >= playerUnit.attackCooldown) {
+        enemyUnit.health -= playerUnit.damage;
+        playerUnit.lastAttack = currentTime;
+        
+        // Visual feedback for attack using graphics
+        this.combatEffects.clear();
+        this.combatEffects.lineStyle(2, 0xffff00);
+        this.combatEffects.strokeCircle(enemyUnit.x, enemyUnit.y, 10);
+        
+        // Fade out effect
+        this.tweens.add({
+            targets: this.combatEffects,
+            alpha: 0,
+            duration: 100,
+            onComplete: () => {
+                this.combatEffects.clear();
+                this.combatEffects.alpha = 1;
+            }
+        });
+    }
+    
+    // Enemy unit attacks back
+    if (currentTime - enemyUnit.lastAttack >= enemyUnit.attackCooldown) {
+        playerUnit.health -= enemyUnit.damage;
+        enemyUnit.lastAttack = currentTime;
+    }
+    
+    // Check for unit death
+    if (enemyUnit.health <= 0) {
+        // Remove from selection if it was selected
+        const enemyIndex = selectedUnits.indexOf(enemyUnit);
+        if (enemyIndex > -1) {
+            selectedUnits.splice(enemyIndex, 1);
+        }
+        if (enemyUnit.selectionCircle) {
+            enemyUnit.selectionCircle.destroy();
+        }
+        enemyUnit.destroy();
+    }
+    if (playerUnit.health <= 0) {
+        // Remove from selection if it was selected
+        const playerIndex = selectedUnits.indexOf(playerUnit);
+        if (playerIndex > -1) {
+            selectedUnits.splice(playerIndex, 1);
+        }
+        if (playerUnit.selectionCircle) {
+            playerUnit.selectionCircle.destroy();
+        }
+        playerUnit.destroy();
+    }
+    
+    // Update selection rectangle after potential unit destruction
+    updateGroupSelectionRect();
+}
+
+// Add a separation function to help prevent unit stacking
+function separateUnits(unit1, unit2) {
+    const angle = Phaser.Math.Angle.Between(unit1.x, unit1.y, unit2.x, unit2.y);
+    const pushForce = 30;
+    
+    unit1.body.velocity.x -= Math.cos(angle) * pushForce;
+    unit1.body.velocity.y -= Math.sin(angle) * pushForce;
+    unit2.body.velocity.x += Math.cos(angle) * pushForce;
+    unit2.body.velocity.y += Math.sin(angle) * pushForce;
+}
+
+function update() {
+    // Clean up any destroyed units from selection
+    selectedUnits = selectedUnits.filter(unit => unit && unit.active);
+    
+    // Always update selection rectangle if units are selected
+    if (selectedUnits.length > 0) {
+        updateGroupSelectionRect();
+        
+        // Calculate current squad center
+        const currentSquadCenter = getGroupCenter(selectedUnits);
+        
+        // Update unit positions to maintain squad cohesion
+        selectedUnits.forEach((unit, index) => {
+            if (!unit || !unit.active || !unit.body) return;
+            
+            // Get ideal formation position relative to current squad center
+            const offset = getFormationOffset(index, selectedUnits.length);
+            const idealX = unit.targetX;
+            const idealY = unit.targetY;
+            
+            // Calculate distances
+            const distToTarget = Phaser.Math.Distance.Between(
+                unit.x, unit.y,
+                idealX, idealY
+            );
+            
+            const distToSquadCenter = Phaser.Math.Distance.Between(
+                unit.x, unit.y,
+                currentSquadCenter.x, currentSquadCenter.y
+            );
+            
+            // Calculate angles
+            const angleToTarget = Phaser.Math.Angle.Between(
+                unit.x, unit.y,
+                idealX, idealY
+            );
+            
+            const angleToSquadCenter = Phaser.Math.Angle.Between(
+                unit.x, unit.y,
+                currentSquadCenter.x, currentSquadCenter.y
+            );
+            
+            // Strong cohesion force when units are too far from squad center
+            const maxSquadSpread = 50; // Reduced spread distance
+            const cohesionStrength = Math.min((distToSquadCenter - maxSquadSpread) / 30, 1);
+            
+            // Blend movement between target position and squad cohesion
+            let finalAngle = angleToTarget;
+            let speed = 100;
+            
+            if (distToSquadCenter > maxSquadSpread) {
+                // Strong pull toward squad center when too far
+                finalAngle = Phaser.Math.Angle.Wrap(
+                    angleToTarget * (1 - cohesionStrength) + 
+                    angleToSquadCenter * cohesionStrength
+                );
+                // Increase speed when far from squad to catch up
+                speed = 100 + (cohesionStrength * 50);
             }
             
-            // Add some slight vertical randomness but maintain general spacing
-            const randomY = y + Phaser.Math.Between(-30, 30);
-            points.push({ x, y: randomY });
-        }
-    }
-    
-    points.forEach(point => {
-        hookPoints.create(point.x, point.y, 'hookPoint');
-    });
-    
-    lastGeneratedY = endY;
-}
-  
-function preload() {
-    // Replace with actual file paths
-    this.load.image('player', 'assets/player.png');
-    this.load.image('hookPoint', 'assets/anchor.png');
-    this.load.image('hook', 'assets/anchor.png'); // Reusing anchor for hook projectile
-}
-  
-function create() {
-    // Set world bounds - use width from game config
-    this.physics.world.setBounds(0, 0, game.config.width, WORLD_HEIGHT);
-    
-    // Create static hook points
-    hookPoints = this.physics.add.staticGroup();
-    
-    // Generate hook points starting from the very bottom
-    const initialStart = WORLD_HEIGHT - CHUNK_HEIGHT * 3;
-    const initialEnd = WORLD_HEIGHT;
-    
-    // Generate initial chunks from bottom up
-    generateHookPointsInRange(this, initialEnd - CHUNK_HEIGHT, initialEnd); // Bottom chunk
-    generateHookPointsInRange(this, initialEnd - CHUNK_HEIGHT * 2, initialEnd - CHUNK_HEIGHT); // Middle chunk
-    generateHookPointsInRange(this, initialEnd - CHUNK_HEIGHT * 3, initialEnd - CHUNK_HEIGHT * 2); // Top chunk
-    
-    // Create player at the bottom of the screen
-    const startY = WORLD_HEIGHT - 100;
-    player = this.physics.add.sprite(game.config.width / 2, startY, 'player');
-    player.setCollideWorldBounds(true);
-    player.setBounce(0.1);
-    player.setDrag(30);
-    player.setMaxVelocity(1000, 1200);
-  
-    // Set up camera to follow player
-    this.cameras.main.setBounds(0, 0, game.config.width, WORLD_HEIGHT);
-    this.cameras.main.startFollow(player, true, 0.1, 0.1);
-    this.cameras.main.setDeadzone(50, 100);
-  
-    // Set initial camera position to show player at bottom
-    this.cameras.main.scrollY = WORLD_HEIGHT - game.config.height;
-  
-    // Create hook projectile
-    hookProjectile = this.physics.add.sprite(0, 0, 'hook');
-    hookProjectile.setVisible(false);
-    hookProjectile.setScale(0.5); // Make the hook smaller
-  
-    // Add collision between hook and hook points
-    this.physics.add.overlap(hookProjectile, hookPoints, (hook, point) => {
-        if (isHookFlying) {
-            isHookFlying = false;
-            hookProjectile.setVisible(false);
-            hookActive = true;
-            currentHookPoint = point;
-            
-            // Add screen shake and flash effect on connection
-            addScreenShake(this, 2);
-            point.setTint(0xffff00);
-            this.time.delayedCall(100, () => point.clearTint());
-            
-            // Initial boost toward hook point with spring setup
-            const dx = point.x - player.x;
-            const dy = point.y - player.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            const boostSpeed = Math.min(700, dist * 2);
-            
-            // Set initial spring values
-            springForce = 0;
-            springVelocity = 0;
-            
-            player.setVelocity(
-                (dx / dist) * boostSpeed,
-                (dy / dist) * boostSpeed
-            );
-        }
-    });
-  
-    // Graphics for rope and aim line
-    ropeGraphics = this.add.graphics({ lineStyle: { width: 2, color: 0xffffff } });
-    aimGraphics = this.add.graphics({ lineStyle: { width: 2, color: 0x00ff00 } });
-  
-    // Make graphics follow camera
-    ropeGraphics.setScrollFactor(1);
-    aimGraphics.setScrollFactor(1);
-  
-    // Add keyboard controls
-    cursors = this.input.keyboard.createCursorKeys();
-  
-    // Drag to aim system
-    this.input.on('pointerdown', (pointer) => {
-      if (!hookActive && canGrapple && !isHookFlying) {
-        isDragging = true;
-        // Store screen coordinates instead of world coordinates
-        dragStartPoint.x = pointer.x;
-        dragStartPoint.y = pointer.y;
-      } else if (!isHookFlying) {
-        hookActive = false;
-        currentHookPoint = null;
-      }
-    });
-  
-    this.input.on('pointermove', (pointer) => {
-      if (isDragging) {
-        // Calculate angle based on screen-space coordinates
-        const playerScreenX = player.x - this.cameras.main.scrollX;
-        const playerScreenY = player.y - this.cameras.main.scrollY;
-        
-        // Get the drag vector relative to player's screen position
-        const dx = (pointer.x - dragStartPoint.x);
-        const dy = (pointer.y - dragStartPoint.y);
-        hookAngle = Math.atan2(dy, dx);
-      }
-    });
-  
-    this.input.on('pointerup', () => {
-      if (isDragging) {
-        isDragging = false;
-        
-        // Add screen shake on launch
-        addScreenShake(this, 1);
-        
-        // Launch hook projectile
-        hookProjectile.setPosition(player.x, player.y);
-        hookProjectile.setVisible(true);
-        isHookFlying = true;
-        
-        // Set hook velocity in the aimed direction
-        const dirX = Math.cos(hookAngle);
-        const dirY = Math.sin(hookAngle);
-        hookProjectile.setVelocity(
-          dirX * HOOK_SPEED,
-          dirY * HOOK_SPEED
-        );
-        
-        // Start a timer to reset hook if it doesn't hit anything
-        this.time.delayedCall(500, () => {
-          if (isHookFlying) {
-            isHookFlying = false;
-            hookProjectile.setVisible(false);
-          }
+            // Apply movement
+            if (distToTarget > 5) {
+                unit.body.setVelocity(
+                    Math.cos(finalAngle) * speed,
+                    Math.sin(finalAngle) * speed
+                );
+            } else {
+                // Slow down when near target position
+                unit.body.setVelocity(0, 0);
+            }
         });
-      } else if (hookActive) {
-        // Add release boost based on current velocity
-        const speed = Math.sqrt(
-            player.body.velocity.x * player.body.velocity.x +
-            player.body.velocity.y * player.body.velocity.y
-        );
+    }
+    
+    // Update selection circles and handle combat
+    playerUnits.getChildren().forEach(unit => {
+        if (!unit || !unit.active || !unit.selectionCircle) return;
         
-        if (speed > 400) {
-            const boostMultiplier = 1.2;
-            player.setVelocity(
-                player.body.velocity.x * boostMultiplier,
-                player.body.velocity.y * boostMultiplier
-            );
-            addScreenShake(this, speed / 400); // Shake based on speed
+        unit.selectionCircle.setPosition(unit.x, unit.y);
+        
+        // Handle attack-move behavior
+        if (unit.isAttackMoving) {
+            let nearestEnemy = null;
+            let nearestDistance = unit.attackMoveRange;
+            
+            enemyUnits.getChildren().forEach(enemy => {
+                if (!enemy || !enemy.active) return;
+                
+                const distance = Phaser.Math.Distance.Between(
+                    unit.x, unit.y,
+                    enemy.x, enemy.y
+                );
+                
+                if (distance < nearestDistance) {
+                    nearestDistance = distance;
+                    nearestEnemy = enemy;
+                }
+            });
+            
+            if (nearestEnemy && selectedUnits.length > 0) {
+                const currentSquadCenter = getGroupCenter(selectedUnits);
+                const distFromCenter = Phaser.Math.Distance.Between(
+                    unit.x, unit.y,
+                    currentSquadCenter.x, currentSquadCenter.y
+                );
+                
+                const angleToEnemy = Phaser.Math.Angle.Between(
+                    unit.x, unit.y,
+                    nearestEnemy.x, nearestEnemy.y
+                );
+                
+                const angleToCenter = Phaser.Math.Angle.Between(
+                    unit.x, unit.y,
+                    currentSquadCenter.x, currentSquadCenter.y
+                );
+                
+                // Stronger squad cohesion during combat
+                const maxCombatSpread = 40; // Even tighter formation in combat
+                const cohesionStrength = Math.min((distFromCenter - maxCombatSpread) / 30, 1);
+                const blendedAngle = Phaser.Math.Angle.Wrap(
+                    angleToEnemy * (1 - cohesionStrength) + angleToCenter * cohesionStrength
+                );
+                
+                const speed = 100;
+                unit.body.setVelocity(
+                    Math.cos(blendedAngle) * speed,
+                    Math.sin(blendedAngle) * speed
+                );
+            }
         }
-        
-        hookActive = false;
-        currentHookPoint = null;
-      }
     });
-}
-  
-function update() {
-    ropeGraphics.clear();
-    aimGraphics.clear();
-  
-    // Track highest point reached and generate new chunks
-    if (player.y < highestPoint || highestPoint === 0) {
-        highestPoint = player.y;
+    
+    // Enemy squad behavior
+    if (enemyUnits.getChildren().length > 0) {
+        const enemySquadCenter = getGroupCenter(enemyUnits.getChildren());
+        const maxEnemySpread = 60; // Slightly looser than player units
         
-        // Generate new hook points when player is closer to the top of generated area
-        if (highestPoint < lastGeneratedY - (CHUNK_HEIGHT * 2)) {
-            const newChunkEnd = lastGeneratedY - CHUNK_HEIGHT;
-            const newChunkStart = newChunkEnd - CHUNK_HEIGHT;
-            generateHookPointsInRange(this, newChunkStart, newChunkEnd);
-        }
+        enemyUnits.getChildren().forEach(enemyUnit => {
+            if (!enemyUnit || !enemyUnit.active) return;
+            
+            let nearestPlayerUnit = null;
+            let nearestDistance = Infinity;
+            
+            playerUnits.getChildren().forEach(playerUnit => {
+                if (!playerUnit || !playerUnit.active) return;
+                
+                const distance = Phaser.Math.Distance.Between(
+                    enemyUnit.x, enemyUnit.y,
+                    playerUnit.x, playerUnit.y
+                );
+                
+                if (distance < nearestDistance) {
+                    nearestDistance = distance;
+                    nearestPlayerUnit = playerUnit;
+                }
+            });
+            
+            if (nearestPlayerUnit) {
+                // Calculate distances and angles
+                const distToSquadCenter = Phaser.Math.Distance.Between(
+                    enemyUnit.x, enemyUnit.y,
+                    enemySquadCenter.x, enemySquadCenter.y
+                );
+                
+                const angleToTarget = Phaser.Math.Angle.Between(
+                    enemyUnit.x, enemyUnit.y,
+                    nearestPlayerUnit.x, nearestPlayerUnit.y
+                );
+                
+                const angleToSquadCenter = Phaser.Math.Angle.Between(
+                    enemyUnit.x, enemyUnit.y,
+                    enemySquadCenter.x, enemySquadCenter.y
+                );
+                
+                // Calculate cohesion strength based on distance from squad center
+                const cohesionStrength = Math.min((distToSquadCenter - maxEnemySpread) / 30, 1);
+                
+                // Blend between target and squad center
+                let finalAngle = angleToTarget;
+                let speed = 50; // Base enemy speed
+                
+                if (distToSquadCenter > maxEnemySpread) {
+                    // Strong pull toward squad center when too far
+                    finalAngle = Phaser.Math.Angle.Wrap(
+                        angleToTarget * (1 - cohesionStrength) + 
+                        angleToSquadCenter * cohesionStrength
+                    );
+                    // Speed up to catch up with squad
+                    speed = 50 + (cohesionStrength * 30);
+                }
+                
+                // Only move if not too close to target
+                const distToTarget = Phaser.Math.Distance.Between(
+                    enemyUnit.x, enemyUnit.y,
+                    nearestPlayerUnit.x, nearestPlayerUnit.y
+                );
+                
+                if (distToTarget > 40) { // Keep some distance from target
+                    enemyUnit.body.setVelocity(
+                        Math.cos(finalAngle) * speed,
+                        Math.sin(finalAngle) * speed
+                    );
+                } else {
+                    // If close to target, just stop
+                    enemyUnit.body.setVelocity(0, 0);
+                }
+            } else {
+                // If no target, move toward squad center if too far
+                const distToSquadCenter = Phaser.Math.Distance.Between(
+                    enemyUnit.x, enemyUnit.y,
+                    enemySquadCenter.x, enemySquadCenter.y
+                );
+                
+                if (distToSquadCenter > maxEnemySpread) {
+                    const angleToCenter = Phaser.Math.Angle.Between(
+                        enemyUnit.x, enemyUnit.y,
+                        enemySquadCenter.x, enemySquadCenter.y
+                    );
+                    const speed = 50;
+                    enemyUnit.body.setVelocity(
+                        Math.cos(angleToCenter) * speed,
+                        Math.sin(angleToCenter) * speed
+                    );
+                } else {
+                    enemyUnit.body.setVelocity(0, 0);
+                }
+            }
+        });
     }
-  
-    // Clean up old hook points that are far below
-    hookPoints.getChildren().forEach(point => {
-        if (point.y > player.y + CHUNK_HEIGHT * 3) {
-            point.destroy();
-        }
-    });
-  
-    // Draw aim line while dragging (adjusted for camera)
-    if (isDragging && !hookActive) {
-      const lineLength = 100;
-      aimGraphics.lineStyle(2, 0x00ff00);
-      aimGraphics.beginPath();
-      aimGraphics.moveTo(player.x, player.y);
-      aimGraphics.lineTo(
-        player.x + Math.cos(hookAngle) * lineLength,
-        player.y + Math.sin(hookAngle) * lineLength
-      );
-      aimGraphics.stroke();
-      
-      aimGraphics.lineStyle(1, 0x00ff00, 0.3);
-      aimGraphics.strokeCircle(player.x, player.y, HOOK_RANGE);
-    }
-  
-    // Reset hook if it goes too far
-    if (isHookFlying) {
-      const dist = Phaser.Math.Distance.Between(player.x, player.y, hookProjectile.x, hookProjectile.y);
-      if (dist > HOOK_RANGE) {
-        isHookFlying = false;
-        hookProjectile.setVisible(false);
-      }
-      
-      // Draw rope to hook projectile while it's flying
-      ropeGraphics.lineStyle(2, 0xffffff);
-      ropeGraphics.lineBetween(player.x, player.y, hookProjectile.x, hookProjectile.y);
-    }
-  
-    // More responsive horizontal movement
-    if (!hookActive) {
-      if (cursors.left.isDown) {
-        player.setVelocityX(player.body.velocity.x - 40);
-      } else if (cursors.right.isDown) {
-        player.setVelocityX(player.body.velocity.x + 40);
-      }
-    }
-  
-    if (hookActive && currentHookPoint) {
-        // Draw rope with spring effect
-        const dx = currentHookPoint.x - player.x;
-        const dy = currentHookPoint.y - player.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        
-        // Calculate spring physics
-        const stretch = dist - SPRING_LENGTH;
-        springForce = stretch * SPRING_CONSTANT;
-        springVelocity += springForce;
-        springVelocity *= SPRING_DAMPING;
-        
-        // Apply spring effect to rope visual with reduced offset
-        const springOffset = springVelocity * 10; // Reduced from 20
-        
-        // Calculate curve control point with limited offset
-        const maxOffset = dist * 0.3; // Limit offset to 30% of rope length
-        const actualOffset = Math.min(Math.abs(springOffset), maxOffset) * Math.sign(springOffset);
-        
-        // Calculate midpoint with smoother curve
-        const midX = (player.x + currentHookPoint.x) / 2 + (dy / dist) * actualOffset;
-        const midY = (player.y + currentHookPoint.y) / 2 - (dx / dist) * actualOffset;
-        
-        // Draw curved rope using proper Phaser methods
-        ropeGraphics.clear();
-        ropeGraphics.lineStyle(2, 0xffffff);
-        ropeGraphics.beginPath();
-        ropeGraphics.moveTo(player.x, player.y);
-        
-        // Draw multiple line segments to create curve effect
-        const segments = 16;
-        for (let i = 1; i <= segments; i++) {
-            const t = i / segments;
-            // Modified curve calculation for more natural sag
-            const tx = player.x + (midX - player.x) * 2 * t * (1 - t) + (currentHookPoint.x - player.x) * (t * t);
-            const ty = player.y + (midY - player.y) * 2 * t * (1 - t) + (currentHookPoint.y - player.y) * (t * t) + (Math.sin(t * Math.PI) * 5); // Added slight natural sag
-            ropeGraphics.lineTo(tx, ty);
-        }
-        ropeGraphics.strokePath();
-        
-        // Dynamic pull strength based on distance and spring
-        const pullStrength = 0.025 * (1 + Math.abs(springVelocity) * 0.1);
-        player.body.velocity.x += dx * pullStrength;
-        player.body.velocity.y += dy * pullStrength;
-        
-        // Enhanced horizontal control while swinging
-        if (cursors.left.isDown) {
-          player.body.velocity.x -= 30;
-        } else if (cursors.right.isDown) {
-          player.body.velocity.x += 30;
-        }
-        
-        // Rope length limiting with spring effect
-        const maxRopeLength = 350;
-        if (dist > maxRopeLength) {
-          const pushFactor = (dist - maxRopeLength) * 0.15;
-          const elasticity = 0.7 + Math.abs(springVelocity) * 0.1;
-          player.body.velocity.x -= (dx / dist) * pushFactor * elasticity;
-          player.body.velocity.y -= (dy / dist) * pushFactor * elasticity;
-        }
-        
-        // Speed cap with direction preservation
-        const maxSpeed = 1200;
-        const currentSpeed = Math.sqrt(
-          player.body.velocity.x * player.body.velocity.x +
-          player.body.velocity.y * player.body.velocity.y
-        );
-        if (currentSpeed > maxSpeed) {
-          const reduction = maxSpeed / currentSpeed;
-          player.body.velocity.x *= reduction;
-          player.body.velocity.y *= reduction;
-        }
-    }
-}
-  
-// Add resize handler
-window.addEventListener('resize', () => {
-    game.scale.resize(window.innerWidth, window.innerHeight);
-});
-  
-// Add shake function after the game creation
-function addScreenShake(scene, intensity = 1) {
-    const duration = 100;
-    const ease = 'Cubic.easeOut';
-    const fromRight = Phaser.Math.Between(-1, 1) * intensity;
-    const fromBottom = Phaser.Math.Between(-1, 1) * intensity;
-
-    scene.cameras.main.shake(duration, 0.005 * intensity);
 }
   
