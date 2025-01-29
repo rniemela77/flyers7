@@ -289,6 +289,42 @@ function updateGroupSelectionRect() {
     );
 }
 
+function createHealthBar(scene, unit) {
+    const width = unit.width; // Match unit width
+    const height = 4;
+    const yOffset = -15; // Position above unit
+    
+    // Create container for health bar
+    const healthBar = scene.add.graphics();
+    
+    // Update function for the health bar
+    const updateHealthBar = () => {
+        healthBar.clear();
+        
+        // Position relative to unit's left side
+        const barX = unit.x - unit.width/2;
+        const barY = unit.y + yOffset;
+        
+        // Background (red)
+        healthBar.fillStyle(0xff0000);
+        healthBar.fillRect(barX, barY, width, height);
+        
+        // Health (green)
+        const healthWidth = Math.max(0, (unit.health / unit.maxHealth) * width);
+        healthBar.fillStyle(0x00ff00);
+        healthBar.fillRect(barX, barY, healthWidth, height);
+        
+        // Border
+        healthBar.lineStyle(1, 0x000000);
+        healthBar.strokeRect(barX, barY, width, height);
+    };
+    
+    // Store the update function on the unit
+    unit.updateHealthBar = updateHealthBar;
+    
+    return healthBar;
+}
+
 function spawnUnits(scene, group, count, x, y, color) {
     for (let i = 0; i < count; i++) {
         const unit = scene.add.rectangle(
@@ -316,7 +352,8 @@ function spawnUnits(scene, group, count, x, y, color) {
         );
         
         // Add custom properties
-        unit.health = 100;
+        unit.maxHealth = 100;
+        unit.health = unit.maxHealth;
         unit.damage = 10;
         unit.attackRange = 50;
         unit.lastAttack = 0;
@@ -328,6 +365,9 @@ function spawnUnits(scene, group, count, x, y, color) {
         
         // Add selection indicator (initially invisible)
         unit.selectionCircle = scene.add.circle(unit.x, unit.y, 15, 0xffff00, 0);
+        
+        // Add health bar
+        unit.healthBar = createHealthBar(scene, unit);
         
         group.add(unit);
     }
@@ -503,6 +543,10 @@ function handleCombat(playerUnit, enemyUnit) {
         });
     }
     
+    // After dealing damage, update health bars
+    if (playerUnit.updateHealthBar) playerUnit.updateHealthBar();
+    if (enemyUnit.updateHealthBar) enemyUnit.updateHealthBar();
+    
     // Check for unit death
     if (enemyUnit.health <= 0) {
         const enemyIndex = selectedUnits.indexOf(enemyUnit);
@@ -511,6 +555,9 @@ function handleCombat(playerUnit, enemyUnit) {
         }
         if (enemyUnit.selectionCircle) {
             enemyUnit.selectionCircle.destroy();
+        }
+        if (enemyUnit.healthBar) {
+            enemyUnit.healthBar.destroy();
         }
         enemyUnit.destroy();
     }
@@ -521,6 +568,9 @@ function handleCombat(playerUnit, enemyUnit) {
         }
         if (playerUnit.selectionCircle) {
             playerUnit.selectionCircle.destroy();
+        }
+        if (playerUnit.healthBar) {
+            playerUnit.healthBar.destroy();
         }
         playerUnit.destroy();
     }
@@ -707,6 +757,11 @@ function update() {
                     }
                 }
             }
+            
+            // Update health bar position and fill
+            if (unit.updateHealthBar) {
+                unit.updateHealthBar();
+            }
         });
     });
     
@@ -747,8 +802,21 @@ function update() {
             } else {
                 enemyUnit.body.setVelocity(0, 0);
             }
+            
+            // Update health bar position and fill
+            if (enemyUnit.updateHealthBar) {
+                enemyUnit.updateHealthBar();
+            }
         });
     }
+    
+    // Update enemy health bars
+    enemyUnits.getChildren().forEach(unit => {
+        if (!unit || !unit.active) return;
+        if (unit.updateHealthBar) {
+            unit.updateHealthBar();
+        }
+    });
 }
 
 function spawnSquad(scene, group, count, x, y, color) {
@@ -786,18 +854,22 @@ function spawnSquad(scene, group, count, x, y, color) {
         
         // Add custom properties with different values for ranged units
         unit.isRanged = isRanged;
-        unit.health = isRanged ? 70 : 100; // Ranged units have less health
-        unit.damage = isRanged ? 15 : 10; // Ranged units do more damage
-        unit.attackRange = isRanged ? 200 : 50; // Reduced from 300 to 200 for ranged units
+        unit.maxHealth = isRanged ? 70 : 100; // Store max health
+        unit.health = unit.maxHealth; // Current health starts at max
+        unit.damage = isRanged ? 15 : 10;
+        unit.attackRange = isRanged ? 200 : 50;
         unit.lastAttack = 0;
-        unit.attackCooldown = isRanged ? 1500 : 1000; // Ranged units attack slower
+        unit.attackCooldown = isRanged ? 1500 : 1000;
         unit.isAttackMoving = false;
         unit.targetX = null;
         unit.targetY = null;
-        unit.attackMoveRange = isRanged ? 250 : 200; // Reduced from 400 to 250 for ranged units
+        unit.attackMoveRange = isRanged ? 250 : 200;
         
         // Add selection indicator (initially invisible)
         unit.selectionCircle = scene.add.circle(unit.x, unit.y, 15, 0xffff00, 0);
+        
+        // Add health bar
+        unit.healthBar = createHealthBar(scene, unit);
         
         group.add(unit);
         squad.push(unit);
