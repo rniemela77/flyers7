@@ -25,6 +25,10 @@ let selectedUnits = [];
 let graphics;
 let attackMoveIndicator;
 let groupSelectionRect;
+let currentSquad = [];
+let squadTargetX = null;
+let squadTargetY = null;
+let isSquadAttackMoving = false;
 
 function preload() {
     // We'll use simple shapes for now, so no assets needed
@@ -67,14 +71,47 @@ function create() {
     
     // Track drag state
     this.dragStart = null;
+    this.isDragging = false;
     
     // Input handling for drag and tap
     this.input.on('pointerdown', (pointer) => {
-        this.dragStart = { x: pointer.x, y: pointer.y, time: pointer.time };
+        // Check if we clicked on a unit
+        const clickedUnits = getUnitsAtPosition(playerUnits, pointer.x, pointer.y, 50);
+        
+        if (clickedUnits.length > 0) {
+            // Select the squad
+            clearSelection();
+            const clickedCenter = getGroupCenter(clickedUnits);
+            
+            // Select all units in squad range
+            const squadRadius = 150;
+            playerUnits.getChildren().forEach(unit => {
+                if (!unit || !unit.active || !unit.body) return;
+                
+                const distanceToCenter = Phaser.Math.Distance.Between(
+                    unit.x, unit.y,
+                    clickedCenter.x, clickedCenter.y
+                );
+                if (distanceToCenter <= squadRadius) {
+                    selectUnit(unit);
+                }
+            });
+            
+            updateGroupSelectionRect();
+            
+            // Start drag if we clicked on a selected squad
+            if (selectedUnits.length > 0) {
+                this.dragStart = { x: pointer.x, y: pointer.y };
+                this.isDragging = true;
+            }
+        } else {
+            // Clicked empty space - deselect
+            clearSelection();
+        }
     });
     
     this.input.on('pointermove', (pointer) => {
-        if (this.dragStart && selectedUnits.length > 0) {
+        if (this.isDragging && selectedUnits.length > 0) {
             // Draw drag line
             graphics.clear();
             graphics.lineStyle(2, 0xff0000);
@@ -86,28 +123,14 @@ function create() {
     });
     
     this.input.on('pointerup', (pointer) => {
-        if (!this.dragStart) return;
-        
-        const dragDistance = Phaser.Math.Distance.Between(
-            this.dragStart.x, this.dragStart.y,
-            pointer.x, pointer.y
-        );
-        
-        const dragTime = pointer.time - this.dragStart.time;
-        
-        if (dragDistance > 10 && dragTime > 50) {
-            // This was a drag - handle as attack-move if units are selected
-            if (selectedUnits.length > 0) {
-                moveSelectedUnits(pointer.x, pointer.y, true);
-            }
-        } else {
-            // This was a tap - handle selection
-            handleTapSelection(pointer);
+        if (this.isDragging && selectedUnits.length > 0) {
+            // Issue attack-move command
+            moveSelectedUnits(pointer.x, pointer.y, true);
+            graphics.clear();
         }
         
-        // Clear drag visuals
-        graphics.clear();
         this.dragStart = null;
+        this.isDragging = false;
     });
 }
 
@@ -299,6 +322,7 @@ function clearSelection() {
     selectedUnits.forEach(unit => {
         if (unit && unit.active && unit.selectionCircle) {
             unit.selectionCircle.setAlpha(0);
+            // Don't stop movement or attack-move when deselecting
         }
     });
     selectedUnits = [];
@@ -306,17 +330,23 @@ function clearSelection() {
 }
 
 function getFormationOffset(index, totalUnits) {
-    // Create a much tighter formation
-    const spacing = 15; // Reduced spacing between units
+    // Increase spacing to prevent overcrowding
+    const spacing = 25; // Increased from 15 to give more room
     const columns = Math.ceil(Math.sqrt(totalUnits));
     const rows = Math.ceil(totalUnits / columns);
     const col = index % columns;
     const row = Math.floor(index / columns);
     
+    // Add slight randomness to prevent perfect grid alignment
+    const randomOffset = {
+        x: Phaser.Math.Between(-5, 5),
+        y: Phaser.Math.Between(-5, 5)
+    };
+    
     // Center the formation around (0,0)
     return {
-        x: (col - (columns - 1) / 2) * spacing,
-        y: (row - (rows - 1) / 2) * spacing
+        x: (col - (columns - 1) / 2) * spacing + randomOffset.x,
+        y: (row - (rows - 1) / 2) * spacing + randomOffset.y
     };
 }
 
@@ -326,34 +356,22 @@ function moveSelectedUnits(targetX, targetY, isAttackMove = false) {
     
     if (selectedUnits.length === 0) return;
     
-    const squadCenter = getGroupCenter(selectedUnits);
+    // Set the current squad to be these units
+    currentSquad = [...selectedUnits];
     
-    selectedUnits.forEach((unit, index) => {
+    // Store squad-wide target and state
+    squadTargetX = targetX;
+    squadTargetY = targetY;
+    isSquadAttackMoving = isAttackMove;
+    
+    // Assign formation positions
+    currentSquad.forEach((unit, index) => {
         if (!unit || !unit.active || !unit.body) return;
         
-        // Get formation position relative to target center
-        const offset = getFormationOffset(index, selectedUnits.length);
-        const formationX = targetX + offset.x;
-        const formationY = targetY + offset.y;
-        
-        // Set movement properties
-        unit.isAttackMoving = isAttackMove;
-        unit.targetX = formationX;
-        unit.targetY = formationY;
-        unit.squadCenter = squadCenter;
-        
-        // Calculate direction and set initial velocity
-        const angle = Phaser.Math.Angle.Between(unit.x, unit.y, formationX, formationY);
-        const speed = 100;
-        unit.body.setVelocity(
-            Math.cos(angle) * speed,
-            Math.sin(angle) * speed
-        );
+        const offset = getFormationOffset(index, currentSquad.length);
+        unit.formationOffset = offset;
+        unit.squadIndex = index;
     });
-    
-    if (isAttackMove) {
-        showAttackMoveIndicator(targetX, targetY);
-    }
 }
 
 function attackMoveToLocation(x, y) {
@@ -394,7 +412,7 @@ function handleCombat(playerUnit, enemyUnit) {
         enemyUnit.health -= playerUnit.damage;
         playerUnit.lastAttack = currentTime;
         
-        // Visual feedback for attack using graphics
+        // Visual feedback for player's attack
         this.combatEffects.clear();
         this.combatEffects.lineStyle(2, 0xffff00);
         this.combatEffects.strokeCircle(enemyUnit.x, enemyUnit.y, 10);
@@ -415,6 +433,22 @@ function handleCombat(playerUnit, enemyUnit) {
     if (currentTime - enemyUnit.lastAttack >= enemyUnit.attackCooldown) {
         playerUnit.health -= enemyUnit.damage;
         enemyUnit.lastAttack = currentTime;
+        
+        // Visual feedback for enemy's attack
+        this.combatEffects.clear();
+        this.combatEffects.lineStyle(2, 0xffffff);  // White circle for enemy attacks
+        this.combatEffects.strokeCircle(playerUnit.x, playerUnit.y, 10);
+        
+        // Fade out effect
+        this.tweens.add({
+            targets: this.combatEffects,
+            alpha: 0,
+            duration: 100,
+            onComplete: () => {
+                this.combatEffects.clear();
+                this.combatEffects.alpha = 1;
+            }
+        });
     }
     
     // Check for unit death
@@ -457,230 +491,124 @@ function separateUnits(unit1, unit2) {
 }
 
 function update() {
-    // Clean up any destroyed units from selection
+    // Clean up any destroyed units
+    currentSquad = currentSquad.filter(unit => unit && unit.active);
     selectedUnits = selectedUnits.filter(unit => unit && unit.active);
     
-    // Always update selection rectangle if units are selected
+    // Update selection rectangle
     if (selectedUnits.length > 0) {
         updateGroupSelectionRect();
+    }
+    
+    // Update squad movement
+    if (currentSquad.length > 0 && squadTargetX !== null && squadTargetY !== null) {
+        const squadCenter = getGroupCenter(currentSquad);
         
-        // Calculate current squad center
-        const currentSquadCenter = getGroupCenter(selectedUnits);
-        
-        // Update unit positions to maintain squad cohesion
-        selectedUnits.forEach((unit, index) => {
+        currentSquad.forEach(unit => {
             if (!unit || !unit.active || !unit.body) return;
             
-            // Get ideal formation position relative to current squad center
-            const offset = getFormationOffset(index, selectedUnits.length);
-            const idealX = unit.targetX;
-            const idealY = unit.targetY;
-            
-            // Calculate distances
-            const distToTarget = Phaser.Math.Distance.Between(
-                unit.x, unit.y,
-                idealX, idealY
-            );
-            
-            const distToSquadCenter = Phaser.Math.Distance.Between(
-                unit.x, unit.y,
-                currentSquadCenter.x, currentSquadCenter.y
-            );
-            
-            // Calculate angles
-            const angleToTarget = Phaser.Math.Angle.Between(
-                unit.x, unit.y,
-                idealX, idealY
-            );
-            
-            const angleToSquadCenter = Phaser.Math.Angle.Between(
-                unit.x, unit.y,
-                currentSquadCenter.x, currentSquadCenter.y
-            );
-            
-            // Strong cohesion force when units are too far from squad center
-            const maxSquadSpread = 50; // Reduced spread distance
-            const cohesionStrength = Math.min((distToSquadCenter - maxSquadSpread) / 30, 1);
-            
-            // Blend movement between target position and squad cohesion
-            let finalAngle = angleToTarget;
-            let speed = 100;
-            
-            if (distToSquadCenter > maxSquadSpread) {
-                // Strong pull toward squad center when too far
-                finalAngle = Phaser.Math.Angle.Wrap(
-                    angleToTarget * (1 - cohesionStrength) + 
-                    angleToSquadCenter * cohesionStrength
-                );
-                // Increase speed when far from squad to catch up
-                speed = 100 + (cohesionStrength * 50);
+            // Update selection circle
+            if (unit.selectionCircle) {
+                unit.selectionCircle.setPosition(unit.x, unit.y);
             }
             
-            // Apply movement
-            if (distToTarget > 5) {
-                unit.body.setVelocity(
-                    Math.cos(finalAngle) * speed,
-                    Math.sin(finalAngle) * speed
-                );
-            } else {
-                // Slow down when near target position
-                unit.body.setVelocity(0, 0);
+            if (isSquadAttackMoving) {
+                // Check for nearby enemies
+                let nearestEnemy = null;
+                let nearestDistance = unit.attackMoveRange;
+                
+                enemyUnits.getChildren().forEach(enemy => {
+                    if (!enemy || !enemy.active) return;
+                    const distance = Phaser.Math.Distance.Between(
+                        unit.x, unit.y, enemy.x, enemy.y
+                    );
+                    if (distance < nearestDistance) {
+                        nearestDistance = distance;
+                        nearestEnemy = enemy;
+                    }
+                });
+                
+                if (nearestEnemy) {
+                    // Move to attack enemy
+                    const angle = Phaser.Math.Angle.Between(
+                        unit.x, unit.y,
+                        nearestEnemy.x, nearestEnemy.y
+                    );
+                    unit.body.setVelocity(
+                        Math.cos(angle) * 100,
+                        Math.sin(angle) * 100
+                    );
+                } else {
+                    // Move to formation position
+                    const formationX = squadTargetX + unit.formationOffset.x;
+                    const formationY = squadTargetY + unit.formationOffset.y;
+                    
+                    const distToTarget = Phaser.Math.Distance.Between(
+                        unit.x, unit.y,
+                        formationX, formationY
+                    );
+                    
+                    // Increase stopping distance to prevent jiggling
+                    if (distToTarget > 20) { // Increased from 5
+                        const angle = Phaser.Math.Angle.Between(
+                            unit.x, unit.y,
+                            formationX, formationY
+                        );
+                        
+                        // Slow down when getting close to target
+                        const speed = distToTarget > 50 ? 100 : 50;
+                        
+                        unit.body.setVelocity(
+                            Math.cos(angle) * speed,
+                            Math.sin(angle) * speed
+                        );
+                    } else {
+                        // Come to a complete stop
+                        unit.body.setVelocity(0, 0);
+                        // Add some drag to prevent sliding
+                        unit.body.setDrag(0.95);
+                    }
+                }
             }
         });
     }
     
-    // Update selection circles and handle combat
-    playerUnits.getChildren().forEach(unit => {
-        if (!unit || !unit.active || !unit.selectionCircle) return;
-        
-        unit.selectionCircle.setPosition(unit.x, unit.y);
-        
-        // Handle attack-move behavior
-        if (unit.isAttackMoving) {
-            let nearestEnemy = null;
-            let nearestDistance = unit.attackMoveRange;
-            
-            enemyUnits.getChildren().forEach(enemy => {
-                if (!enemy || !enemy.active) return;
-                
-                const distance = Phaser.Math.Distance.Between(
-                    unit.x, unit.y,
-                    enemy.x, enemy.y
-                );
-                
-                if (distance < nearestDistance) {
-                    nearestDistance = distance;
-                    nearestEnemy = enemy;
-                }
-            });
-            
-            if (nearestEnemy && selectedUnits.length > 0) {
-                const currentSquadCenter = getGroupCenter(selectedUnits);
-                const distFromCenter = Phaser.Math.Distance.Between(
-                    unit.x, unit.y,
-                    currentSquadCenter.x, currentSquadCenter.y
-                );
-                
-                const angleToEnemy = Phaser.Math.Angle.Between(
-                    unit.x, unit.y,
-                    nearestEnemy.x, nearestEnemy.y
-                );
-                
-                const angleToCenter = Phaser.Math.Angle.Between(
-                    unit.x, unit.y,
-                    currentSquadCenter.x, currentSquadCenter.y
-                );
-                
-                // Stronger squad cohesion during combat
-                const maxCombatSpread = 40; // Even tighter formation in combat
-                const cohesionStrength = Math.min((distFromCenter - maxCombatSpread) / 30, 1);
-                const blendedAngle = Phaser.Math.Angle.Wrap(
-                    angleToEnemy * (1 - cohesionStrength) + angleToCenter * cohesionStrength
-                );
-                
-                const speed = 100;
-                unit.body.setVelocity(
-                    Math.cos(blendedAngle) * speed,
-                    Math.sin(blendedAngle) * speed
-                );
-            }
-        }
-    });
-    
-    // Enemy squad behavior
+    // Enemy behavior
     if (enemyUnits.getChildren().length > 0) {
         const enemySquadCenter = getGroupCenter(enemyUnits.getChildren());
-        const maxEnemySpread = 60; // Slightly looser than player units
         
         enemyUnits.getChildren().forEach(enemyUnit => {
             if (!enemyUnit || !enemyUnit.active) return;
             
+            // Find nearest player unit
             let nearestPlayerUnit = null;
             let nearestDistance = Infinity;
             
             playerUnits.getChildren().forEach(playerUnit => {
                 if (!playerUnit || !playerUnit.active) return;
-                
                 const distance = Phaser.Math.Distance.Between(
                     enemyUnit.x, enemyUnit.y,
                     playerUnit.x, playerUnit.y
                 );
-                
                 if (distance < nearestDistance) {
                     nearestDistance = distance;
                     nearestPlayerUnit = playerUnit;
                 }
             });
             
-            if (nearestPlayerUnit) {
-                // Calculate distances and angles
-                const distToSquadCenter = Phaser.Math.Distance.Between(
-                    enemyUnit.x, enemyUnit.y,
-                    enemySquadCenter.x, enemySquadCenter.y
-                );
-                
+            if (nearestPlayerUnit && nearestDistance > 40) {
+                // Move toward nearest player while staying near squad
                 const angleToTarget = Phaser.Math.Angle.Between(
                     enemyUnit.x, enemyUnit.y,
                     nearestPlayerUnit.x, nearestPlayerUnit.y
                 );
                 
-                const angleToSquadCenter = Phaser.Math.Angle.Between(
-                    enemyUnit.x, enemyUnit.y,
-                    enemySquadCenter.x, enemySquadCenter.y
+                enemyUnit.body.setVelocity(
+                    Math.cos(angleToTarget) * 50,
+                    Math.sin(angleToTarget) * 50
                 );
-                
-                // Calculate cohesion strength based on distance from squad center
-                const cohesionStrength = Math.min((distToSquadCenter - maxEnemySpread) / 30, 1);
-                
-                // Blend between target and squad center
-                let finalAngle = angleToTarget;
-                let speed = 50; // Base enemy speed
-                
-                if (distToSquadCenter > maxEnemySpread) {
-                    // Strong pull toward squad center when too far
-                    finalAngle = Phaser.Math.Angle.Wrap(
-                        angleToTarget * (1 - cohesionStrength) + 
-                        angleToSquadCenter * cohesionStrength
-                    );
-                    // Speed up to catch up with squad
-                    speed = 50 + (cohesionStrength * 30);
-                }
-                
-                // Only move if not too close to target
-                const distToTarget = Phaser.Math.Distance.Between(
-                    enemyUnit.x, enemyUnit.y,
-                    nearestPlayerUnit.x, nearestPlayerUnit.y
-                );
-                
-                if (distToTarget > 40) { // Keep some distance from target
-                    enemyUnit.body.setVelocity(
-                        Math.cos(finalAngle) * speed,
-                        Math.sin(finalAngle) * speed
-                    );
-                } else {
-                    // If close to target, just stop
-                    enemyUnit.body.setVelocity(0, 0);
-                }
             } else {
-                // If no target, move toward squad center if too far
-                const distToSquadCenter = Phaser.Math.Distance.Between(
-                    enemyUnit.x, enemyUnit.y,
-                    enemySquadCenter.x, enemySquadCenter.y
-                );
-                
-                if (distToSquadCenter > maxEnemySpread) {
-                    const angleToCenter = Phaser.Math.Angle.Between(
-                        enemyUnit.x, enemyUnit.y,
-                        enemySquadCenter.x, enemySquadCenter.y
-                    );
-                    const speed = 50;
-                    enemyUnit.body.setVelocity(
-                        Math.cos(angleToCenter) * speed,
-                        Math.sin(angleToCenter) * speed
-                    );
-                } else {
-                    enemyUnit.body.setVelocity(0, 0);
-                }
+                enemyUnit.body.setVelocity(0, 0);
             }
         });
     }
