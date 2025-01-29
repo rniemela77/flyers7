@@ -29,6 +29,12 @@ let currentSquad = [];
 let squadTargetX = null;
 let squadTargetY = null;
 let isSquadAttackMoving = false;
+let playerSquads = [];
+let selectedSquadIndex = -1;
+let activeSquadTargets = [
+    { x: null, y: null, isAttackMoving: false },
+    { x: null, y: null, isAttackMoving: false }
+];
 
 function preload() {
     // We'll use simple shapes for now, so no assets needed
@@ -57,8 +63,12 @@ function create() {
         dragY: 0.9
     });
     
-    // Spawn initial units
-    spawnUnits(this, playerUnits, 5, 100, 300, 0x00ff00);
+    // Create two player squads
+    const squad1 = spawnSquad(this, playerUnits, 5, 100, 100, 0x00ff00);
+    const squad2 = spawnSquad(this, playerUnits, 5, 100, 400, 0x00ff00);
+    playerSquads = [squad1, squad2];
+    
+    // Spawn enemy squad
     spawnUnits(this, enemyUnits, 5, 700, 300, 0xff0000);
     
     // Store scene reference for combat handling
@@ -76,37 +86,38 @@ function create() {
     // Input handling for drag and tap
     this.input.on('pointerdown', (pointer) => {
         // Check if we clicked on a unit
-        const clickedUnits = getUnitsAtPosition(playerUnits, pointer.x, pointer.y, 50);
-        
-        if (clickedUnits.length > 0) {
-            // Select the squad
-            clearSelection();
-            const clickedCenter = getGroupCenter(clickedUnits);
-            
-            // Select all units in squad range
-            const squadRadius = 150;
-            playerUnits.getChildren().forEach(unit => {
-                if (!unit || !unit.active || !unit.body) return;
-                
-                const distanceToCenter = Phaser.Math.Distance.Between(
+        playerSquads.forEach((squad, index) => {
+            const clickedUnits = squad.filter(unit => {
+                if (!unit || !unit.active || !unit.body) return false;
+                const distance = Phaser.Math.Distance.Between(
                     unit.x, unit.y,
-                    clickedCenter.x, clickedCenter.y
+                    pointer.x, pointer.y
                 );
-                if (distanceToCenter <= squadRadius) {
-                    selectUnit(unit);
-                }
+                return distance <= 50;
             });
             
-            updateGroupSelectionRect();
-            
-            // Start drag if we clicked on a selected squad
-            if (selectedUnits.length > 0) {
+            if (clickedUnits.length > 0) {
+                // Select this squad
+                clearSelection();
+                selectedSquadIndex = index;
+                currentSquad = squad;
+                squad.forEach(unit => {
+                    if (unit && unit.active) {
+                        selectUnit(unit);
+                    }
+                });
+                updateGroupSelectionRect();
+                
+                // Start drag if we clicked on the selected squad
                 this.dragStart = { x: pointer.x, y: pointer.y };
                 this.isDragging = true;
             }
-        } else {
-            // Clicked empty space - deselect
+        });
+        
+        // If we didn't click any squad, deselect
+        if (selectedSquadIndex === -1) {
             clearSelection();
+            currentSquad = [];
         }
     });
     
@@ -322,10 +333,10 @@ function clearSelection() {
     selectedUnits.forEach(unit => {
         if (unit && unit.active && unit.selectionCircle) {
             unit.selectionCircle.setAlpha(0);
-            // Don't stop movement or attack-move when deselecting
         }
     });
     selectedUnits = [];
+    selectedSquadIndex = -1;
     groupSelectionRect.clear();
 }
 
@@ -351,18 +362,22 @@ function getFormationOffset(index, totalUnits) {
 }
 
 function moveSelectedUnits(targetX, targetY, isAttackMove = false) {
-    // Filter out any destroyed units first
-    selectedUnits = selectedUnits.filter(unit => unit && unit.active && unit.body);
+    if (selectedSquadIndex === -1 || !playerSquads[selectedSquadIndex]) return;
     
-    if (selectedUnits.length === 0) return;
+    // Filter out any destroyed units from the current squad
+    playerSquads[selectedSquadIndex] = playerSquads[selectedSquadIndex].filter(
+        unit => unit && unit.active && unit.body
+    );
+    currentSquad = playerSquads[selectedSquadIndex];
     
-    // Set the current squad to be these units
-    currentSquad = [...selectedUnits];
+    if (currentSquad.length === 0) return;
     
-    // Store squad-wide target and state
-    squadTargetX = targetX;
-    squadTargetY = targetY;
-    isSquadAttackMoving = isAttackMove;
+    // Store squad-wide target and state for the specific squad
+    activeSquadTargets[selectedSquadIndex] = {
+        x: targetX,
+        y: targetY,
+        isAttackMoving: isAttackMove
+    };
     
     // Assign formation positions
     currentSquad.forEach((unit, index) => {
@@ -492,7 +507,9 @@ function separateUnits(unit1, unit2) {
 
 function update() {
     // Clean up any destroyed units
-    currentSquad = currentSquad.filter(unit => unit && unit.active);
+    playerSquads = playerSquads.map(squad => 
+        squad.filter(unit => unit && unit.active)
+    );
     selectedUnits = selectedUnits.filter(unit => unit && unit.active);
     
     // Update selection rectangle
@@ -500,11 +517,14 @@ function update() {
         updateGroupSelectionRect();
     }
     
-    // Update squad movement
-    if (currentSquad.length > 0 && squadTargetX !== null && squadTargetY !== null) {
-        const squadCenter = getGroupCenter(currentSquad);
+    // Update all squads
+    playerSquads.forEach((squad, squadIndex) => {
+        const squadTarget = activeSquadTargets[squadIndex];
+        if (!squad.length || !squadTarget.x || !squadTarget.y) return;
         
-        currentSquad.forEach(unit => {
+        const squadCenter = getGroupCenter(squad);
+        
+        squad.forEach(unit => {
             if (!unit || !unit.active || !unit.body) return;
             
             // Update selection circle
@@ -512,7 +532,7 @@ function update() {
                 unit.selectionCircle.setPosition(unit.x, unit.y);
             }
             
-            if (isSquadAttackMoving) {
+            if (squadTarget.isAttackMoving) {
                 // Check for nearby enemies
                 let nearestEnemy = null;
                 let nearestDistance = unit.attackMoveRange;
@@ -540,8 +560,8 @@ function update() {
                     );
                 } else {
                     // Move to formation position
-                    const formationX = squadTargetX + unit.formationOffset.x;
-                    const formationY = squadTargetY + unit.formationOffset.y;
+                    const formationX = squadTarget.x + unit.formationOffset.x;
+                    const formationY = squadTarget.y + unit.formationOffset.y;
                     
                     const distToTarget = Phaser.Math.Distance.Between(
                         unit.x, unit.y,
@@ -549,7 +569,7 @@ function update() {
                     );
                     
                     // Increase stopping distance to prevent jiggling
-                    if (distToTarget > 20) { // Increased from 5
+                    if (distToTarget > 20) {
                         const angle = Phaser.Math.Angle.Between(
                             unit.x, unit.y,
                             formationX, formationY
@@ -571,7 +591,7 @@ function update() {
                 }
             }
         });
-    }
+    });
     
     // Enemy behavior
     if (enemyUnits.getChildren().length > 0) {
@@ -612,5 +632,52 @@ function update() {
             }
         });
     }
+}
+
+function spawnSquad(scene, group, count, x, y, color) {
+    const squad = [];
+    for (let i = 0; i < count; i++) {
+        const unit = scene.add.rectangle(
+            x + Phaser.Math.Between(-50, 50),
+            y + Phaser.Math.Between(-50, 50),
+            20,
+            20,
+            color
+        );
+        
+        scene.physics.add.existing(unit);
+        
+        // Configure physics body
+        unit.body.setCollideWorldBounds(true);
+        unit.body.setBounce(0.1);
+        unit.body.setMass(1);
+        unit.body.setFriction(0.9);
+        unit.body.setDrag(0.9);
+        
+        // Set a circular body for better unit movement
+        const bodyRadius = 12;
+        unit.body.setCircle(bodyRadius, 
+            (unit.width - bodyRadius * 2) / 2, 
+            (unit.height - bodyRadius * 2) / 2
+        );
+        
+        // Add custom properties
+        unit.health = 100;
+        unit.damage = 10;
+        unit.attackRange = 50;
+        unit.lastAttack = 0;
+        unit.attackCooldown = 1000;
+        unit.isAttackMoving = false;
+        unit.targetX = null;
+        unit.targetY = null;
+        unit.attackMoveRange = 200;
+        
+        // Add selection indicator (initially invisible)
+        unit.selectionCircle = scene.add.circle(unit.x, unit.y, 15, 0xffff00, 0);
+        
+        group.add(unit);
+        squad.push(unit);
+    }
+    return squad;
 }
   
