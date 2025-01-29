@@ -77,7 +77,16 @@ function create() {
     // Enable collisions between units with some separation
     this.physics.add.collider(playerUnits, playerUnits, separateUnits);
     this.physics.add.collider(enemyUnits, enemyUnits, separateUnits);
-    this.physics.add.collider(playerUnits, enemyUnits, handleCombat.bind(this));
+    
+    // Only handle melee combat on collision
+    this.physics.add.collider(playerUnits, enemyUnits, (playerUnit, enemyUnit) => {
+        // Only process melee combat on collision
+        if (!playerUnit.isRanged && !enemyUnit.isRanged) {
+            handleCombat.call(this, playerUnit, enemyUnit);
+        }
+        // Always separate units to prevent stacking
+        separateUnits(playerUnit, enemyUnit);
+    });
     
     // Track drag state
     this.dragStart = null;
@@ -422,21 +431,38 @@ function handleCombat(playerUnit, enemyUnit) {
     
     const currentTime = game.getTime();
     
-    // Player unit attacks enemy
-    if (currentTime - playerUnit.lastAttack >= playerUnit.attackCooldown) {
+    // Calculate distance between units
+    const distance = Phaser.Math.Distance.Between(
+        playerUnit.x, playerUnit.y,
+        enemyUnit.x, enemyUnit.y
+    );
+    
+    // Player unit attacks enemy if in range (no collision check needed for ranged units)
+    if ((playerUnit.isRanged || distance <= playerUnit.attackRange) && 
+        currentTime - playerUnit.lastAttack >= playerUnit.attackCooldown) {
         enemyUnit.health -= playerUnit.damage;
         playerUnit.lastAttack = currentTime;
         
         // Visual feedback for player's attack
         this.combatEffects.clear();
-        this.combatEffects.lineStyle(2, 0xffff00);
-        this.combatEffects.strokeCircle(enemyUnit.x, enemyUnit.y, 10);
+        if (playerUnit.isRanged) {
+            // Draw projectile line for ranged attack
+            this.combatEffects.lineStyle(2, 0x00ffff);
+            this.combatEffects.beginPath();
+            this.combatEffects.moveTo(playerUnit.x, playerUnit.y);
+            this.combatEffects.lineTo(enemyUnit.x, enemyUnit.y);
+            this.combatEffects.strokePath();
+        } else {
+            // Melee attack circle
+            this.combatEffects.lineStyle(2, 0xffff00);
+            this.combatEffects.strokeCircle(enemyUnit.x, enemyUnit.y, 10);
+        }
         
         // Fade out effect
         this.tweens.add({
             targets: this.combatEffects,
             alpha: 0,
-            duration: 100,
+            duration: playerUnit.isRanged ? 200 : 100,
             onComplete: () => {
                 this.combatEffects.clear();
                 this.combatEffects.alpha = 1;
@@ -444,21 +470,32 @@ function handleCombat(playerUnit, enemyUnit) {
         });
     }
     
-    // Enemy unit attacks back
-    if (currentTime - enemyUnit.lastAttack >= enemyUnit.attackCooldown) {
+    // Enemy unit attacks back if in range (no collision check needed for ranged units)
+    if ((enemyUnit.isRanged || distance <= enemyUnit.attackRange) && 
+        currentTime - enemyUnit.lastAttack >= enemyUnit.attackCooldown) {
         playerUnit.health -= enemyUnit.damage;
         enemyUnit.lastAttack = currentTime;
         
         // Visual feedback for enemy's attack
         this.combatEffects.clear();
-        this.combatEffects.lineStyle(2, 0xffffff);  // White circle for enemy attacks
-        this.combatEffects.strokeCircle(playerUnit.x, playerUnit.y, 10);
+        if (enemyUnit.isRanged) {
+            // Draw projectile line for ranged attack
+            this.combatEffects.lineStyle(2, 0xff00ff);  // Magenta for enemy ranged attacks
+            this.combatEffects.beginPath();
+            this.combatEffects.moveTo(enemyUnit.x, enemyUnit.y);
+            this.combatEffects.lineTo(playerUnit.x, playerUnit.y);
+            this.combatEffects.strokePath();
+        } else {
+            // Melee attack circle
+            this.combatEffects.lineStyle(2, 0xffffff);
+            this.combatEffects.strokeCircle(playerUnit.x, playerUnit.y, 10);
+        }
         
         // Fade out effect
         this.tweens.add({
             targets: this.combatEffects,
             alpha: 0,
-            duration: 100,
+            duration: enemyUnit.isRanged ? 200 : 100,
             onComplete: () => {
                 this.combatEffects.clear();
                 this.combatEffects.alpha = 1;
@@ -468,7 +505,6 @@ function handleCombat(playerUnit, enemyUnit) {
     
     // Check for unit death
     if (enemyUnit.health <= 0) {
-        // Remove from selection if it was selected
         const enemyIndex = selectedUnits.indexOf(enemyUnit);
         if (enemyIndex > -1) {
             selectedUnits.splice(enemyIndex, 1);
@@ -479,7 +515,6 @@ function handleCombat(playerUnit, enemyUnit) {
         enemyUnit.destroy();
     }
     if (playerUnit.health <= 0) {
-        // Remove from selection if it was selected
         const playerIndex = selectedUnits.indexOf(playerUnit);
         if (playerIndex > -1) {
             selectedUnits.splice(playerIndex, 1);
@@ -496,6 +531,11 @@ function handleCombat(playerUnit, enemyUnit) {
 
 // Add a separation function to help prevent unit stacking
 function separateUnits(unit1, unit2) {
+    // Check if both units and their bodies are valid
+    if (!unit1 || !unit1.active || !unit1.body || !unit2 || !unit2.active || !unit2.body) {
+        return;
+    }
+    
     const angle = Phaser.Math.Angle.Between(unit1.x, unit1.y, unit2.x, unit2.y);
     const pushForce = 30;
     
@@ -516,6 +556,47 @@ function update() {
     if (selectedUnits.length > 0) {
         updateGroupSelectionRect();
     }
+    
+    // Check for ranged combat for all units
+    playerUnits.getChildren().forEach(playerUnit => {
+        if (!playerUnit || !playerUnit.active) return;
+        
+        // Only check ranged combat for ranged units
+        if (playerUnit.isRanged) {
+            enemyUnits.getChildren().forEach(enemyUnit => {
+                if (!enemyUnit || !enemyUnit.active) return;
+                
+                const distance = Phaser.Math.Distance.Between(
+                    playerUnit.x, playerUnit.y,
+                    enemyUnit.x, enemyUnit.y
+                );
+                
+                if (distance <= playerUnit.attackRange) {
+                    handleCombat.call(this, playerUnit, enemyUnit);
+                }
+            });
+        }
+    });
+    
+    // Do the same for enemy ranged units
+    enemyUnits.getChildren().forEach(enemyUnit => {
+        if (!enemyUnit || !enemyUnit.active) return;
+        
+        if (enemyUnit.isRanged) {
+            playerUnits.getChildren().forEach(playerUnit => {
+                if (!playerUnit || !playerUnit.active) return;
+                
+                const distance = Phaser.Math.Distance.Between(
+                    enemyUnit.x, enemyUnit.y,
+                    playerUnit.x, playerUnit.y
+                );
+                
+                if (distance <= enemyUnit.attackRange) {
+                    handleCombat.call(this, playerUnit, enemyUnit);
+                }
+            });
+        }
+    });
     
     // Update all squads
     playerSquads.forEach((squad, squadIndex) => {
@@ -549,15 +630,51 @@ function update() {
                 });
                 
                 if (nearestEnemy) {
-                    // Move to attack enemy
-                    const angle = Phaser.Math.Angle.Between(
+                    // Calculate distance to enemy
+                    const distanceToEnemy = Phaser.Math.Distance.Between(
                         unit.x, unit.y,
                         nearestEnemy.x, nearestEnemy.y
                     );
-                    unit.body.setVelocity(
-                        Math.cos(angle) * 100,
-                        Math.sin(angle) * 100
-                    );
+                    
+                    if (unit.isRanged) {
+                        // Ranged units try to maintain optimal range
+                        const optimalRange = unit.attackRange * 0.8; // Stay at 80% of max range
+                        
+                        if (distanceToEnemy < optimalRange - 20) {
+                            // Too close, back away
+                            const angle = Phaser.Math.Angle.Between(
+                                nearestEnemy.x, nearestEnemy.y,
+                                unit.x, unit.y
+                            );
+                            unit.body.setVelocity(
+                                Math.cos(angle) * 100,
+                                Math.sin(angle) * 100
+                            );
+                        } else if (distanceToEnemy > optimalRange + 20) {
+                            // Too far, move closer
+                            const angle = Phaser.Math.Angle.Between(
+                                unit.x, unit.y,
+                                nearestEnemy.x, nearestEnemy.y
+                            );
+                            unit.body.setVelocity(
+                                Math.cos(angle) * 100,
+                                Math.sin(angle) * 100
+                            );
+                        } else {
+                            // At good range, stop moving
+                            unit.body.setVelocity(0, 0);
+                        }
+                    } else {
+                        // Melee units behave as before
+                        const angle = Phaser.Math.Angle.Between(
+                            unit.x, unit.y,
+                            nearestEnemy.x, nearestEnemy.y
+                        );
+                        unit.body.setVelocity(
+                            Math.cos(angle) * 100,
+                            Math.sin(angle) * 100
+                        );
+                    }
                 } else {
                     // Move to formation position
                     const formationX = squadTarget.x + unit.formationOffset.x;
@@ -636,13 +753,19 @@ function update() {
 
 function spawnSquad(scene, group, count, x, y, color) {
     const squad = [];
+    // Determine number of ranged units (1-3)
+    const numRangedUnits = Phaser.Math.Between(1, Math.min(3, count));
+    
     for (let i = 0; i < count; i++) {
+        const isRanged = i < numRangedUnits;
+        const unitColor = isRanged ? 0x00ffff : color; // Cyan for ranged units
+        
         const unit = scene.add.rectangle(
             x + Phaser.Math.Between(-50, 50),
             y + Phaser.Math.Between(-50, 50),
             20,
             20,
-            color
+            unitColor
         );
         
         scene.physics.add.existing(unit);
@@ -661,16 +784,17 @@ function spawnSquad(scene, group, count, x, y, color) {
             (unit.height - bodyRadius * 2) / 2
         );
         
-        // Add custom properties
-        unit.health = 100;
-        unit.damage = 10;
-        unit.attackRange = 50;
+        // Add custom properties with different values for ranged units
+        unit.isRanged = isRanged;
+        unit.health = isRanged ? 70 : 100; // Ranged units have less health
+        unit.damage = isRanged ? 15 : 10; // Ranged units do more damage
+        unit.attackRange = isRanged ? 200 : 50; // Reduced from 300 to 200 for ranged units
         unit.lastAttack = 0;
-        unit.attackCooldown = 1000;
+        unit.attackCooldown = isRanged ? 1500 : 1000; // Ranged units attack slower
         unit.isAttackMoving = false;
         unit.targetX = null;
         unit.targetY = null;
-        unit.attackMoveRange = 200;
+        unit.attackMoveRange = isRanged ? 250 : 200; // Reduced from 400 to 250 for ranged units
         
         // Add selection indicator (initially invisible)
         unit.selectionCircle = scene.add.circle(unit.x, unit.y, 15, 0xffff00, 0);
