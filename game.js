@@ -5,7 +5,7 @@ const config = {
     physics: {
         default: 'arcade',
         arcade: {
-            debug: false
+            debug: true
         }
     },
     scene: {
@@ -60,6 +60,34 @@ function create() {
 
     // Initialize previous pointer position
     previousPointerX = null;
+
+    // Calculate circle size as 25% of the map's width or height
+    const circleSize = Math.min(config.width, config.height) * 0.25;
+
+    // Calculate the position in front of the motorcycle
+    const offsetDistance = 140; // Distance in front of the motorcycle
+    const angleInRadians = Phaser.Math.DegToRad(motorcycle.angle);
+    const frontX = motorcycle.x + Math.cos(angleInRadians) * offsetDistance;
+    const frontY = motorcycle.y + Math.sin(angleInRadians) * offsetDistance;
+
+    // Draw the circle
+    circleGraphics.fillStyle(0x333333, 1); // Dark grey color
+    circleGraphics.fillCircle(frontX, frontY, circleSize / 2);
+
+    // Enable physics for the motorcycle and set its body to a circle
+    this.physics.add.existing(motorcycle);
+    motorcycle.body.setCircle(motorcycle.width / 2);
+
+    // Create a circle with physics at the calculated position
+    const circle = this.add.circle(frontX, frontY, circleSize / 2, 0x333333);
+    this.physics.add.existing(circle);
+    circle.body.setCircle(circleSize / 2);
+
+    // Add collision detection between the motorcycle and the circle
+    this.physics.add.collider(motorcycle, circle, () => {
+        console.log('Collision detected!');
+        // Handle collision logic here
+    });
 }
 
 function drawGrid(graphics) {
