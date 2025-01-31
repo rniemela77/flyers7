@@ -88,6 +88,22 @@ function create() {
         console.log('Collision detected!');
         // Handle collision logic here
     });
+
+    // Create a graphics object for the blue circle and rectangle
+    const blueGraphics = this.add.graphics();
+
+    // Define the size of the circle and rectangle
+    const circleRadius = 25;
+    const rectangleWidth = 100;
+    const rectangleHeight = circleRadius * 2;
+
+    // Draw the blue circle
+    blueGraphics.fillStyle(0x0000FF, 1); // Blue color
+    blueGraphics.fillCircle(100, 100, circleRadius);
+
+    // Draw the rectangle with an even smaller gap from the circle
+    const gap = 1; // Further reduce the gap between the circle and rectangle
+    blueGraphics.fillRect(75 + circleRadius + gap, 100 - circleRadius, rectangleWidth, rectangleHeight);
 }
 
 function drawGrid(graphics) {
