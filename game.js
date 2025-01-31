@@ -64,21 +64,21 @@ function create() {
 
 function drawGrid(graphics) {
     const gridSize = 50;
-    const width = config.width;
-    const height = config.height;
+    const gridWidth = config.width * 2; // Double the width
+    const gridHeight = config.height * 2; // Double the height
 
     graphics.lineStyle(1, 0xCCCCCC, 0.5);
 
     // Draw vertical lines
-    for (let x = 0; x <= width; x += gridSize) {
-        graphics.moveTo(x, 0);
-        graphics.lineTo(x, height);
+    for (let x = -gridWidth / 2; x <= gridWidth / 2; x += gridSize) {
+        graphics.moveTo(x, -gridHeight / 2);
+        graphics.lineTo(x, gridHeight / 2);
     }
 
     // Draw horizontal lines
-    for (let y = 0; y <= height; y += gridSize) {
-        graphics.moveTo(0, y);
-        graphics.lineTo(width, y);
+    for (let y = -gridHeight / 2; y <= gridHeight / 2; y += gridSize) {
+        graphics.moveTo(-gridWidth / 2, y);
+        graphics.lineTo(gridWidth / 2, y);
     }
 
     graphics.strokePath();
