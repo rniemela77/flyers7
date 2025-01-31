@@ -25,6 +25,8 @@ let steeringSensitivity = 0.1;
 
 const rotationSpeed = 0.05;
 let circleGraphics;
+let trailGraphics;
+let trailPoints = [];
 
 function preload() {
     // Load motorcycle image
@@ -42,6 +44,9 @@ function create() {
 
     // Create graphics for circles
     circleGraphics = this.add.graphics();
+
+    // Create graphics for trail
+    trailGraphics = this.add.graphics();
 
     // Center the grid on the motorcycle
     gridGraphics.x = motorcycle.x - config.width / 2;
@@ -109,12 +114,19 @@ function update() {
     // Rotate the camera to match the motorcycle's angle in the opposite direction
     this.cameras.main.rotation = -Phaser.Math.DegToRad(motorcycle.angle) - Math.PI / 2;
 
-    // Draw a yellow circle around the motorcycle if the pointer is down
-    circleGraphics.clear();
-    if (this.input.activePointer.isDown) {
-        circleGraphics.fillStyle(0xFFFF00, 1);
-        const circleX = motorcycle.x;
-        const circleY = motorcycle.y - 50; // Position the circle above the motorcycle
-        circleGraphics.fillCircle(circleX, circleY, 10);
+    // Add current position to trail points
+    trailPoints.push({ x: motorcycle.x, y: motorcycle.y });
+    if (trailPoints.length > 50) {
+        trailPoints.shift(); // Limit the number of points in the trail
     }
+
+    // Draw the trail
+    trailGraphics.clear();
+    trailGraphics.lineStyle(2, 0xFFFF00, 1);
+    trailGraphics.beginPath();
+    for (let i = 0; i < trailPoints.length - 1; i++) {
+        trailGraphics.moveTo(trailPoints[i].x, trailPoints[i].y);
+        trailGraphics.lineTo(trailPoints[i + 1].x, trailPoints[i + 1].y);
+    }
+    trailGraphics.strokePath();
 }
