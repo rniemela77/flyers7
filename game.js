@@ -57,9 +57,10 @@ let enemyHealth = 100;
 let isEnemyMoving = false;
 let isCharging = false;
 let chargeStartTime = 0;
-let chargeThreshold = 650; // Increased from 500ms to 650ms
+let chargeThreshold = 900; // Time to reach max charge (300ms per level)
 let activePointers = {};  // Track multiple active pointers
 let chargeIndicator; // New: Graphics object for charge indicator
+let activeShootingPointer = null; // Track the active shooting pointer
 
 function preload() {
     // Remove the bullet image preload since we'll create it with graphics
@@ -130,35 +131,16 @@ function create() {
     // Create reticle at enemy position
     reticle = this.add.sprite(enemy.x, enemy.y, 'reticle');
 
-    // Create bullet texture using graphics
-    const bulletGraphics = this.add.graphics();
-    bulletGraphics.fillStyle(0xFFFFFF);  // White fill
-    bulletGraphics.beginPath();
-    bulletGraphics.arc(4, 4, 4, 0, Math.PI * 2);  // Draw circle at (4,4) with radius 4
-    bulletGraphics.closePath();
-    bulletGraphics.fill();
-    
-    const bulletTexture = bulletGraphics.generateTexture('bullet', 8, 8);
-    bulletGraphics.destroy();
-
-    // Create charged bullet texture using graphics
-    const chargedBulletGraphics = this.add.graphics();
-    chargedBulletGraphics.fillStyle(0xFFFF00);  // Yellow fill for charged bullets
-    chargedBulletGraphics.beginPath();
-    chargedBulletGraphics.arc(8, 8, 8, 0, Math.PI * 2);  // Larger circle at (8,8) with radius 8
-    chargedBulletGraphics.closePath();
-    chargedBulletGraphics.fill();
-    
-    const chargedBulletTexture = chargedBulletGraphics.generateTexture('chargedBullet', 16, 16);
-    chargedBulletGraphics.destroy();
-
     // Create bullet group
     bullets = this.physics.add.group();
 
+    // Create all bullet textures once
+    createBulletTextures.call(this);
+
     // Create charge indicator (initially invisible)
     chargeIndicator = this.add.graphics();
-    chargeIndicator.setDepth(1); // Ensure it renders above other elements
-    updateChargeIndicator.call(this, 0); // Initialize with 0 progress
+    chargeIndicator.setDepth(1);
+    updateChargeIndicator.call(this, 0);
 
     // Setup input handlers
     this.input.on('pointerdown', (pointer) => {
@@ -177,10 +159,10 @@ function create() {
             activePointers[pointer.id].isJoystick = true;
         }
         // Handle bottom left quadrant (shooting)
-        else {
+        else if (!activeShootingPointer) { // Only allow one shooting pointer at a time
+            activeShootingPointer = pointer.id;
             activePointers[pointer.id].isCharging = true;
             activePointers[pointer.id].chargeStartTime = this.time.now;
-            activePointers[pointer.id].chargePosition = { x: pointer.x, y: pointer.y };
             chargeIndicator.setVisible(true);
             updateChargeIndicator.call(this, 0);
         }
@@ -212,12 +194,19 @@ function create() {
         const pointerState = activePointers[pointer.id];
 
         // Handle shooting in bottom left quadrant
-        if (pointerState.isCharging) {
-            const chargeTime = this.time.now - pointerState.chargeStartTime;
-            // Only fire charged shot if held long enough, otherwise fire normal shot
-            const isCharged = chargeTime >= chargeThreshold;
-            fireBullet.call(this, isCharged);
-            chargeIndicator.setVisible(false); // Hide charge indicator
+        if (pointerState.isCharging && pointer.id === activeShootingPointer) {
+            const holdTime = this.time.now - pointerState.chargeStartTime;
+            const isQuickTap = holdTime < 200; // If held less than 200ms, it's a quick tap
+            
+            if (isQuickTap) {
+                fireBullet.call(this, false); // Quick shot
+            } else {
+                const progress = Math.min(holdTime / chargeThreshold, 1);
+                fireBullet.call(this, true, progress); // Charged shot with current progress
+            }
+            
+            chargeIndicator.setVisible(false);
+            activeShootingPointer = null; // Clear active shooting pointer
         }
 
         // Clean up this pointer's state
@@ -237,77 +226,98 @@ function updateHealthBar() {
     );
 }
 
-function fireBullet(isCharged = false) {
+function createBulletTextures() {
+    // Create quick shot bullet texture
+    const quickBulletGraphics = this.add.graphics();
+    quickBulletGraphics.fillStyle(0xffffff, 1);
+    quickBulletGraphics.beginPath();
+    quickBulletGraphics.arc(4, 4, 4, 0, Math.PI * 2);
+    quickBulletGraphics.closePath();
+    quickBulletGraphics.fill();
+    quickBulletGraphics.generateTexture('bullet_quick', 8, 8);
+    quickBulletGraphics.destroy();
+
+    // Create charged bullet textures for each level
+    const chargedBulletProps = [
+        { key: 'bullet_charged_1', size: 12, color: 0x3498db },  // Blue, small
+        { key: 'bullet_charged_2', size: 20, color: 0x9b59b6 },  // Purple, medium
+        { key: 'bullet_charged_3', size: 32, color: 0x00ffff }   // Cyan, large
+    ];
+
+    chargedBulletProps.forEach(props => {
+        const graphics = this.add.graphics();
+        graphics.fillStyle(props.color, 1);
+        graphics.beginPath();
+        graphics.arc(props.size/2, props.size/2, props.size/2, 0, Math.PI * 2);
+        graphics.closePath();
+        graphics.fill();
+        graphics.generateTexture(props.key, props.size, props.size);
+        graphics.destroy();
+    });
+}
+
+function fireBullet(isCharged = false, chargeProgress = 0) {
     if (isCharged) {
-        // For charged shots, fire a single large bullet
-        const bullet = bullets.create(config.width / 2, config.height - 20, 'chargedBullet');
+        // Get charge level based on provided progress
+        const chargeLevel = getChargeLevel(chargeProgress);
+        
+        // Properties scale with charge level
+        const bulletProps = {
+            1: { size: 12, damage: 20, speed: 500, key: 'bullet_charged_1' },
+            2: { size: 20, damage: 35, speed: 600, key: 'bullet_charged_2' },
+            3: { size: 32, damage: 50, speed: 700, key: 'bullet_charged_3' }
+        }[chargeLevel];
+        
+        // Create and fire the bullet using pre-generated texture
+        const bullet = bullets.create(config.width / 2, config.height - 20, bulletProps.key);
         
         const angle = Phaser.Math.Angle.Between(
             bullet.x, bullet.y,
             reticle.x, reticle.y
         );
         
-        // Set bullet velocity towards reticle (charged bullets are faster)
-        const speed = 800;
-        this.physics.velocityFromRotation(angle, speed, bullet.body.velocity);
-        
-        // Rotate bullet to face direction of travel
+        this.physics.velocityFromRotation(angle, bulletProps.speed, bullet.body.velocity);
         bullet.rotation = angle;
-
-        // Add collision with enemy (charged bullets do more damage)
+        
+        // Add collision with enemy
         this.physics.add.overlap(bullet, enemy, (bullet, enemy) => {
             bullet.destroy();
-            const damage = 30;
-            enemyHealth = Math.max(0, enemyHealth - damage);
+            enemyHealth = Math.max(0, enemyHealth - bulletProps.damage);
             updateHealthBar.call(this);
         });
-
-        // Destroy bullet after 2 seconds
+        
+        // Cleanup after 2 seconds
         this.time.delayedCall(2000, () => {
             if (bullet.active) {
                 bullet.destroy();
             }
         });
     } else {
-        // For normal shots, fire three bullets in sequence
-        // Capture initial angle to reticle - this will be used for all three bullets
-        const initialAngle = Phaser.Math.Angle.Between(
-            config.width / 2, config.height - 20,
+        // Create and fire the bullet using pre-generated texture
+        const bullet = bullets.create(config.width / 2, config.height - 20, 'bullet_quick');
+        
+        const angle = Phaser.Math.Angle.Between(
+            bullet.x, bullet.y,
             reticle.x, reticle.y
         );
-
-        const fireOneBullet = (delay) => {
-            this.time.delayedCall(delay, () => {
-                const bullet = bullets.create(config.width / 2, config.height - 20, 'bullet');
-                
-                // Use the initial angle for consistent direction
-                const speed = 400;
-                this.physics.velocityFromRotation(initialAngle, speed, bullet.body.velocity);
-                
-                // Rotate bullet to face direction of travel
-                bullet.rotation = initialAngle;
-
-                // Add collision with enemy
-                this.physics.add.overlap(bullet, enemy, (bullet, enemy) => {
-                    bullet.destroy();
-                    const damage = 10;
-                    enemyHealth = Math.max(0, enemyHealth - damage);
-                    updateHealthBar.call(this);
-                });
-
-                // Destroy bullet after 2 seconds
-                this.time.delayedCall(2000, () => {
-                    if (bullet.active) {
-                        bullet.destroy();
-                    }
-                });
-            });
-        };
-
-        // Fire three bullets with a tighter delay between each (33ms ≈ 2 frames at 60fps)
-        fireOneBullet(0);    // First bullet immediately
-        fireOneBullet(60);   // Second bullet after 33ms
-        fireOneBullet(120);   // Third bullet after 66ms
+        
+        const speed = 800; // Quick bullets are fastest
+        this.physics.velocityFromRotation(angle, speed, bullet.body.velocity);
+        bullet.rotation = angle;
+        
+        // Add collision with enemy
+        this.physics.add.overlap(bullet, enemy, (bullet, enemy) => {
+            bullet.destroy();
+            enemyHealth = Math.max(0, enemyHealth - 15); // Quick shots do 15 damage
+            updateHealthBar.call(this);
+        });
+        
+        // Cleanup after 2 seconds
+        this.time.delayedCall(2000, () => {
+            if (bullet.active) {
+                bullet.destroy();
+            }
+        });
     }
 }
 
@@ -342,55 +352,92 @@ function updateChargeIndicator(progress) {
     chargeIndicator.clear();
     
     // Bar dimensions and position
-    const barWidth = config.width * 0.4;  // 40% of screen width
-    const barHeight = 20;
-    const x = (config.width - barWidth) / 2;  // Center horizontally
-    const y = config.height * 0.6;  // 60% down the screen
+    const barWidth = config.width * 0.4;
+    const barHeight = 12;  // Thinner bar
+    const x = (config.width - barWidth) / 2;
+    const y = config.height * 0.6;
+    const cornerRadius = 6;  // Rounded corners
     
-    // Draw background bar (dark grey)
-    chargeIndicator.fillStyle(0x333333, 1);
-    chargeIndicator.fillRect(x, y, barWidth, barHeight);
+    // Draw background bar (darker)
+    chargeIndicator.fillStyle(0x222222, 0.9);
+    chargeIndicator.fillRoundedRect(x, y, barWidth, barHeight, cornerRadius);
     
     if (progress > 0) {
-        // Draw progress bar
-        const fillWidth = barWidth * progress;
+        // Get charge level and determine color
+        const chargeLevel = getChargeLevel(progress);
+        let barColor;
         
-        if (progress >= 1) {
-            // Fully charged - cyan with glow
-            // Main bar
-            chargeIndicator.fillStyle(0x00ffff, 0.9);
-            chargeIndicator.fillRect(x, y, fillWidth, barHeight);
-            
-            // Glow effects
-            const pulseScale = 1 + Math.sin(this.time.now / 200) * 0.1;
-            
-            // Inner glow
-            chargeIndicator.lineStyle(4, 0x00ffff, 0.3);
-            chargeIndicator.strokeRect(x - 2, y - 2, barWidth + 4, barHeight + 4);
-            
-            // Outer glow
-            chargeIndicator.lineStyle(8, 0x00ffff, 0.2);
-            chargeIndicator.strokeRect(
-                x - 4 * pulseScale, 
-                y - 4 * pulseScale, 
-                barWidth + 8 * pulseScale, 
-                barHeight + 8 * pulseScale
+        if (progress < 0.33) {
+            // Grey to blue
+            barColor = Phaser.Display.Color.Interpolate.ColorWithColor(
+                new Phaser.Display.Color(102, 102, 102),  // #666666
+                new Phaser.Display.Color(52, 152, 219),   // #3498db
+                100,
+                Math.floor(progress * 300)
             );
-            
-            // Outermost glow
-            chargeIndicator.lineStyle(12, 0x00ffff, 0.1);
-            chargeIndicator.strokeRect(
-                x - 6 * pulseScale, 
-                y - 6 * pulseScale, 
-                barWidth + 12 * pulseScale, 
-                barHeight + 12 * pulseScale
+        } else if (progress < 0.67) {
+            // Blue to purple
+            barColor = Phaser.Display.Color.Interpolate.ColorWithColor(
+                new Phaser.Display.Color(52, 152, 219),   // #3498db
+                new Phaser.Display.Color(155, 89, 182),   // #9b59b6
+                100,
+                Math.floor((progress - 0.33) * 300)
             );
         } else {
-            // Charging - grey
-            chargeIndicator.fillStyle(0x666666, 0.9);
-            chargeIndicator.fillRect(x, y, fillWidth, barHeight);
+            // Purple to cyan
+            barColor = Phaser.Display.Color.Interpolate.ColorWithColor(
+                new Phaser.Display.Color(155, 89, 182),   // #9b59b6
+                new Phaser.Display.Color(0, 255, 255),    // #00ffff
+                100,
+                Math.floor((progress - 0.67) * 300)
+            );
+        }
+        
+        // Convert RGB color to hex
+        const hexColor = Phaser.Display.Color.GetColor(barColor.r, barColor.g, barColor.b);
+        
+        // Draw progress bar with interpolated color
+        const fillWidth = barWidth * progress;
+        chargeIndicator.fillStyle(hexColor, 1);
+        chargeIndicator.fillRoundedRect(x, y, fillWidth, barHeight, cornerRadius);
+        
+        // Get glow color based on charge level
+        const glowColor = chargeLevel === 3 ? 0x00ffff : (chargeLevel === 2 ? 0x9b59b6 : 0x3498db);
+        
+        // Add glow effect when charge level increases
+        if (chargeLevel > 0) {
+            const glowAlpha = 0.2 + Math.sin(this.time.now / 200) * 0.1;
+            
+            // Outer glow
+            chargeIndicator.lineStyle(4, glowColor, glowAlpha);
+            chargeIndicator.strokeRoundedRect(x - 2, y - 2, fillWidth + 4, barHeight + 4, cornerRadius + 2);
+        }
+        
+        // Add level markers (small dots above the bar)
+        const dotRadius = 3;
+        const dotSpacing = barWidth / 3;
+        
+        for (let i = 1; i <= 3; i++) {
+            const dotX = x + (dotSpacing * i) - (dotSpacing / 2);
+            const dotY = y - 8;
+            
+            // Filled dot if level reached, outline if not
+            if (progress >= (i / 3)) {
+                chargeIndicator.fillStyle(glowColor, 1);
+                chargeIndicator.fillCircle(dotX, dotY, dotRadius);
+            } else {
+                chargeIndicator.fillStyle(0x444444, 0.8);
+                chargeIndicator.fillCircle(dotX, dotY, dotRadius);
+            }
         }
     }
+}
+
+function getChargeLevel(progress) {
+    if (progress >= 1) return 3;
+    if (progress >= 0.67) return 2;
+    if (progress >= 0.33) return 1;
+    return 0;
 }
 
 function update() {
@@ -403,13 +450,12 @@ function update() {
     });
 
     // Update charge indicator if charging
-    Object.values(activePointers).forEach(pointer => {
-        if (pointer.isCharging) {
-            const chargeTime = this.time.now - pointer.chargeStartTime;
-            const progress = Math.min(chargeTime / chargeThreshold, 1);
-            updateChargeIndicator.call(this, progress);
-        }
-    });
+    if (activeShootingPointer !== null && activePointers[activeShootingPointer]) {
+        const pointer = activePointers[activeShootingPointer];
+        const chargeTime = this.time.now - pointer.chargeStartTime;
+        const progress = Math.min(chargeTime / chargeThreshold, 1);
+        updateChargeIndicator.call(this, progress);
+    }
 }
 
 // Helper function to determine pointer quadrant
