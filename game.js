@@ -57,7 +57,7 @@ let enemyHealth = 100;
 let isEnemyMoving = false;
 let isCharging = false;
 let chargeStartTime = 0;
-let chargeThreshold = 900; // Time to reach max charge (300ms per level)
+let chargeThreshold = 1500; // Increased from 900ms to 1500ms (500ms per level)
 let activePointers = {};  // Track multiple active pointers
 let chargeIndicator; // New: Graphics object for charge indicator
 let activeShootingPointer = null; // Track the active shooting pointer
@@ -353,84 +353,74 @@ function updateChargeIndicator(progress) {
     
     // Bar dimensions and position
     const barWidth = config.width * 0.4;
-    const barHeight = 12;  // Thinner bar
+    const barHeight = 16;
     const x = (config.width - barWidth) / 2;
     const y = config.height * 0.6;
-    const cornerRadius = 6;  // Rounded corners
+    const cornerRadius = 6;
+    const sectionWidth = barWidth / 3;
     
-    // Draw background bar (darker)
+    // Draw background bar
     chargeIndicator.fillStyle(0x222222, 0.9);
     chargeIndicator.fillRoundedRect(x, y, barWidth, barHeight, cornerRadius);
     
     if (progress > 0) {
-        // Get charge level and determine color
-        const chargeLevel = getChargeLevel(progress);
-        let barColor;
+        // Draw completed sections first
+        const completedSections = Math.floor(progress * 3);
+        const colors = [0x3498db, 0x9b59b6, 0x00ffff]; // Blue, Purple, Cyan
         
-        if (progress < 0.33) {
-            // Grey to blue
-            barColor = Phaser.Display.Color.Interpolate.ColorWithColor(
-                new Phaser.Display.Color(102, 102, 102),  // #666666
-                new Phaser.Display.Color(52, 152, 219),   // #3498db
-                100,
-                Math.floor(progress * 300)
-            );
-        } else if (progress < 0.67) {
-            // Blue to purple
-            barColor = Phaser.Display.Color.Interpolate.ColorWithColor(
-                new Phaser.Display.Color(52, 152, 219),   // #3498db
-                new Phaser.Display.Color(155, 89, 182),   // #9b59b6
-                100,
-                Math.floor((progress - 0.33) * 300)
-            );
-        } else {
-            // Purple to cyan
-            barColor = Phaser.Display.Color.Interpolate.ColorWithColor(
-                new Phaser.Display.Color(155, 89, 182),   // #9b59b6
-                new Phaser.Display.Color(0, 255, 255),    // #00ffff
-                100,
-                Math.floor((progress - 0.67) * 300)
-            );
-        }
-        
-        // Convert RGB color to hex
-        const hexColor = Phaser.Display.Color.GetColor(barColor.r, barColor.g, barColor.b);
-        
-        // Draw progress bar with interpolated color
-        const fillWidth = barWidth * progress;
-        chargeIndicator.fillStyle(hexColor, 1);
-        chargeIndicator.fillRoundedRect(x, y, fillWidth, barHeight, cornerRadius);
-        
-        // Get glow color based on charge level
-        const glowColor = chargeLevel === 3 ? 0x00ffff : (chargeLevel === 2 ? 0x9b59b6 : 0x3498db);
-        
-        // Add glow effect when charge level increases
-        if (chargeLevel > 0) {
+        // Draw fully completed sections
+        for (let i = 0; i < completedSections; i++) {
+            chargeIndicator.fillStyle(colors[i], 0.9);
+            const sectionX = x + (sectionWidth * i);
+            
+            // First section: round left corners
+            if (i === 0) {
+                chargeIndicator.fillRoundedRect(sectionX, y, sectionWidth, barHeight, { tl: cornerRadius, bl: cornerRadius, tr: 0, br: 0 });
+            }
+            // Last section: round right corners
+            else if (i === 2) {
+                chargeIndicator.fillRoundedRect(sectionX, y, sectionWidth, barHeight, { tl: 0, bl: 0, tr: cornerRadius, br: cornerRadius });
+            }
+            // Middle section: no rounded corners
+            else {
+                chargeIndicator.fillRect(sectionX, y, sectionWidth, barHeight);
+            }
+            
+            // Add glow to completed section
             const glowAlpha = 0.2 + Math.sin(this.time.now / 200) * 0.1;
-            
-            // Outer glow
-            chargeIndicator.lineStyle(4, glowColor, glowAlpha);
-            chargeIndicator.strokeRoundedRect(x - 2, y - 2, fillWidth + 4, barHeight + 4, cornerRadius + 2);
+            chargeIndicator.lineStyle(4, colors[i], glowAlpha);
+            if (i === 0) {
+                chargeIndicator.strokeRoundedRect(sectionX - 2, y - 2, sectionWidth + 2, barHeight + 4, 
+                    { tl: cornerRadius + 2, bl: cornerRadius + 2, tr: 0, br: 0 });
+            } else if (i === 2) {
+                chargeIndicator.strokeRoundedRect(sectionX, y - 2, sectionWidth + 2, barHeight + 4, 
+                    { tl: 0, bl: 0, tr: cornerRadius + 2, br: cornerRadius + 2 });
+            } else {
+                chargeIndicator.strokeRect(sectionX, y - 2, sectionWidth, barHeight + 4);
+            }
         }
         
-        // Add level markers (small dots above the bar)
-        const dotRadius = 3;
-        const dotSpacing = barWidth / 3;
-        
-        for (let i = 1; i <= 3; i++) {
-            const dotX = x + (dotSpacing * i) - (dotSpacing / 2);
-            const dotY = y - 8;
-            
-            // Filled dot if level reached, outline if not
-            if (progress >= (i / 3)) {
-                chargeIndicator.fillStyle(glowColor, 1);
-                chargeIndicator.fillCircle(dotX, dotY, dotRadius);
-            } else {
-                chargeIndicator.fillStyle(0x444444, 0.8);
-                chargeIndicator.fillCircle(dotX, dotY, dotRadius);
+        // Draw partial progress in current section if not fully charged
+        if (completedSections < 3) {
+            const remainingProgress = (progress * 3) % 1;
+            if (remainingProgress > 0) {
+                const currentSectionX = x + (sectionWidth * completedSections);
+                const partialWidth = sectionWidth * remainingProgress;
+                
+                chargeIndicator.fillStyle(0x666666, 0.9);
+                chargeIndicator.fillRect(currentSectionX, y, partialWidth, barHeight);
             }
         }
     }
+    
+    // Draw section dividers
+    chargeIndicator.lineStyle(2, 0x333333, 1);
+    chargeIndicator.beginPath();
+    chargeIndicator.moveTo(x + sectionWidth, y);
+    chargeIndicator.lineTo(x + sectionWidth, y + barHeight);
+    chargeIndicator.moveTo(x + sectionWidth * 2, y);
+    chargeIndicator.lineTo(x + sectionWidth * 2, y + barHeight);
+    chargeIndicator.strokePath();
 }
 
 function getChargeLevel(progress) {
