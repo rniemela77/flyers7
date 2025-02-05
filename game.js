@@ -8,7 +8,7 @@ Game mechanics:
 - on pointerdown, create a virtual joystick at the pointer position.
 - while pointerdown, on pointermove, the targeting reticle moves in the direction of the drag from the pointer down position. (almost like panning the reticle)
 - the targeting reticle moves at 2x the distance of the drag.
-- the player can click to fire a bullet, which spawns at the bottom center and travels to the targeting reticle.
+- the player continuously fires bullets which spawn at the bottom center and travels in the direction of the targeting reticle.
 */
 
 const config = {
@@ -130,6 +130,14 @@ function create() {
     // Create bullet group
     bullets = this.physics.add.group();
 
+    // Setup continuous bullet firing
+    this.time.addEvent({
+        delay: 100,  // Fire a bullet every 100ms
+        callback: fireBullet,
+        callbackScope: this,
+        loop: true
+    });
+
     // Setup input handlers
     this.input.on('pointerdown', (pointer) => {
         isPointerDown = true;
@@ -156,8 +164,6 @@ function create() {
 
     this.input.on('pointerup', () => {
         isPointerDown = false;
-        // Fire bullet on pointer up
-        fireBullet.call(this);
     });
 }
 
