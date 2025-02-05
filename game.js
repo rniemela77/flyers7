@@ -1,11 +1,31 @@
+/*
+Phaser.js game
+
+Game mechanics:
+
+- the enemy (a red triangle) spawns at the top half of the screen.
+- the targeting reticle (a white crosshair) spawns on the enemy
+- on pointerdown, create a virtual joystick at the pointer position.
+- while pointerdown, on pointermove, the targeting reticle moves in the direction of the drag from the pointer down position. (almost like panning the reticle)
+- the targeting reticle moves at 2x the distance of the drag.
+- the player can click to fire a bullet, which spawns at the bottom center and travels to the targeting reticle.
+*/
+
 const config = {
+    // 2340 x 1080
     type: Phaser.AUTO,
-    width: window.innerWidth,
-    height: window.innerHeight,
+    width: 400, // 2340 / 2 = 1170
+    height: 800, // 1080 / 2 = 540
+    // make the game fullscreen
+    scale: {
+        mode: Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_BOTH
+    },
     physics: {
         default: 'arcade',
         arcade: {
-            debug: true
+            gravity: { y: 0 },
+            debug: false
         }
     },
     scene: {
@@ -17,160 +37,219 @@ const config = {
 
 const game = new Phaser.Game(config);
 
-let motorcycle;
-let gridGraphics;
-let cursors;
-let previousPointerX;
-let steeringSensitivity = 0.1;
-
-const rotationSpeed = 0.05;
-let circleGraphics;
-let trailGraphics;
-let trailPoints = [];
+let enemy;
+let reticle;
+let joystickPoint;
+let bullets;
+let isPointerDown = false;
+let lastPointerPosition = { x: 0, y: 0 };
+let healthBar;
+let enemyHealth = 100;
+let isEnemyMoving = false;
 
 function preload() {
-    // Load motorcycle image
-    this.load.image('motorcycle', 'path/to/motorcycle.png');
+    // Remove the bullet image preload since we'll create it with graphics
 }
 
 function create() {
-    // Create motorcycle sprite at the center of the screen
-    motorcycle = this.add.sprite(config.width / 2, config.height / 2, 'motorcycle');
-    motorcycle.setOrigin(0.5, 0.5);
+    // Create health bar
+    healthBar = {
+        width: 200,
+        height: 20,
+        x: config.width / 2,
+        y: 30,
+        background: this.add.graphics(),
+        bar: this.add.graphics()
+    };
 
-    // Create grid graphics
-    gridGraphics = this.add.graphics();
-    drawGrid(gridGraphics);
+    // Draw health bar background (gray)
+    healthBar.background.fillStyle(0x333333);
+    healthBar.background.fillRect(
+        healthBar.x - healthBar.width / 2,
+        healthBar.y - healthBar.height / 2,
+        healthBar.width,
+        healthBar.height
+    );
 
-    // Create graphics for circles
-    circleGraphics = this.add.graphics();
+    // Draw health bar (red)
+    updateHealthBar.call(this);
 
-    // Create graphics for trail
-    trailGraphics = this.add.graphics();
+    // Create enemy (red triangle)
+    const enemyGraphics = this.add.graphics();
+    enemyGraphics.lineStyle(2, 0xFF0000);
+    enemyGraphics.fillStyle(0xFF0000);
+    enemyGraphics.beginPath();
+    // Draw a simple triangle in the middle of a 40x40 texture
+    enemyGraphics.moveTo(20, 5);   // Top
+    enemyGraphics.lineTo(35, 35);  // Bottom right
+    enemyGraphics.lineTo(5, 35);   // Bottom left
+    enemyGraphics.closePath();
+    enemyGraphics.fill();
+    enemyGraphics.stroke();
 
-    // Center the grid on the motorcycle
-    gridGraphics.x = motorcycle.x - config.width / 2;
-    gridGraphics.y = motorcycle.y - config.height / 2;
+    const texture = enemyGraphics.generateTexture('enemy', 40, 40);
+    enemyGraphics.destroy();
 
-    // Set up cursor keys for input
-    cursors = this.input.keyboard.createCursorKeys();
+    // Spawn enemy in top half of screen
+    enemy = this.physics.add.sprite(
+        Phaser.Math.Between(50, config.width - 50),
+        Phaser.Math.Between(50, config.height / 2 - 50),
+        'enemy'
+    );
 
-    // Make the camera follow the motorcycle
-    this.cameras.main.startFollow(motorcycle);
+    // Start enemy movement
+    moveEnemyToNewPosition.call(this);
 
-    // Initialize previous pointer position
-    previousPointerX = null;
+    // Create targeting reticle
+    const reticleGraphics = this.add.graphics();
+    reticleGraphics.lineStyle(2, 0xFFFFFF);
+    // Draw a simple crosshair in a 50x50 texture
+    reticleGraphics.strokeCircle(25, 25, 15);
+    reticleGraphics.moveTo(5, 25);
+    reticleGraphics.lineTo(45, 25);
+    reticleGraphics.moveTo(25, 5);
+    reticleGraphics.lineTo(25, 45);
 
-    // Calculate circle size as 25% of the map's width or height
-    const circleSize = Math.min(config.width, config.height) * 0.25;
+    const reticleTexture = reticleGraphics.generateTexture('reticle', 50, 50);
+    reticleGraphics.destroy();
 
-    // Calculate the position in front of the motorcycle
-    const offsetDistance = 140; // Distance in front of the motorcycle
-    const angleInRadians = Phaser.Math.DegToRad(motorcycle.angle);
-    const frontX = motorcycle.x + Math.cos(angleInRadians) * offsetDistance;
-    const frontY = motorcycle.y + Math.sin(angleInRadians) * offsetDistance;
+    // Create reticle at enemy position
+    reticle = this.add.sprite(enemy.x, enemy.y, 'reticle');
 
-    // Draw the circle
-    circleGraphics.fillStyle(0x333333, 1); // Dark grey color
-    circleGraphics.fillCircle(frontX, frontY, circleSize / 2);
+    // Create bullet texture using graphics
+    const bulletGraphics = this.add.graphics();
+    bulletGraphics.fillStyle(0xFFFFFF);  // White fill
+    bulletGraphics.beginPath();
+    bulletGraphics.arc(4, 4, 4, 0, Math.PI * 2);  // Draw circle at (4,4) with radius 4
+    bulletGraphics.closePath();
+    bulletGraphics.fill();
+    
+    const bulletTexture = bulletGraphics.generateTexture('bullet', 8, 8);
+    bulletGraphics.destroy();
 
-    // Enable physics for the motorcycle and set its body to a circle
-    this.physics.add.existing(motorcycle);
-    motorcycle.body.setCircle(motorcycle.width / 2);
+    // Create bullet group
+    bullets = this.physics.add.group();
 
-    // Create a circle with physics at the calculated position
-    const circle = this.add.circle(frontX, frontY, circleSize / 2, 0x333333);
-    this.physics.add.existing(circle);
-    circle.body.setCircle(circleSize / 2);
-
-    // Add collision detection between the motorcycle and the circle
-    this.physics.add.collider(motorcycle, circle, () => {
-        console.log('Collision detected!');
-        // Handle collision logic here
+    // Setup input handlers
+    this.input.on('pointerdown', (pointer) => {
+        isPointerDown = true;
+        joystickPoint = { x: pointer.x, y: pointer.y };
+        lastPointerPosition = { x: pointer.x, y: pointer.y };
     });
 
-    // Create a graphics object for the blue circle and rectangle
-    const blueGraphics = this.add.graphics();
+    this.input.on('pointermove', (pointer) => {
+        if (isPointerDown) {
+            const dx = pointer.x - joystickPoint.x;
+            const dy = pointer.y - joystickPoint.y;
+            
+            // Move reticle at 2x the distance of the drag
+            reticle.x += (pointer.x - lastPointerPosition.x) * 2;
+            reticle.y += (pointer.y - lastPointerPosition.y) * 2;
 
-    // Define the size of the circle and rectangle
-    const circleRadius = 25;
-    const rectangleWidth = 100;
-    const rectangleHeight = circleRadius * 2;
+            // Keep reticle within game bounds
+            reticle.x = Phaser.Math.Clamp(reticle.x, 0, config.width);
+            reticle.y = Phaser.Math.Clamp(reticle.y, 0, config.height);
 
-    // Draw the blue circle
-    blueGraphics.fillStyle(0x0000FF, 1); // Blue color
-    blueGraphics.fillCircle(100, 100, circleRadius);
+            lastPointerPosition = { x: pointer.x, y: pointer.y };
+        }
+    });
 
-    // Draw the rectangle with an even smaller gap from the circle
-    const gap = 1; // Further reduce the gap between the circle and rectangle
-    blueGraphics.fillRect(75 + circleRadius + gap, 100 - circleRadius, rectangleWidth, rectangleHeight);
+    this.input.on('pointerup', () => {
+        isPointerDown = false;
+        // Fire bullet on pointer up
+        fireBullet.call(this);
+    });
 }
 
-function drawGrid(graphics) {
-    const gridSize = 50;
-    const gridWidth = config.width * 2; // Double the width
-    const gridHeight = config.height * 2; // Double the height
+function updateHealthBar() {
+    healthBar.bar.clear();
+    healthBar.bar.fillStyle(0xFF0000);
+    const width = (enemyHealth / 100) * healthBar.width;
+    healthBar.bar.fillRect(
+        healthBar.x - healthBar.width / 2,
+        healthBar.y - healthBar.height / 2,
+        width,
+        healthBar.height
+    );
+}
 
-    graphics.lineStyle(1, 0xCCCCCC, 0.5);
+function fireBullet() {
+    const bullet = bullets.create(config.width / 2, config.height - 20, 'bullet');
+    const angle = Phaser.Math.Angle.Between(
+        bullet.x, bullet.y,
+        reticle.x, reticle.y
+    );
+    
+    // Set bullet velocity towards reticle
+    const speed = 400;
+    this.physics.velocityFromRotation(angle, speed, bullet.body.velocity);
+    
+    // Rotate bullet to face direction of travel
+    bullet.rotation = angle;
 
-    // Draw vertical lines
-    for (let x = -gridWidth / 2; x <= gridWidth / 2; x += gridSize) {
-        graphics.moveTo(x, -gridHeight / 2);
-        graphics.lineTo(x, gridHeight / 2);
-    }
+    // Add collision with enemy
+    this.physics.add.overlap(bullet, enemy, (bullet, enemy) => {
+        bullet.destroy();
+        enemyHealth = Math.max(0, enemyHealth - 10);  // Decrease health by 10
+        updateHealthBar.call(this);
+    });
 
-    // Draw horizontal lines
-    for (let y = -gridHeight / 2; y <= gridHeight / 2; y += gridSize) {
-        graphics.moveTo(-gridWidth / 2, y);
-        graphics.lineTo(gridWidth / 2, y);
-    }
+    // Destroy bullet after 2 seconds
+    this.time.delayedCall(2000, () => {
+        bullet.destroy();
+    });
+}
 
-    graphics.strokePath();
+function moveEnemyToNewPosition() {
+    if (isEnemyMoving) return;
+
+    // Calculate new random position in top half, keeping away from edges
+    const margin = 50;
+    const newX = Phaser.Math.Between(margin, config.width - margin);
+    const newY = Phaser.Math.Between(margin, (config.height / 2) - margin);
+    
+    isEnemyMoving = true;
+
+    // Move enemy to new position
+    this.tweens.add({
+        targets: enemy,
+        x: newX,
+        y: newY,
+        duration: 1500,  // 1.5 seconds for movement
+        ease: 'Power2',
+        onComplete: () => {
+            isEnemyMoving = false;
+            // Wait 1-2 seconds before moving again
+            this.time.delayedCall(Phaser.Math.Between(1000, 2000), () => {
+                moveEnemyToNewPosition.call(this);
+            });
+        }
+    });
 }
 
 function update() {
-    const rotationSpeed = 0.1;
-    const acceleration = 2;
-
-    // Calculate pointer movement only when pointer is down
-    const pointer = this.input.activePointer;
-    if (pointer.isDown) {
-        if (previousPointerX === null) {
-            previousPointerX = pointer.x; // Initialize previousPointerX on first press
+    // Clean up bullets that are out of bounds
+    bullets.getChildren().forEach((bullet) => {
+        if (bullet.x < 0 || bullet.x > config.width || 
+            bullet.y < 0 || bullet.y > config.height) {
+            bullet.destroy();
         }
-        const deltaX = pointer.x - previousPointerX;
+    });
 
-        // Adjust motorcycle angle based on pointer movement with sensitivity
-        motorcycle.angle += deltaX * rotationSpeed * steeringSensitivity;
-    } else {
-        previousPointerX = null; // Reset previousPointerX when pointer is up
+    // Allow reticle movement at any time
+    if (isPointerDown) {
+        // Move reticle at 2x the distance of the drag
+        reticle.x += (this.input.activePointer.x - lastPointerPosition.x) * 2;
+        reticle.y += (this.input.activePointer.y - lastPointerPosition.y) * 2;
+
+        // Keep reticle within game bounds
+        reticle.x = Phaser.Math.Clamp(reticle.x, 0, config.width);
+        reticle.y = Phaser.Math.Clamp(reticle.y, 0, config.height);
+
+        lastPointerPosition = { 
+            x: this.input.activePointer.x, 
+            y: this.input.activePointer.y 
+        };
     }
-
-    // Move motorcycle forward in the direction it's facing
-    const angleInRadians = Phaser.Math.DegToRad(motorcycle.angle);
-    motorcycle.x += Math.cos(angleInRadians) * acceleration;
-    motorcycle.y += Math.sin(angleInRadians) * acceleration;
-
-    // Keep the motorcycle within the bounds of the screen
-    motorcycle.x = Phaser.Math.Wrap(motorcycle.x, 0, config.width);
-    motorcycle.y = Phaser.Math.Wrap(motorcycle.y, 0, config.height);
-
-    // Rotate the camera to match the motorcycle's angle in the opposite direction
-    this.cameras.main.rotation = -Phaser.Math.DegToRad(motorcycle.angle) - Math.PI / 2;
-
-    // Add current position to trail points
-    trailPoints.push({ x: motorcycle.x, y: motorcycle.y });
-    if (trailPoints.length > 50) {
-        trailPoints.shift(); // Limit the number of points in the trail
-    }
-
-    // Draw the trail
-    trailGraphics.clear();
-    trailGraphics.lineStyle(2, 0xFFFF00, 1);
-    trailGraphics.beginPath();
-    for (let i = 0; i < trailPoints.length - 1; i++) {
-        trailGraphics.moveTo(trailPoints[i].x, trailPoints[i].y);
-        trailGraphics.lineTo(trailPoints[i + 1].x, trailPoints[i + 1].y);
-    }
-    trailGraphics.strokePath();
 }
+
