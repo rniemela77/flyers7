@@ -50,17 +50,36 @@ let reticle;
 let joystickPoint;
 let bullets;
 let isPointerDown = false;
-let isJoystickActive = false;  // New variable to track joystick state
+let isJoystickActive = false;
 let lastPointerPosition = { x: 0, y: 0 };
 let healthBar;
 let enemyHealth = 100;
 let isEnemyMoving = false;
-let isCharging = false;
-let chargeStartTime = 0;
-let chargeThreshold = 1500; // Increased from 900ms to 1500ms (500ms per level)
-let activePointers = {};  // Track multiple active pointers
-let chargeIndicator; // New: Graphics object for charge indicator
-let activeShootingPointer = null; // Track the active shooting pointer
+let activePointers = {};
+let activeShootingPointer = null;
+let player;
+const FIRE_RATE = 5;
+const FIRE_INTERVAL = 1000 / FIRE_RATE; // Convert to milliseconds between shots
+let lastFireTime = 0;
+const DODGE_SPEED = 1000; // Increased from 600 to 1000 for more noticeable movement
+const DODGE_DURATION = 200; // Duration of dodge in ms
+const DODGE_COOLDOWN = 500; // Cooldown between dodges in ms
+const MIN_SWIPE_VELOCITY = 0.5; // Velocity threshold
+const MIN_SWIPE_DISTANCE = 10; // Reduced from 20 to make it easier to trigger
+let lastDodgeTime = 0;
+let isDodging = false;
+let dodgeTrail; // Graphics object for dodge trail effect
+let moveIndicator; // Graphics object for movement indicator
+const MOVE_SPEED = 400; // Normal movement speed
+const MAX_VELOCITY = 300; // Reduced max speed
+const VELOCITY_CHANGE_RATE = 200; // Reduced for more gradual acceleration
+const FRICTION = 0.98; // Increased from 0.95 for slower deceleration
+let playerVelocityX = 0;
+let movingLine;
+let lineY = 0;
+let lineProgress = 0; // Add this to track overall progress of the line
+let lastEnemyFireTime = 0; // Add this with other variables at the top
+const ENEMY_FIRE_INTERVAL = 1000; // 1 second between shots
 
 function preload() {
     // Remove the bullet image preload since we'll create it with graphics
@@ -89,31 +108,22 @@ function create() {
     // Draw health bar (red)
     updateHealthBar.call(this);
 
+    // Create bullet texture
+    const bulletGraphics = this.add.graphics();
+    bulletGraphics.fillStyle(0xffffff, 1);
+    bulletGraphics.beginPath();
+    bulletGraphics.arc(4, 4, 4, 0, Math.PI * 2);
+    bulletGraphics.closePath();
+    bulletGraphics.fill();
+    bulletGraphics.generateTexture('bullet_quick', 8, 8);
+    bulletGraphics.destroy();
+
+    // Create dodge trail and move indicator graphics
+    dodgeTrail = this.add.graphics();
+    moveIndicator = this.add.graphics();
+
     // Create enemy (red triangle)
-    const enemyGraphics = this.add.graphics();
-    enemyGraphics.lineStyle(2, 0xFF0000);
-    enemyGraphics.fillStyle(0xFF0000);
-    enemyGraphics.beginPath();
-    // Draw a simple triangle in the middle of a 40x40 texture
-    enemyGraphics.moveTo(20, 5);   // Top
-    enemyGraphics.lineTo(35, 35);  // Bottom right
-    enemyGraphics.lineTo(5, 35);   // Bottom left
-    enemyGraphics.closePath();
-    enemyGraphics.fill();
-    enemyGraphics.stroke();
-
-    const texture = enemyGraphics.generateTexture('enemy', 40, 40);
-    enemyGraphics.destroy();
-
-    // Spawn enemy in top half of screen
-    enemy = this.physics.add.sprite(
-        Phaser.Math.Between(50, config.width - 50),
-        Phaser.Math.Between(50, config.height / 2 - 50),
-        'enemy'
-    );
-
-    // Start enemy movement
-    moveEnemyToNewPosition.call(this);
+    createEnemy.call(this);
 
     // Create targeting reticle
     const reticleGraphics = this.add.graphics();
@@ -134,15 +144,40 @@ function create() {
     // Create bullet group
     bullets = this.physics.add.group();
 
-    // Create all bullet textures once
-    createBulletTextures.call(this);
+    // Create moving line
+    movingLine = this.add.graphics();
+    movingLine.lineStyle(2, 0x00ff00, 0.5); // Green line with 0.5 opacity
+    updateMovingLine.call(this);
 
-    // Create charge indicator (initially invisible)
-    chargeIndicator = this.add.graphics();
-    chargeIndicator.setDepth(1);
-    updateChargeIndicator.call(this, 0);
+    // Create player character (blue circle)
+    const playerGraphics = this.add.graphics();
+    playerGraphics.lineStyle(3, 0x3498db); // Thicker outline
+    playerGraphics.fillStyle(0x3498db, 1); // Full opacity
+    playerGraphics.beginPath();
+    playerGraphics.arc(25, 25, 20, 0, Math.PI * 2); // Larger circle, centered in 50x50 texture
+    playerGraphics.closePath();
+    playerGraphics.fill();
+    playerGraphics.stroke();
 
-    // Setup input handlers
+    const playerTexture = playerGraphics.generateTexture('player', 50, 50); // Larger texture
+    playerGraphics.destroy();
+
+    // Create player at center of screen
+    player = this.physics.add.sprite(config.width / 2, config.height / 2, 'player');
+    player.setCollideWorldBounds(true);
+    player.setDepth(10);
+    
+    // Configure player physics
+    player.body.allowGravity = false;
+    player.body.moves = true;
+    player.body.immovable = false;
+    player.body.setSize(40, 40); // Set collision box size
+    
+    // Fix Y position
+    player.body.setAllowGravity(false);
+    player.body.setImmovable(true);
+
+    // Modify input handlers
     this.input.on('pointerdown', (pointer) => {
         // Only handle pointers in bottom half of screen
         if (pointer.y <= config.height / 2) return;
@@ -151,21 +186,10 @@ function create() {
         activePointers[pointer.id] = {
             position: { x: pointer.x, y: pointer.y },
             quadrant: getQuadrant(pointer.x, pointer.y),
-            lastPosition: { x: pointer.x, y: pointer.y }
+            lastPosition: { x: pointer.x, y: pointer.y, time: this.time.now }
         };
 
-        // Handle bottom right quadrant (joystick)
-        if (pointer.x > config.width / 2) {
-            activePointers[pointer.id].isJoystick = true;
-        }
-        // Handle bottom left quadrant (shooting)
-        else if (!activeShootingPointer) { // Only allow one shooting pointer at a time
-            activeShootingPointer = pointer.id;
-            activePointers[pointer.id].isCharging = true;
-            activePointers[pointer.id].chargeStartTime = this.time.now;
-            chargeIndicator.setVisible(true);
-            updateChargeIndicator.call(this, 0);
-        }
+        activePointers[pointer.id].isMovementJoystick = pointer.x <= config.width / 2;
     });
 
     this.input.on('pointermove', (pointer) => {
@@ -173,45 +197,73 @@ function create() {
 
         const pointerState = activePointers[pointer.id];
         
-        // Handle joystick movement if this pointer is a joystick
-        if (pointerState.isJoystick) {
-            // Move reticle at 2x the distance of the drag
+        if (pointerState.isMovementJoystick) {
+            // Calculate X movement based on drag distance from last position
+            const dx = pointer.x - pointerState.lastPosition.x;
+            const timeDelta = (this.time.now - pointerState.lastPosition.time) / 1000;
+            
+            // Add to velocity based on drag direction and amount
+            if (Math.abs(dx) > 0) {
+                // More gradual acceleration
+                const acceleration = dx * VELOCITY_CHANGE_RATE * timeDelta;
+                playerVelocityX += acceleration;
+                
+                // Clamp velocity to maximum speed
+                playerVelocityX = Phaser.Math.Clamp(playerVelocityX, -MAX_VELOCITY, MAX_VELOCITY);
+                // Set the physics velocity directly
+                player.body.setVelocityX(playerVelocityX);
+                player.body.setVelocityY(0); // Keep Y velocity at 0
+            }
+        } else {
+            // Move reticle with right joystick (existing code)
             reticle.x += (pointer.x - pointerState.lastPosition.x) * 2;
             reticle.y += (pointer.y - pointerState.lastPosition.y) * 2;
-
-            // Keep reticle within game bounds
             reticle.x = Phaser.Math.Clamp(reticle.x, 0, config.width);
             reticle.y = Phaser.Math.Clamp(reticle.y, 0, config.height);
-
-            // Update last position for this specific pointer
-            pointerState.lastPosition = { x: pointer.x, y: pointer.y };
         }
+        
+        pointerState.lastPosition = { 
+            x: pointer.x, 
+            y: pointer.y,
+            time: this.time.now 
+        };
     });
 
     this.input.on('pointerup', (pointer) => {
         if (!activePointers[pointer.id]) return;
-
-        const pointerState = activePointers[pointer.id];
-
-        // Handle shooting in bottom left quadrant
-        if (pointerState.isCharging && pointer.id === activeShootingPointer) {
-            const holdTime = this.time.now - pointerState.chargeStartTime;
-            const isQuickTap = holdTime < 200; // If held less than 200ms, it's a quick tap
-            
-            if (isQuickTap) {
-                fireBullet.call(this, false); // Quick shot
-            } else {
-                const progress = Math.min(holdTime / chargeThreshold, 1);
-                fireBullet.call(this, true, progress); // Charged shot with current progress
-            }
-            
-            chargeIndicator.setVisible(false);
-            activeShootingPointer = null; // Clear active shooting pointer
-        }
-
-        // Clean up this pointer's state
         delete activePointers[pointer.id];
     });
+}
+
+function createEnemy() {
+    const enemyGraphics = this.add.graphics();
+    enemyGraphics.lineStyle(2, 0xFF0000);
+    enemyGraphics.fillStyle(0xFF0000);
+    enemyGraphics.beginPath();
+    // Draw a simple triangle in the middle of a 40x40 texture
+    enemyGraphics.moveTo(20, 5);   // Top
+    enemyGraphics.lineTo(35, 35);  // Bottom right
+    enemyGraphics.lineTo(5, 35);   // Bottom left
+    enemyGraphics.closePath();
+    enemyGraphics.fill();
+    enemyGraphics.stroke();
+
+    const texture = enemyGraphics.generateTexture('enemy', 40, 40);
+    enemyGraphics.destroy();
+
+    // Spawn enemy in top half of screen
+    if (enemy) enemy.destroy(); // Clean up old enemy if it exists
+    
+    enemy = this.physics.add.sprite(
+        Phaser.Math.Between(50, config.width - 50),
+        Phaser.Math.Between(50, config.height / 2 - 50),
+        'enemy'
+    );
+    enemyHealth = 100; // Reset enemy health
+    updateHealthBar.call(this);
+
+    // Start enemy movement
+    moveEnemyToNewPosition.call(this);
 }
 
 function updateHealthBar() {
@@ -256,69 +308,35 @@ function createBulletTextures() {
     });
 }
 
-function fireBullet(isCharged = false, chargeProgress = 0) {
-    if (isCharged) {
-        // Get charge level based on provided progress
-        const chargeLevel = getChargeLevel(chargeProgress);
-        
-        // Properties scale with charge level
-        const bulletProps = {
-            1: { size: 12, damage: 20, speed: 500, key: 'bullet_charged_1' },
-            2: { size: 20, damage: 35, speed: 600, key: 'bullet_charged_2' },
-            3: { size: 32, damage: 50, speed: 700, key: 'bullet_charged_3' }
-        }[chargeLevel];
-        
-        // Create and fire the bullet using pre-generated texture
-        const bullet = bullets.create(config.width / 2, config.height - 20, bulletProps.key);
-        
-        const angle = Phaser.Math.Angle.Between(
-            bullet.x, bullet.y,
-            reticle.x, reticle.y
-        );
-        
-        this.physics.velocityFromRotation(angle, bulletProps.speed, bullet.body.velocity);
-        bullet.rotation = angle;
-        
-        // Add collision with enemy
-        this.physics.add.overlap(bullet, enemy, (bullet, enemy) => {
+function fireBullet() {
+    // Create and fire the bullet using pre-generated texture
+    const bullet = bullets.create(player.x, player.y, 'bullet_quick');
+    
+    const angle = Phaser.Math.Angle.Between(
+        bullet.x, bullet.y,
+        reticle.x, reticle.y
+    );
+    
+    const speed = 800;
+    this.physics.velocityFromRotation(angle, speed, bullet.body.velocity);
+    bullet.rotation = angle;
+    
+    // Add collision with enemy
+    this.physics.add.overlap(bullet, enemy, (bullet, enemy) => {
+        bullet.destroy();
+        enemyHealth = Math.max(0, enemyHealth - 15);
+        updateHealthBar.call(this);
+        if (enemyHealth <= 0) {
+            createEnemy.call(this);
+        }
+    });
+    
+    // Cleanup after 2 seconds
+    this.time.delayedCall(2000, () => {
+        if (bullet.active) {
             bullet.destroy();
-            enemyHealth = Math.max(0, enemyHealth - bulletProps.damage);
-            updateHealthBar.call(this);
-        });
-        
-        // Cleanup after 2 seconds
-        this.time.delayedCall(2000, () => {
-            if (bullet.active) {
-                bullet.destroy();
-            }
-        });
-    } else {
-        // Create and fire the bullet using pre-generated texture
-        const bullet = bullets.create(config.width / 2, config.height - 20, 'bullet_quick');
-        
-        const angle = Phaser.Math.Angle.Between(
-            bullet.x, bullet.y,
-            reticle.x, reticle.y
-        );
-        
-        const speed = 800; // Quick bullets are fastest
-        this.physics.velocityFromRotation(angle, speed, bullet.body.velocity);
-        bullet.rotation = angle;
-        
-        // Add collision with enemy
-        this.physics.add.overlap(bullet, enemy, (bullet, enemy) => {
-            bullet.destroy();
-            enemyHealth = Math.max(0, enemyHealth - 15); // Quick shots do 15 damage
-            updateHealthBar.call(this);
-        });
-        
-        // Cleanup after 2 seconds
-        this.time.delayedCall(2000, () => {
-            if (bullet.active) {
-                bullet.destroy();
-            }
-        });
-    }
+        }
+    });
 }
 
 function moveEnemyToNewPosition() {
@@ -348,89 +366,22 @@ function moveEnemyToNewPosition() {
     });
 }
 
-function updateChargeIndicator(progress) {
-    chargeIndicator.clear();
+function update() {
+    // Keep player at a lower position (3/4 down the screen)
+    player.y = config.height * 0.75;
     
-    // Bar dimensions and position
-    const barWidth = config.width * 0.4;
-    const barHeight = 16;
-    const x = (config.width - barWidth) / 2;
-    const y = config.height * 0.6;
-    const cornerRadius = 6;
-    const sectionWidth = barWidth / 3;
-    
-    // Draw background bar
-    chargeIndicator.fillStyle(0x222222, 0.9);
-    chargeIndicator.fillRoundedRect(x, y, barWidth, barHeight, cornerRadius);
-    
-    if (progress > 0) {
-        // Draw completed sections first
-        const completedSections = Math.floor(progress * 3);
-        const colors = [0x3498db, 0x9b59b6, 0x00ffff]; // Blue, Purple, Cyan
+    // Apply friction to physics velocity
+    if (Math.abs(player.body.velocity.x) > 0) {
+        playerVelocityX = player.body.velocity.x * FRICTION;
+        player.body.setVelocityX(playerVelocityX);
         
-        // Draw fully completed sections
-        for (let i = 0; i < completedSections; i++) {
-            chargeIndicator.fillStyle(colors[i], 0.9);
-            const sectionX = x + (sectionWidth * i);
-            
-            // First section: round left corners
-            if (i === 0) {
-                chargeIndicator.fillRoundedRect(sectionX, y, sectionWidth, barHeight, { tl: cornerRadius, bl: cornerRadius, tr: 0, br: 0 });
-            }
-            // Last section: round right corners
-            else if (i === 2) {
-                chargeIndicator.fillRoundedRect(sectionX, y, sectionWidth, barHeight, { tl: 0, bl: 0, tr: cornerRadius, br: cornerRadius });
-            }
-            // Middle section: no rounded corners
-            else {
-                chargeIndicator.fillRect(sectionX, y, sectionWidth, barHeight);
-            }
-            
-            // Add glow to completed section
-            const glowAlpha = 0.2 + Math.sin(this.time.now / 200) * 0.1;
-            chargeIndicator.lineStyle(4, colors[i], glowAlpha);
-            if (i === 0) {
-                chargeIndicator.strokeRoundedRect(sectionX - 2, y - 2, sectionWidth + 2, barHeight + 4, 
-                    { tl: cornerRadius + 2, bl: cornerRadius + 2, tr: 0, br: 0 });
-            } else if (i === 2) {
-                chargeIndicator.strokeRoundedRect(sectionX, y - 2, sectionWidth + 2, barHeight + 4, 
-                    { tl: 0, bl: 0, tr: cornerRadius + 2, br: cornerRadius + 2 });
-            } else {
-                chargeIndicator.strokeRect(sectionX, y - 2, sectionWidth, barHeight + 4);
-            }
-        }
-        
-        // Draw partial progress in current section if not fully charged
-        if (completedSections < 3) {
-            const remainingProgress = (progress * 3) % 1;
-            if (remainingProgress > 0) {
-                const currentSectionX = x + (sectionWidth * completedSections);
-                const partialWidth = sectionWidth * remainingProgress;
-                
-                chargeIndicator.fillStyle(0x666666, 0.9);
-                chargeIndicator.fillRect(currentSectionX, y, partialWidth, barHeight);
-            }
+        // Stop completely if velocity is very small
+        if (Math.abs(playerVelocityX) < 0.1) {
+            playerVelocityX = 0;
+            player.body.setVelocityX(0);
         }
     }
-    
-    // Draw section dividers
-    chargeIndicator.lineStyle(2, 0x333333, 1);
-    chargeIndicator.beginPath();
-    chargeIndicator.moveTo(x + sectionWidth, y);
-    chargeIndicator.lineTo(x + sectionWidth, y + barHeight);
-    chargeIndicator.moveTo(x + sectionWidth * 2, y);
-    chargeIndicator.lineTo(x + sectionWidth * 2, y + barHeight);
-    chargeIndicator.strokePath();
-}
 
-function getChargeLevel(progress) {
-    if (progress >= 1) return 3;
-    if (progress >= 0.67) return 2;
-    if (progress >= 0.33) return 1;
-    return 0;
-}
-
-function update() {
     // Clean up bullets that are out of bounds
     bullets.getChildren().forEach((bullet) => {
         if (bullet.x < 0 || bullet.x > config.width || 
@@ -439,12 +390,39 @@ function update() {
         }
     });
 
-    // Update charge indicator if charging
-    if (activeShootingPointer !== null && activePointers[activeShootingPointer]) {
-        const pointer = activePointers[activeShootingPointer];
-        const chargeTime = this.time.now - pointer.chargeStartTime;
-        const progress = Math.min(chargeTime / chargeThreshold, 1);
-        updateChargeIndicator.call(this, progress);
+    // Auto-shoot towards reticle
+    if (this.time.now - lastFireTime >= FIRE_INTERVAL) {
+        fireBullet.call(this);
+        lastFireTime = this.time.now;
+    }
+
+    // Enemy shoots at player
+    if (this.time.now - lastEnemyFireTime >= ENEMY_FIRE_INTERVAL) {
+        fireEnemyBullet.call(this);
+        lastEnemyFireTime = this.time.now;
+    }
+
+    // Update moving line position
+    updateMovingLine.call(this);
+}
+
+function updateMovingLine() {
+    // Clear previous line
+    movingLine.clear();
+    
+    // Draw new line
+    movingLine.lineStyle(2, 0x00ff00, 0.5);
+    movingLine.beginPath();
+    movingLine.moveTo(0, lineY);
+    movingLine.lineTo(config.width, lineY);
+    movingLine.strokePath();
+    
+    // Update line position (move down)
+    lineY += (config.height / 3.0) * (1/60); // Move the full height in 3.0 seconds
+    
+    // Reset line position when it reaches bottom
+    if (lineY > config.height) {
+        lineY = 0;
     }
 }
 
@@ -455,5 +433,64 @@ function getQuadrant(x, y) {
     } else {
         return y > config.height / 2 ? 'bottomRight' : 'topRight';
     }
+}
+
+function updateMoveIndicator(pointer) {
+    const pointerState = activePointers[pointer.id];
+    if (!pointerState) return;
+
+    const dx = pointer.x - pointerState.startPosition.x;
+    const dy = pointer.y - pointerState.startPosition.y;
+    const magnitude = Math.sqrt(dx * dx + dy * dy);
+    
+    if (magnitude > 0) {
+        const normalizedDx = dx / magnitude;
+        const normalizedDy = dy / magnitude;
+        
+        // Calculate end point
+        const targetX = player.x + normalizedDx * MOVE_SPEED * (DODGE_DURATION / 1000);
+        const targetY = player.y + normalizedDy * MOVE_SPEED * (DODGE_DURATION / 1000);
+        
+        // Draw movement indicator
+        moveIndicator.clear();
+        moveIndicator.lineStyle(3, 0x3498db, 0.8);
+        moveIndicator.beginPath();
+        moveIndicator.moveTo(player.x, player.y);
+        moveIndicator.lineTo(targetX, targetY);
+        moveIndicator.strokePath();
+    }
+}
+
+function fireEnemyBullet() {
+    // Create enemy bullet (red bullet)
+    const bullet = bullets.create(enemy.x, enemy.y, 'bullet_quick');
+    bullet.setTint(0xff0000); // Make the bullet red
+    bullet.setScale(2); // Make enemy bullets bigger
+    
+    const angle = Phaser.Math.Angle.Between(
+        bullet.x, bullet.y,
+        player.x, player.y
+    );
+    
+    const speed = 300; // Slower than player bullets
+    this.physics.velocityFromRotation(angle, speed, bullet.body.velocity);
+    bullet.rotation = angle;
+    
+    // Add collision with player
+    this.physics.add.overlap(bullet, player, (bullet, player) => {
+        bullet.destroy();
+        // Flash player red when hit
+        player.setTint(0xff0000);
+        this.time.delayedCall(100, () => {
+            player.clearTint();
+        });
+    });
+    
+    // Cleanup after 2 seconds
+    this.time.delayedCall(2000, () => {
+        if (bullet.active) {
+            bullet.destroy();
+        }
+    });
 }
 
