@@ -37,13 +37,12 @@ const config = {
 
 const game = new Phaser.Game(config);
 
-let enemy;
+let enemies;  // Group to hold all enemies
 let reticle;
 let joystickPoint;
 let bullets;
 let isPointerDown = false;
 let lastPointerPosition = { x: 0, y: 0 };
-let enemyHealth = 100;
 let isEnemyMoving = false;
 
 function preload() {
@@ -68,26 +67,36 @@ function createEnemy() {
     enemyGraphics.destroy();
 
     // Spawn enemy in top half of screen
-    enemy = this.physics.add.sprite(
+    const enemy = this.physics.add.sprite(
         Phaser.Math.Between(50, config.width - 50),
         Phaser.Math.Between(50, config.height / 2 - 50),
         'enemy'
     );
-    enemy.setDepth(1);  // Set enemy depth to 1
+    enemy.setDepth(1);
+    enemy.health = 100;  // Add health property to enemy
 
     // Create enemy health bar
     enemy.healthBar = this.add.graphics();
-    enemy.healthBar.setDepth(1);  // Set health bar to same depth as enemy
-    enemyHealth = 100;
-    updateEnemyHealthBar.call(this);
+    enemy.healthBar.setDepth(1);
+    updateEnemyHealthBar(enemy);
+
+    // Add to enemies group
+    enemies.add(enemy);
 
     // Start enemy movement
-    moveEnemyToNewPosition.call(this);
+    moveEnemyToNewPosition.call(this, enemy);
+
+    return enemy;
 }
 
 function create() {
-    // Create initial enemy
-    createEnemy.call(this);
+    // Create enemies group
+    enemies = this.physics.add.group();
+    
+    // Create initial enemies (3 of them)
+    for (let i = 0; i < 3; i++) {
+        createEnemy.call(this);
+    }
 
     // Create targeting reticle
     const reticleGraphics = this.add.graphics();
@@ -157,22 +166,22 @@ function create() {
     });
 }
 
-function updateEnemyHealthBar() {
+function updateEnemyHealthBar(enemy) {
     if (!enemy || !enemy.healthBar) return;
     
     enemy.healthBar.clear();
     
     const barWidth = 40;
     const barHeight = 5;
-    const barY = enemy.y - enemy.height/2 - barHeight - 5; // Position above enemy with 5px gap
-    const barX = enemy.x - barWidth/2; // Center horizontally with enemy
+    const barY = enemy.y - enemy.height/2 - barHeight - 5;
+    const barX = enemy.x - barWidth/2;
     
     // Background (gray)
     enemy.healthBar.fillStyle(0x333333);
     enemy.healthBar.fillRect(barX, barY, barWidth, barHeight);
     // Health (red)
     enemy.healthBar.fillStyle(0xFF0000);
-    enemy.healthBar.fillRect(barX, barY, (enemyHealth / 100) * barWidth, barHeight);
+    enemy.healthBar.fillRect(barX, barY, (enemy.health / 100) * barWidth, barHeight);
 }
 
 function fireBullet() {
@@ -189,21 +198,20 @@ function fireBullet() {
     // Rotate bullet to face direction of travel
     bullet.rotation = angle;
 
-    // Add collision with enemy
-    this.physics.add.overlap(bullet, enemy, (bullet, enemy) => {
+    // Add collision with all enemies
+    this.physics.add.overlap(bullet, enemies, (bullet, enemy) => {
         bullet.destroy();
-        enemyHealth = Math.max(0, enemyHealth - 10);  // Decrease health by 10
+        enemy.health = Math.max(0, enemy.health - 10);  // Decrease health by 10
         
-        if (enemyHealth <= 0) {
+        if (enemy.health <= 0) {
             enemy.healthBar.destroy();
             enemy.destroy();
-            enemy = null;
-            // Respawn enemy after a delay
+            // Create a new enemy after a delay
             this.time.delayedCall(1000, () => {
                 createEnemy.call(this);
             });
         } else {
-            updateEnemyHealthBar.call(this);
+            updateEnemyHealthBar(enemy);
         }
     });
 
@@ -213,43 +221,44 @@ function fireBullet() {
     });
 }
 
-function moveEnemyToNewPosition() {
-    if (isEnemyMoving || !enemy) return;
+function moveEnemyToNewPosition(enemy) {
+    if (!enemy || !enemy.active) return;
 
     // Calculate new random position in top half, keeping away from edges
     const margin = 50;
     const newX = Phaser.Math.Between(margin, config.width - margin);
     const newY = Phaser.Math.Between(margin, (config.height / 2) - margin);
     
-    isEnemyMoving = true;
-
     // Move enemy to new position
     this.tweens.add({
         targets: enemy,
         x: newX,
         y: newY,
-        duration: 1500,  // 1.5 seconds for movement
+        duration: 1500,
         ease: 'Power2',
         onComplete: () => {
-            isEnemyMoving = false;
             // Wait 1-2 seconds before moving again
             this.time.delayedCall(Phaser.Math.Between(1000, 2000), () => {
-                if (enemy) {  // Only move if enemy exists
-                    moveEnemyToNewPosition.call(this);
+                if (enemy && enemy.active) {
+                    moveEnemyToNewPosition.call(this, enemy);
                 }
             });
         },
         onUpdate: () => {
-            updateEnemyHealthBar.call(this);
+            if (enemy && enemy.active) {
+                updateEnemyHealthBar(enemy);
+            }
         }
     });
 }
 
 function update() {
-    // Update enemy health bar position if enemy exists
-    if (enemy && enemy.healthBar) {
-        updateEnemyHealthBar.call(this);
-    }
+    // Update all enemy health bars
+    enemies.getChildren().forEach(enemy => {
+        if (enemy && enemy.active) {
+            updateEnemyHealthBar(enemy);
+        }
+    });
 
     // Clean up bullets that are out of bounds
     bullets.getChildren().forEach((bullet) => {
