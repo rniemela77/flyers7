@@ -49,7 +49,7 @@ function preload() {
     // Remove the bullet image preload since we'll create it with graphics
 }
 
-function createEnemy() {
+function createTriangleEnemy() {
     // Create enemy (red triangle)
     const enemyGraphics = this.add.graphics();
     enemyGraphics.lineStyle(2, 0xFF0000);
@@ -63,17 +63,25 @@ function createEnemy() {
     enemyGraphics.fill();
     enemyGraphics.stroke();
 
-    const texture = enemyGraphics.generateTexture('enemy', 40, 40);
+    const texture = enemyGraphics.generateTexture('triangle_enemy', 40, 40);
     enemyGraphics.destroy();
 
-    // Spawn enemy in top half of screen
+    // Spawn enemy at top of screen at random x position
     const enemy = this.physics.add.sprite(
         Phaser.Math.Between(50, config.width - 50),
-        Phaser.Math.Between(50, config.height / 2 - 50),
-        'enemy'
+        -20, // Start above screen
+        'triangle_enemy'
     );
     enemy.setDepth(1);
-    enemy.health = 100;  // Add health property to enemy
+    enemy.maxHealth = 40;
+    enemy.health = enemy.maxHealth;
+    enemy.type = 'triangle';
+
+    // Set up circular physics body
+    enemy.body.setCircle(20);  // 20px radius
+    enemy.body.setBounce(0.5);
+    enemy.body.setCollideWorldBounds(true);  // Only triangles collide with world bounds
+    enemy.body.setMass(1);
 
     // Create enemy health bar
     enemy.healthBar = this.add.graphics();
@@ -83,20 +91,84 @@ function createEnemy() {
     // Add to enemies group
     enemies.add(enemy);
 
-    // Start enemy movement
-    moveEnemyToNewPosition.call(this, enemy);
+    // Initial downward movement
+    enemy.setVelocityY(50);  // Reduced from 100 to 50 to match squares
+
+    // Start lurching behavior
+    this.time.addEvent({
+        delay: Phaser.Math.Between(3000, 5000),  // Increased delay between lurches
+        callback: () => lurchForward.call(this, enemy),
+        callbackScope: this,
+        loop: true
+    });
+
+    return enemy;
+}
+
+function createSquareEnemy() {
+    // Create enemy (blue square)
+    const enemyGraphics = this.add.graphics();
+    enemyGraphics.lineStyle(2, 0x0000FF);
+    enemyGraphics.fillStyle(0x0000FF);
+    enemyGraphics.fillRect(5, 5, 30, 30);  // Draw a 30x30 square with 5px margin
+    enemyGraphics.strokeRect(5, 5, 30, 30);
+
+    const texture = enemyGraphics.generateTexture('square_enemy', 40, 40);
+    enemyGraphics.destroy();
+
+    // Spawn enemy at top of screen at random x position
+    const enemy = this.physics.add.sprite(
+        Phaser.Math.Between(50, config.width - 50),
+        -20, // Start above screen
+        'square_enemy'
+    );
+    enemy.setDepth(1);
+    enemy.maxHealth = 50;
+    enemy.health = enemy.maxHealth;
+    enemy.type = 'square';
+
+    // Set up circular physics body
+    enemy.body.setCircle(20);  // 20px radius
+    enemy.body.setBounce(0.5);
+    enemy.body.setMass(0.8);  // Slightly lighter than triangles
+
+    // Create enemy health bar
+    enemy.healthBar = this.add.graphics();
+    enemy.healthBar.setDepth(1);
+    updateEnemyHealthBar(enemy);
+
+    // Add to enemies group
+    enemies.add(enemy);
+
+    // Set constant downward velocity
+    enemy.setVelocityY(50);  // Slower downward movement for marching effect
+    enemy.minVelocityY = 50; // Store minimum velocity for reference
 
     return enemy;
 }
 
 function create() {
-    // Create enemies group
-    enemies = this.physics.add.group();
+    // Create enemies group with collision
+    enemies = this.physics.add.group({
+        bounceX: 0.5,
+        bounceY: 0.5
+    });
     
-    // Create initial enemies (3 of them)
+    // Enable collision between enemies in the group
+    this.physics.add.collider(enemies, enemies);
+    
+    // Create initial enemies (3 triangles)
     for (let i = 0; i < 3; i++) {
-        createEnemy.call(this);
+        createTriangleEnemy.call(this);
     }
+
+    // Spawn square enemies periodically
+    this.time.addEvent({
+        delay: 1500,  // Reduced from 3000 to 1500 (twice as frequent)
+        callback: () => createSquareEnemy.call(this),
+        callbackScope: this,
+        loop: true
+    });
 
     // Create targeting reticle
     const reticleGraphics = this.add.graphics();
@@ -181,7 +253,7 @@ function updateEnemyHealthBar(enemy) {
     enemy.healthBar.fillRect(barX, barY, barWidth, barHeight);
     // Health (red)
     enemy.healthBar.fillStyle(0xFF0000);
-    enemy.healthBar.fillRect(barX, barY, (enemy.health / 100) * barWidth, barHeight);
+    enemy.healthBar.fillRect(barX, barY, (enemy.health / enemy.maxHealth) * barWidth, barHeight);
 }
 
 function fireBullet() {
@@ -208,7 +280,7 @@ function fireBullet() {
             enemy.destroy();
             // Create a new enemy after a delay
             this.time.delayedCall(1000, () => {
-                createEnemy.call(this);
+                createTriangleEnemy.call(this);
             });
         } else {
             updateEnemyHealthBar(enemy);
@@ -221,42 +293,56 @@ function fireBullet() {
     });
 }
 
-function moveEnemyToNewPosition(enemy) {
+function lurchForward(enemy) {
     if (!enemy || !enemy.active) return;
 
-    // Calculate new random position in top half, keeping away from edges
-    const margin = 50;
-    const newX = Phaser.Math.Between(margin, config.width - margin);
-    const newY = Phaser.Math.Between(margin, (config.height / 2) - margin);
-    
-    // Move enemy to new position
-    this.tweens.add({
-        targets: enemy,
-        x: newX,
-        y: newY,
-        duration: 1500,
-        ease: 'Power2',
-        onComplete: () => {
-            // Wait 1-2 seconds before moving again
-            this.time.delayedCall(Phaser.Math.Between(1000, 2000), () => {
-                if (enemy && enemy.active) {
-                    moveEnemyToNewPosition.call(this, enemy);
-                }
-            });
-        },
-        onUpdate: () => {
-            if (enemy && enemy.active) {
-                updateEnemyHealthBar(enemy);
-            }
+    // Calculate angle towards bottom of screen
+    const angle = Math.PI / 2;  // 90 degrees, pointing downward
+    const variance = (Math.random() - 0.5) * Math.PI / 6;  // Reduced variance to +/- 15 degrees
+    const finalAngle = angle + variance;
+
+    // Lurch forward with a burst of speed
+    const speed = 200;  // Reduced from 300 to 200
+    enemy.body.setVelocity(
+        Math.cos(finalAngle) * speed,
+        Math.sin(finalAngle) * speed
+    );
+
+    // Gradually slow down after the lurch
+    this.time.delayedCall(500, () => {
+        if (enemy && enemy.active) {
+            enemy.body.setVelocity(
+                enemy.body.velocity.x * 0.2,  // More aggressive slowdown
+                Math.max(50, enemy.body.velocity.y * 0.2)  // Keep minimum downward speed at 50
+            );
         }
     });
 }
 
 function update() {
-    // Update all enemy health bars
+    // Update all enemy health bars and check for out-of-bounds enemies
     enemies.getChildren().forEach(enemy => {
         if (enemy && enemy.active) {
             updateEnemyHealthBar(enemy);
+            
+            // Ensure square enemies maintain minimum downward velocity
+            if (enemy.type === 'square') {
+                if (enemy.body.velocity.y < enemy.minVelocityY) {
+                    enemy.setVelocityY(enemy.minVelocityY);
+                }
+            }
+            
+            // Destroy enemies that go off screen
+            if (enemy.y > config.height + 20) {
+                enemy.healthBar.destroy();
+                enemy.destroy();
+                // Replace destroyed triangle enemies
+                if (enemy.type === 'triangle') {
+                    this.time.delayedCall(1000, () => {
+                        createTriangleEnemy.call(this);
+                    });
+                }
+            }
         }
     });
 
