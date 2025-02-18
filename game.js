@@ -47,7 +47,8 @@ let isEnemyMoving = false;
 let fireModes = {
     rapidFire: true,
     dualShot: false,
-    tripleShot: false
+    tripleShot: false,
+    beam: false
 };
 
 function preload() {
@@ -245,6 +246,18 @@ function create() {
         loop: true
     });
 
+    // Setup beam firing
+    this.time.addEvent({
+        delay: 50,  // Very fast firing rate for beam
+        callback: () => {
+            if (fireModes.beam) {
+                fireBeam.call(this);
+            }
+        },
+        callbackScope: this,
+        loop: true
+    });
+
     // Setup input handlers
     this.input.on('pointerdown', (pointer) => {
         isPointerDown = true;
@@ -272,6 +285,10 @@ function create() {
     this.input.on('pointerup', () => {
         isPointerDown = false;
     });
+
+    // Add this to the create function after creating the bullet group:
+    this.beamGraphics = this.add.graphics();
+    this.beamGraphics.setDepth(1);  // Above enemies but below reticle
 }
 
 function updateEnemyHealthBar(enemy) {
@@ -405,6 +422,13 @@ function update() {
             y: this.input.activePointer.y 
         };
     }
+
+    // Update beam if active
+    if (fireModes.beam) {
+        fireBeam.call(this);
+    } else {
+        this.beamGraphics.clear();
+    }
 }
 
 function createFireModeToggles() {
@@ -428,10 +452,16 @@ function createFireModeToggles() {
     tripleShotButton.setInteractive(new Phaser.Geom.Rectangle(margin * 3 + buttonWidth * 2, y, buttonWidth, buttonHeight), Phaser.Geom.Rectangle.Contains);
     tripleShotButton.name = 'tripleShot';
 
+    // Beam toggle
+    const beamButton = this.add.graphics();
+    beamButton.setInteractive(new Phaser.Geom.Rectangle(margin * 4 + buttonWidth * 3, y, buttonWidth, buttonHeight), Phaser.Geom.Rectangle.Contains);
+    beamButton.name = 'beam';
+
     // Draw initial button states
     updateButtonVisuals.call(this, rapidFireButton, fireModes.rapidFire);
     updateButtonVisuals.call(this, dualShotButton, fireModes.dualShot);
     updateButtonVisuals.call(this, tripleShotButton, fireModes.tripleShot);
+    updateButtonVisuals.call(this, beamButton, fireModes.beam);
 
     // Add click handlers
     rapidFireButton.on('pointerdown', () => {
@@ -449,10 +479,16 @@ function createFireModeToggles() {
         updateButtonVisuals.call(this, tripleShotButton, fireModes.tripleShot);
     });
 
+    beamButton.on('pointerdown', () => {
+        fireModes.beam = !fireModes.beam;
+        updateButtonVisuals.call(this, beamButton, fireModes.beam);
+    });
+
     // Store buttons for later reference
     this.rapidFireButton = rapidFireButton;
     this.dualShotButton = dualShotButton;
     this.tripleShotButton = tripleShotButton;
+    this.beamButton = beamButton;
 }
 
 function updateButtonVisuals(button, isActive) {
@@ -470,26 +506,33 @@ function updateButtonVisuals(button, isActive) {
     button.strokeRect(x, y, width, height);
 
     // Draw button icon
+    button.fillStyle(0xFFFFFF);
+    const circleY = y + height/2;
+
     if (button.name === 'rapidFire') {
         // Draw rapid fire icon (three small circles in a row)
-        button.fillStyle(0xFFFFFF);
-        const circleY = y + height/2;
         for (let i = 0; i < 3; i++) {
             button.fillCircle(x + 10 + (i * 10), circleY, 3);
         }
     } else if (button.name === 'dualShot') {
         // Draw dual shot icon (two larger circles side by side)
-        button.fillStyle(0xFFFFFF);
-        const circleY = y + height/2;
         button.fillCircle(x + 13, circleY, 5);
         button.fillCircle(x + 27, circleY, 5);
     } else if (button.name === 'tripleShot') {
         // Draw triple shot icon (three larger circles side by side)
-        button.fillStyle(0xFFFFFF);
-        const circleY = y + height/2;
         button.fillCircle(x + 8, circleY, 5);
         button.fillCircle(x + 20, circleY, 5);
         button.fillCircle(x + 32, circleY, 5);
+    } else if (button.name === 'beam') {
+        // Draw beam icon (vertical line with small circles)
+        button.lineStyle(3, 0xFFFFFF);
+        button.beginPath();
+        button.moveTo(x + width/2, y + 5);
+        button.lineTo(x + width/2, y + height - 5);
+        button.stroke();
+        for (let i = 0; i < 3; i++) {
+            button.fillCircle(x + width/2, y + 10 + (i * 10), 2);
+        }
     }
 }
 
@@ -591,6 +634,59 @@ function fireTripleShot() {
                 bullet.destroy();
             }
         });
+    });
+}
+
+function fireBeam() {
+    const centerX = config.width / 2;
+    const y = config.height - 20;
+    const beamWidth = 4;  // Width of the beam
+
+    // Calculate firing angle
+    const angle = Phaser.Math.Angle.Between(
+        centerX, y,
+        reticle.x, reticle.y
+    );
+
+    // Clear previous beam
+    this.beamGraphics.clear();
+
+    // Draw new beam with glow effect
+    this.beamGraphics.lineStyle(beamWidth + 4, 0xFFFFFF, 0.2);  // Outer glow
+    this.beamGraphics.beginPath();
+    this.beamGraphics.moveTo(centerX, y);
+    this.beamGraphics.lineTo(reticle.x, reticle.y);
+    this.beamGraphics.strokePath();
+
+    this.beamGraphics.lineStyle(beamWidth, 0xFFFFFF, 0.8);  // Main beam
+    this.beamGraphics.beginPath();
+    this.beamGraphics.moveTo(centerX, y);
+    this.beamGraphics.lineTo(reticle.x, reticle.y);
+    this.beamGraphics.strokePath();
+
+    // Check for collisions at reticle position
+    enemies.getChildren().forEach(enemy => {
+        if (enemy && enemy.active) {
+            // Calculate distance from enemy to reticle
+            const distance = Phaser.Math.Distance.Between(
+                enemy.x, enemy.y,
+                reticle.x, reticle.y
+            );
+
+            if (distance < enemy.body.radius + 10) { // Added small buffer for better hit detection
+                enemy.health = Math.max(0, enemy.health - 1);  // Continuous damage while in beam
+                
+                if (enemy.health <= 0) {
+                    enemy.healthBar.destroy();
+                    enemy.destroy();
+                    this.time.delayedCall(1000, () => {
+                        createTriangleEnemy.call(this);
+                    });
+                } else {
+                    updateEnemyHealthBar(enemy);
+                }
+            }
+        }
     });
 }
 
