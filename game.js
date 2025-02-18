@@ -44,6 +44,10 @@ let bullets;
 let isPointerDown = false;
 let lastPointerPosition = { x: 0, y: 0 };
 let isEnemyMoving = false;
+let fireModes = {
+    rapidFire: true,
+    dualShot: false
+};
 
 function preload() {
     // Remove the bullet image preload since we'll create it with graphics
@@ -201,10 +205,29 @@ function create() {
     // Create bullet group
     bullets = this.physics.add.group();
 
-    // Setup continuous bullet firing
+    // Create toggle buttons
+    createFireModeToggles.call(this);
+
+    // Setup continuous bullet firing - now checks fire modes
     this.time.addEvent({
-        delay: 100,  // Fire a bullet every 100ms
-        callback: fireBullet,
+        delay: 100,
+        callback: () => {
+            if (fireModes.rapidFire) {
+                fireBullet.call(this);
+            }
+        },
+        callbackScope: this,
+        loop: true
+    });
+
+    // Setup slower dual shot firing
+    this.time.addEvent({
+        delay: 250,
+        callback: () => {
+            if (fireModes.dualShot) {
+                fireDualShot.call(this);
+            }
+        },
         callbackScope: this,
         loop: true
     });
@@ -369,5 +392,122 @@ function update() {
             y: this.input.activePointer.y 
         };
     }
+}
+
+function createFireModeToggles() {
+    const buttonWidth = 40;
+    const buttonHeight = 40;
+    const margin = 10;
+    const y = config.height - buttonHeight - margin;
+
+    // Rapid fire toggle
+    const rapidFireButton = this.add.graphics();
+    rapidFireButton.setInteractive(new Phaser.Geom.Rectangle(margin, y, buttonWidth, buttonHeight), Phaser.Geom.Rectangle.Contains);
+    rapidFireButton.name = 'rapidFire';
+    
+    // Dual shot toggle
+    const dualShotButton = this.add.graphics();
+    dualShotButton.setInteractive(new Phaser.Geom.Rectangle(margin * 2 + buttonWidth, y, buttonWidth, buttonHeight), Phaser.Geom.Rectangle.Contains);
+    dualShotButton.name = 'dualShot';
+
+    // Draw initial button states
+    updateButtonVisuals.call(this, rapidFireButton, fireModes.rapidFire);
+    updateButtonVisuals.call(this, dualShotButton, fireModes.dualShot);
+
+    // Add click handlers
+    rapidFireButton.on('pointerdown', () => {
+        fireModes.rapidFire = !fireModes.rapidFire;
+        updateButtonVisuals.call(this, rapidFireButton, fireModes.rapidFire);
+    });
+
+    dualShotButton.on('pointerdown', () => {
+        fireModes.dualShot = !fireModes.dualShot;
+        updateButtonVisuals.call(this, dualShotButton, fireModes.dualShot);
+    });
+
+    // Store buttons for later reference
+    this.rapidFireButton = rapidFireButton;
+    this.dualShotButton = dualShotButton;
+}
+
+function updateButtonVisuals(button, isActive) {
+    const x = button.input.hitArea.x;
+    const y = button.input.hitArea.y;
+    const width = button.input.hitArea.width;
+    const height = button.input.hitArea.height;
+
+    button.clear();
+    
+    // Draw button background
+    button.lineStyle(2, 0xFFFFFF);
+    button.fillStyle(isActive ? 0x444444 : 0x222222);
+    button.fillRect(x, y, width, height);
+    button.strokeRect(x, y, width, height);
+
+    // Draw button icon
+    if (button.name === 'rapidFire') {
+        // Draw rapid fire icon (three small circles in a row)
+        button.fillStyle(0xFFFFFF);
+        const circleY = y + height/2;
+        for (let i = 0; i < 3; i++) {
+            button.fillCircle(x + 10 + (i * 10), circleY, 3);
+        }
+    } else if (button.name === 'dualShot') {
+        // Draw dual shot icon (two larger circles side by side)
+        button.fillStyle(0xFFFFFF);
+        const circleY = y + height/2;
+        button.fillCircle(x + 13, circleY, 5);
+        button.fillCircle(x + 27, circleY, 5);
+    }
+}
+
+function fireDualShot() {
+    const spacing = 15;  // Space between the two bullets
+    const centerX = config.width / 2;
+    const y = config.height - 20;
+
+    // Calculate firing angle
+    const angle = Phaser.Math.Angle.Between(
+        centerX, y,
+        reticle.x, reticle.y
+    );
+    
+    // Calculate perpendicular offset (90 degrees = PI/2)
+    const perpX = Math.cos(angle + Math.PI/2) * spacing/2;
+    const perpY = Math.sin(angle + Math.PI/2) * spacing/2;
+    
+    // Create bullets at perpendicular positions
+    const leftBullet = bullets.create(centerX - perpX, y - perpY, 'bullet');
+    const rightBullet = bullets.create(centerX + perpX, y + perpY, 'bullet');
+    
+    const speed = 400;
+
+    // Set same velocity and rotation for both bullets
+    [leftBullet, rightBullet].forEach(bullet => {
+        this.physics.velocityFromRotation(angle, speed, bullet.body.velocity);
+        bullet.rotation = angle;
+
+        this.physics.add.overlap(bullet, enemies, (bullet, enemy) => {
+            bullet.destroy();
+            enemy.health = Math.max(0, enemy.health - 10);
+            
+            if (enemy.health <= 0) {
+                enemy.healthBar.destroy();
+                enemy.destroy();
+                this.time.delayedCall(1000, () => {
+                    createTriangleEnemy.call(this);
+                });
+            } else {
+                updateEnemyHealthBar(enemy);
+            }
+        });
+
+        // Destroy bullet after 2 seconds
+        this.time.delayedCall(2000, () => {
+            if (bullet.active) {
+                bullet.destroy();
+            }
+        });
+    });
 }
 
