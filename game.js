@@ -43,7 +43,6 @@ let joystickPoint;
 let bullets;
 let isPointerDown = false;
 let lastPointerPosition = { x: 0, y: 0 };
-let healthBar;
 let enemyHealth = 100;
 let isEnemyMoving = false;
 
@@ -51,29 +50,7 @@ function preload() {
     // Remove the bullet image preload since we'll create it with graphics
 }
 
-function create() {
-    // Create health bar
-    healthBar = {
-        width: 200,
-        height: 20,
-        x: config.width / 2,
-        y: 30,
-        background: this.add.graphics(),
-        bar: this.add.graphics()
-    };
-
-    // Draw health bar background (gray)
-    healthBar.background.fillStyle(0x333333);
-    healthBar.background.fillRect(
-        healthBar.x - healthBar.width / 2,
-        healthBar.y - healthBar.height / 2,
-        healthBar.width,
-        healthBar.height
-    );
-
-    // Draw health bar (red)
-    updateHealthBar.call(this);
-
+function createEnemy() {
     // Create enemy (red triangle)
     const enemyGraphics = this.add.graphics();
     enemyGraphics.lineStyle(2, 0xFF0000);
@@ -96,9 +73,21 @@ function create() {
         Phaser.Math.Between(50, config.height / 2 - 50),
         'enemy'
     );
+    enemy.setDepth(1);  // Set enemy depth to 1
+
+    // Create enemy health bar
+    enemy.healthBar = this.add.graphics();
+    enemy.healthBar.setDepth(1);  // Set health bar to same depth as enemy
+    enemyHealth = 100;
+    updateEnemyHealthBar.call(this);
 
     // Start enemy movement
     moveEnemyToNewPosition.call(this);
+}
+
+function create() {
+    // Create initial enemy
+    createEnemy.call(this);
 
     // Create targeting reticle
     const reticleGraphics = this.add.graphics();
@@ -113,8 +102,9 @@ function create() {
     const reticleTexture = reticleGraphics.generateTexture('reticle', 50, 50);
     reticleGraphics.destroy();
 
-    // Create reticle at enemy position
-    reticle = this.add.sprite(enemy.x, enemy.y, 'reticle');
+    // Create reticle at center of screen
+    reticle = this.add.sprite(config.width / 2, config.height / 2, 'reticle');
+    reticle.setDepth(2);  // Set reticle depth to 2 (above enemy)
 
     // Create bullet texture using graphics
     const bulletGraphics = this.add.graphics();
@@ -167,16 +157,22 @@ function create() {
     });
 }
 
-function updateHealthBar() {
-    healthBar.bar.clear();
-    healthBar.bar.fillStyle(0xFF0000);
-    const width = (enemyHealth / 100) * healthBar.width;
-    healthBar.bar.fillRect(
-        healthBar.x - healthBar.width / 2,
-        healthBar.y - healthBar.height / 2,
-        width,
-        healthBar.height
-    );
+function updateEnemyHealthBar() {
+    if (!enemy || !enemy.healthBar) return;
+    
+    enemy.healthBar.clear();
+    
+    const barWidth = 40;
+    const barHeight = 5;
+    const barY = enemy.y - enemy.height/2 - barHeight - 5; // Position above enemy with 5px gap
+    const barX = enemy.x - barWidth/2; // Center horizontally with enemy
+    
+    // Background (gray)
+    enemy.healthBar.fillStyle(0x333333);
+    enemy.healthBar.fillRect(barX, barY, barWidth, barHeight);
+    // Health (red)
+    enemy.healthBar.fillStyle(0xFF0000);
+    enemy.healthBar.fillRect(barX, barY, (enemyHealth / 100) * barWidth, barHeight);
 }
 
 function fireBullet() {
@@ -197,7 +193,18 @@ function fireBullet() {
     this.physics.add.overlap(bullet, enemy, (bullet, enemy) => {
         bullet.destroy();
         enemyHealth = Math.max(0, enemyHealth - 10);  // Decrease health by 10
-        updateHealthBar.call(this);
+        
+        if (enemyHealth <= 0) {
+            enemy.healthBar.destroy();
+            enemy.destroy();
+            enemy = null;
+            // Respawn enemy after a delay
+            this.time.delayedCall(1000, () => {
+                createEnemy.call(this);
+            });
+        } else {
+            updateEnemyHealthBar.call(this);
+        }
     });
 
     // Destroy bullet after 2 seconds
@@ -207,7 +214,7 @@ function fireBullet() {
 }
 
 function moveEnemyToNewPosition() {
-    if (isEnemyMoving) return;
+    if (isEnemyMoving || !enemy) return;
 
     // Calculate new random position in top half, keeping away from edges
     const margin = 50;
@@ -227,13 +234,23 @@ function moveEnemyToNewPosition() {
             isEnemyMoving = false;
             // Wait 1-2 seconds before moving again
             this.time.delayedCall(Phaser.Math.Between(1000, 2000), () => {
-                moveEnemyToNewPosition.call(this);
+                if (enemy) {  // Only move if enemy exists
+                    moveEnemyToNewPosition.call(this);
+                }
             });
+        },
+        onUpdate: () => {
+            updateEnemyHealthBar.call(this);
         }
     });
 }
 
 function update() {
+    // Update enemy health bar position if enemy exists
+    if (enemy && enemy.healthBar) {
+        updateEnemyHealthBar.call(this);
+    }
+
     // Clean up bullets that are out of bounds
     bullets.getChildren().forEach((bullet) => {
         if (bullet.x < 0 || bullet.x > config.width || 
