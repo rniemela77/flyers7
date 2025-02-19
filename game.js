@@ -51,6 +51,7 @@ let fireModes = {
     beam: false,
     lockOn: false
 };
+let beamGraphics;  // Add this line to store beam graphics
 
 function preload() {
     // Remove the bullet image preload since we'll create it with graphics
@@ -136,12 +137,28 @@ function create() {
     // Create bullet group
     bullets = this.physics.add.group();
 
+    // Create beam graphics
+    beamGraphics = this.add.graphics();
+    beamGraphics.setDepth(1);  // Set depth between enemies and reticle
+
     // Setup continuous bullet firing
     this.time.addEvent({
-        delay: 100,  // Fire a bullet every 100ms
+        delay: 100,
         callback: () => {
-            if (fireModes.rapidFire) {
+            if (fireModes.rapidFire || fireModes.dualShot || fireModes.tripleShot) {
                 fireBullet.call(this);
+            }
+        },
+        callbackScope: this,
+        loop: true
+    });
+
+    // Setup continuous beam damage
+    this.time.addEvent({
+        delay: 100,  // Check for beam damage every 100ms
+        callback: () => {
+            if (fireModes.beam) {
+                checkBeamCollision.call(this);
             }
         },
         callbackScope: this,
@@ -215,39 +232,74 @@ function updateEnemyHealthBar(enemy) {
 }
 
 function fireBullet() {
-    const bullet = bullets.create(config.width / 2, config.height - 20, 'bullet');
-    const angle = Phaser.Math.Angle.Between(
-        bullet.x, bullet.y,
+    const centerX = config.width / 2;
+    const bottomY = config.height - 20;
+    const speed = 400;
+
+    // Helper function to create a single bullet
+    const createSingleBullet = (x, y, angle) => {
+        const bullet = bullets.create(x, y, 'bullet');
+        this.physics.velocityFromRotation(angle, speed, bullet.body.velocity);
+        bullet.rotation = angle;
+
+        // Add collision with all enemies
+        this.physics.add.overlap(bullet, enemies, (bullet, enemy) => {
+            bullet.destroy();
+            const damage = 10;
+            enemy.health = Math.max(0, enemy.health - damage);
+            
+            if (enemy.health <= 0) {
+                enemy.healthBar.destroy();
+                enemy.destroy();
+                this.time.delayedCall(1000, () => {
+                    createEnemy.call(this);
+                });
+            } else {
+                updateEnemyHealthBar(enemy);
+            }
+        });
+
+        // Destroy bullet after 2 seconds
+        this.time.delayedCall(2000, () => {
+            if (bullet.active) bullet.destroy();
+        });
+
+        return bullet;
+    };
+
+    // Calculate base angle to reticle
+    const baseAngle = Phaser.Math.Angle.Between(
+        centerX, bottomY,
         reticle.x, reticle.y
     );
-    
-    // Set bullet velocity towards reticle
-    const speed = 400;
-    this.physics.velocityFromRotation(angle, speed, bullet.body.velocity);
-    
-    // Rotate bullet to face direction of travel
-    bullet.rotation = angle;
 
-    // Add collision with all enemies
-    this.physics.add.overlap(bullet, enemies, (bullet, enemy) => {
-        bullet.destroy();
-        enemy.health = Math.max(0, enemy.health - 10);  // Decrease health by 10
+    let bulletsToFire = [];
+
+    // Add bullets based on active modes
+    if (fireModes.tripleShot) {
+        const spread = Math.PI / 32;  // ~5.625 degrees
+        bulletsToFire.push({ x: centerX, y: bottomY, angle: baseAngle });  // Center
+        bulletsToFire.push({ x: centerX, y: bottomY, angle: baseAngle - spread });  // Left
+        bulletsToFire.push({ x: centerX, y: bottomY, angle: baseAngle + spread });  // Right
+    }
+
+    if (fireModes.dualShot) {
+        const offset = 10;
+        const perpAngle = baseAngle + Math.PI / 2;
+        const offsetX = Math.cos(perpAngle) * offset;
+        const offsetY = Math.sin(perpAngle) * offset;
         
-        if (enemy.health <= 0) {
-            enemy.healthBar.destroy();
-            enemy.destroy();
-            // Create a new enemy after a delay
-            this.time.delayedCall(1000, () => {
-                createEnemy.call(this);
-            });
-        } else {
-            updateEnemyHealthBar(enemy);
-        }
-    });
+        bulletsToFire.push({ x: centerX - offsetX, y: bottomY - offsetY, angle: baseAngle });  // Left
+        bulletsToFire.push({ x: centerX + offsetX, y: bottomY + offsetY, angle: baseAngle });  // Right
+    }
 
-    // Destroy bullet after 2 seconds
-    this.time.delayedCall(2000, () => {
-        bullet.destroy();
+    if (fireModes.rapidFire && !fireModes.tripleShot && !fireModes.dualShot) {
+        bulletsToFire.push({ x: centerX, y: bottomY, angle: baseAngle });
+    }
+
+    // Fire all bullets
+    bulletsToFire.forEach(bullet => {
+        createSingleBullet(bullet.x, bullet.y, bullet.angle);
     });
 }
 
@@ -319,6 +371,29 @@ function update() {
         updateLockOnTargets.call(this);
     } else {
         this.lockOnGraphics.clear();
+    }
+
+    // Update beam graphics
+    beamGraphics.clear();
+    if (fireModes.beam) {
+        const startX = config.width / 2;
+        const startY = config.height - 20;
+        const endX = reticle.x;
+        const endY = reticle.y;
+
+        // Draw beam glow effect
+        beamGraphics.lineStyle(6, 0x00FFFF, 0.3);  // Wider, semi-transparent cyan
+        beamGraphics.beginPath();
+        beamGraphics.moveTo(startX, startY);
+        beamGraphics.lineTo(endX, endY);
+        beamGraphics.strokePath();
+
+        // Draw beam core
+        beamGraphics.lineStyle(2, 0xFFFFFF, 1);  // Thin, solid white
+        beamGraphics.beginPath();
+        beamGraphics.moveTo(startX, startY);
+        beamGraphics.lineTo(endX, endY);
+        beamGraphics.strokePath();
     }
 }
 
@@ -590,6 +665,76 @@ function fireLockOnMissiles() {
                 missile.destroy();
             }
         });
+    });
+}
+
+function pointToLineDistance(point, lineStart, lineEnd) {
+    // Calculate the distance between a point and a line segment
+    const A = point.x - lineStart.x;
+    const B = point.y - lineStart.y;
+    const C = lineEnd.x - lineStart.x;
+    const D = lineEnd.y - lineStart.y;
+
+    const dot = A * C + B * D;
+    const len_sq = C * C + D * D;
+    let param = -1;
+
+    if (len_sq != 0) {
+        param = dot / len_sq;
+    }
+
+    let xx, yy;
+
+    if (param < 0) {
+        xx = lineStart.x;
+        yy = lineStart.y;
+    } else if (param > 1) {
+        xx = lineEnd.x;
+        yy = lineEnd.y;
+    } else {
+        xx = lineStart.x + param * C;
+        yy = lineStart.y + param * D;
+    }
+
+    const dx = point.x - xx;
+    const dy = point.y - yy;
+
+    return Math.sqrt(dx * dx + dy * dy);
+}
+
+function checkBeamCollision() {
+    if (!fireModes.beam) return;
+
+    const startX = config.width / 2;
+    const startY = config.height - 20;
+    const endX = reticle.x;
+    const endY = reticle.y;
+
+    // Check each enemy for intersection with the beam line
+    enemies.getChildren().forEach(enemy => {
+        if (!enemy || !enemy.active) return;
+
+        // Calculate if enemy intersects with beam line using our custom function
+        const distToLine = pointToLineDistance(
+            { x: enemy.x, y: enemy.y },
+            { x: startX, y: startY },
+            { x: endX, y: endY }
+        );
+
+        // If enemy is close enough to beam line (using enemy width as threshold)
+        if (distToLine < 20) {
+            enemy.health = Math.max(0, enemy.health - 2);  // Continuous small damage
+
+            if (enemy.health <= 0) {
+                enemy.healthBar.destroy();
+                enemy.destroy();
+                this.time.delayedCall(1000, () => {
+                    createEnemy.call(this);
+                });
+            } else {
+                updateEnemyHealthBar(enemy);
+            }
+        }
     });
 }
 
