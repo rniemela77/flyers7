@@ -231,6 +231,26 @@ function updateEnemyHealthBar(enemy) {
     enemy.healthBar.fillRect(barX, barY, (enemy.health / 100) * barWidth, barHeight);
 }
 
+function createExplosion(scene, x, y) {
+    const explosion = scene.add.graphics();
+    explosion.setDepth(3);  // Above enemies (which are at depth 1) and reticle (at depth 2)
+    explosion.fillStyle(0xFFFFFF);  // White fill
+    
+    // Add random offset (-2 to +2 pixels) to position
+    const offsetX = Phaser.Math.Between(-2, 2);
+    const offsetY = Phaser.Math.Between(-2, 2);
+    
+    // Add random variation to size (12 +/- 2 pixels)
+    const radius = 12 + Phaser.Math.Between(-2, 2);
+    
+    explosion.fillCircle(x + offsetX, y + offsetY, radius);
+    
+    // Destroy the circle after 50ms
+    scene.time.delayedCall(50, () => {
+        explosion.destroy();
+    });
+}
+
 function fireBullet() {
     const centerX = config.width / 2;
     const bottomY = config.height - 20;
@@ -244,6 +264,9 @@ function fireBullet() {
 
         // Add collision with all enemies
         this.physics.add.overlap(bullet, enemies, (bullet, enemy) => {
+            // Create explosion at bullet's position
+            createExplosion(this, bullet.x, bullet.y);
+            
             bullet.destroy();
             const damage = 10;
             enemy.health = Math.max(0, enemy.health - damage);
@@ -366,13 +389,6 @@ function update() {
         };
     }
 
-    // Update lock-on targeting
-    if (fireModes.lockOn) {
-        updateLockOnTargets.call(this);
-    } else {
-        this.lockOnGraphics.clear();
-    }
-
     // Update beam graphics
     beamGraphics.clear();
     if (fireModes.beam) {
@@ -394,6 +410,18 @@ function update() {
         beamGraphics.moveTo(startX, startY);
         beamGraphics.lineTo(endX, endY);
         beamGraphics.strokePath();
+    }
+
+    // Update lock-on targeting
+    if (fireModes.lockOn) {
+        updateLockOnTargets.call(this);
+    } else {
+        this.lockOnGraphics.clear();
+    }
+
+    // Update beam collision with proper scene context
+    if (fireModes.beam) {
+        checkBeamCollision.call(this);
     }
 }
 
@@ -645,6 +673,9 @@ function fireLockOnMissiles() {
 
         // Add collision with target
         this.physics.add.overlap(missile, enemies, (missile, enemy) => {
+            // Create explosion at missile's position
+            createExplosion(this, missile.x, missile.y);
+            
             missile.destroy();
             enemy.health = Math.max(0, enemy.health - 15);  // Missiles do more damage
             
@@ -723,6 +754,9 @@ function checkBeamCollision() {
 
         // If enemy is close enough to beam line (using enemy width as threshold)
         if (distToLine < 20) {
+            // Simpler approach: show explosion at enemy's position
+            createExplosion(this, enemy.x, enemy.y + 20);  // Offset slightly down from center
+            
             enemy.health = Math.max(0, enemy.health - 2);  // Continuous small damage
 
             if (enemy.health <= 0) {
