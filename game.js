@@ -97,6 +97,29 @@ const GAME_CONFIG = {
     }
 };
 
+function handleEnemyHit(scene, enemy, damage, hitPosition, skipModifiers = false) {
+    createExplosion(scene, hitPosition.x, hitPosition.y);
+
+    // Create a standardized hit info object that all modifiers can use
+    const hitInfo = {
+        damage: damage,
+        position: hitPosition,
+        scene: scene
+    };
+
+    // Apply modifiers before damage, unless skipModifiers is true
+    if (!skipModifiers && scene.weaponModifierManager?.modifiers) {
+        scene.weaponModifierManager.modifiers.forEach(modifier => {
+            if (modifier?.isActive) {
+                modifier.onHit(scene, enemy, hitInfo);
+            }
+        });
+    }
+
+    // Apply base damage
+    enemy.damage(damage);
+}
+
 class Projectile extends Phaser.Physics.Arcade.Sprite {
     constructor(scene, config) {
         super(scene, config.x, config.y, config.texture || 'bullet');
@@ -110,7 +133,11 @@ class Projectile extends Phaser.Physics.Arcade.Sprite {
         scene.physics.add.existing(this);
         scene.bullets.add(this);  // Add to bullets group
         
-        this.setupCollision();
+        // Set up collision after a short delay to ensure scene is initialized
+        scene.time.delayedCall(0, () => {
+            this.setupCollision();
+        });
+        
         this.setupLifetime();
         
         if (config.angle !== undefined) {
@@ -120,10 +147,12 @@ class Projectile extends Phaser.Physics.Arcade.Sprite {
     }
     
     setupCollision() {
+        // Only set up collision if the projectile is still active
+        if (!this.active) return;
+        
         this.scene.physics.add.overlap(this, this.scene.enemies, (projectile, enemy) => {
-            createExplosion(this.scene, projectile.x, projectile.y);
+            handleEnemyHit(this.scene, enemy, this.damage, { x: projectile.x, y: projectile.y }, false);
             projectile.destroy();
-            enemy.damage(this.damage);
         });
     }
     
@@ -251,8 +280,10 @@ function checkBeamCollision(scene) {
         );
 
         if (distToLine < GAME_CONFIG.combat.projectiles.beam.range) {
-            createExplosion(scene, enemy.x, enemy.y + 20);
-            enemy.damage(GAME_CONFIG.combat.projectiles.beam.damage);
+            handleEnemyHit(scene, enemy, GAME_CONFIG.combat.projectiles.beam.damage, { 
+                x: enemy.x, 
+                y: enemy.y 
+            }, false);
         }
     });
 }
@@ -812,7 +843,7 @@ const FIRE_MODES = {
             graphics.strokeCircle(x + width/2 + 8, y + height/2 + 8, 5);
         },
         fire: function(scene) {
-            if (this.isActive && scene.lockedTargets.length > 0) {
+            if (scene.lockedTargets.length > 0) {
                 fireLockOnMissiles.call(scene);
             }
         },
@@ -959,6 +990,9 @@ function create() {
 
     // Initialize weapon state manager
     this.weaponManager = new WeaponStateManager(this);
+    
+    // Initialize weapon modifier manager
+    this.weaponModifierManager = new WeaponModifierManager(this);
 
     // Setup continuous weapon updates
     this.time.addEvent({
@@ -998,6 +1032,9 @@ function create() {
 
     // Create weapon mode toggle buttons
     this.weaponManager.createToggleButtons();
+    
+    // Create weapon modifier toggle buttons
+    this.weaponModifierManager.createToggleButtons();
 
     // Initialize locked targets array for lock-on mode
     this.lockedTargets = [];
@@ -1266,9 +1303,11 @@ function fireLockOnMissiles() {
         });
 
         this.physics.add.overlap(missile, this.enemies, (missile, enemy) => {
-            createExplosion(this, missile.x, missile.y);
+            handleEnemyHit(this, enemy, GAME_CONFIG.combat.projectiles.lockOn.missileDamage, { 
+                x: missile.x, 
+                y: missile.y 
+            }, false);
             missile.destroy();
-            enemy.damage(15);  // Missiles do more damage
         });
 
         this.time.delayedCall(3000, () => {
@@ -1331,5 +1370,187 @@ function createExplosion(scene, x, y) {
     scene.time.delayedCall(50, () => {
         explosion.destroy();
     });
+}
+
+class WeaponModifier {
+    constructor(config) {
+        this.name = config.name;
+        this.isActive = config.isActive || false;
+        this.iconDrawer = config.iconDrawer;
+        this.buttonConfig = null;
+        this.onHit = config.onHit || (() => {});
+        this.isExclusive = config.isExclusive || false;
+        
+        if (typeof config.onToggle === 'function') {
+            this.onToggle = config.onToggle.bind(this);
+        } else {
+            this.onToggle = () => {};
+        }
+    }
+    
+    toggle(scene) {
+        this.isActive = !this.isActive;
+        this.onToggle(scene, this.isActive);
+        if (typeof this.onStateChange === 'function') {
+            this.onStateChange(this.isActive);
+        }
+    }
+    
+    deactivate() {
+        if (this.isActive) {
+            this.isActive = false;
+            this.onToggle(this.scene, false);
+            if (typeof this.onStateChange === 'function') {
+                this.onStateChange(false);
+            }
+        }
+    }
+}
+
+// Add weapon modifiers configuration
+const WEAPON_MODIFIERS = {
+    chainLightning: new WeaponModifier({
+        name: 'chainLightning',
+        iconDrawer: (graphics, x, y, width, height) => {
+            graphics.lineStyle(2, 0xFFFF00);
+            const centerX = x + width/2;
+            const centerY = y + height/2;
+            
+            // Draw a lightning bolt
+            graphics.beginPath();
+            graphics.moveTo(centerX - 10, centerY - 15);  // Start top-left
+            graphics.lineTo(centerX, centerY - 5);        // First zag right
+            graphics.lineTo(centerX - 5, centerY + 5);    // Second zag left
+            graphics.lineTo(centerX + 10, centerY + 15);  // End bottom-right
+            graphics.strokePath();
+        },
+        onHit: (scene, sourceEnemy, hitInfo) => {
+            const chainChance = 0.75;  // 75% chance to trigger chain lightning
+            if (Math.random() > chainChance) return;
+
+            const maxChains = 2;
+            const chainRange = 100;
+            const chainDamage = hitInfo.damage * 0.5;  // Chain hits do 50% damage
+            
+            // Find up to 2 nearest enemies that aren't the source
+            const nearbyEnemies = scene.enemies.getChildren()
+                .filter(enemy => enemy.active && enemy !== sourceEnemy)
+                .map(enemy => ({
+                    enemy,
+                    distance: Phaser.Math.Distance.Between(
+                        sourceEnemy.x, sourceEnemy.y,
+                        enemy.x, enemy.y
+                    )
+                }))
+                .filter(({ distance }) => distance <= chainRange)
+                .sort((a, b) => a.distance - b.distance)
+                .slice(0, maxChains)
+                .map(({ enemy }) => enemy);
+
+            // Chain to each nearby enemy
+            nearbyEnemies.forEach(targetEnemy => {
+                // Create lightning effect
+                const lightning = scene.add.graphics();
+                lightning.setDepth(3);
+                lightning.lineStyle(3, 0xFFFF00, 0.8);
+                
+                // Add some randomness to the lightning path
+                const midX = (sourceEnemy.x + targetEnemy.x) / 2;
+                const midY = (sourceEnemy.y + targetEnemy.y) / 2;
+                const offsetX = (Math.random() - 0.5) * 20;
+                const offsetY = (Math.random() - 0.5) * 20;
+                
+                lightning.beginPath();
+                lightning.moveTo(sourceEnemy.x, sourceEnemy.y);
+                lightning.lineTo(midX + offsetX, midY + offsetY);
+                lightning.lineTo(targetEnemy.x, targetEnemy.y);
+                lightning.strokePath();
+                
+                // Fade out and destroy the lightning effect
+                scene.tweens.add({
+                    targets: lightning,
+                    alpha: 0,
+                    duration: 200,
+                    onComplete: () => lightning.destroy()
+                });
+                
+                // Deal chain damage directly without triggering more modifiers
+                targetEnemy.damage(chainDamage);
+            });
+        }
+    })
+};
+
+class WeaponModifierManager {
+    constructor(scene) {
+        this.scene = scene;
+        this.modifiers = new Map();
+        this.setupModifiers();
+    }
+    
+    setupModifiers() {
+        Object.entries(WEAPON_MODIFIERS).forEach(([name, modifier]) => {
+            this.addModifier(name, modifier);
+        });
+    }
+    
+    addModifier(name, modifier) {
+        this.modifiers.set(name, modifier);
+        modifier.onStateChange = (active) => this.handleModifierStateChange(name, active);
+    }
+    
+    handleModifierStateChange(modifierName, active) {
+        if (active) {
+            this.modifiers.forEach((modifier, name) => {
+                if (name !== modifierName && modifier.isExclusive) {
+                    modifier.deactivate();
+                }
+            });
+        }
+    }
+    
+    getModifier(name) {
+        return this.modifiers.get(name);
+    }
+    
+    createToggleButtons() {
+        const { width, height, margin } = GAME_CONFIG.ui.buttons;
+        const y = GAME_CONFIG.display.height - (height * 2) - (margin * 2);  // Position above weapon modes
+        
+        let index = 0;
+        this.modifiers.forEach((modifier, name) => {
+            const x = margin * (index + 1) + width * index;
+            modifier.buttonConfig = { x, y, width, height };
+            
+            const button = this.scene.add.graphics();
+            button.setInteractive(
+                new Phaser.Geom.Rectangle(x, y, width, height),
+                Phaser.Geom.Rectangle.Contains
+            );
+            
+            this.updateButtonVisuals(button, modifier);
+            
+            button.on('pointerdown', () => {
+                modifier.toggle(this.scene);
+                this.updateButtonVisuals(button, modifier);
+            });
+            
+            this.scene[`${name}ModifierButton`] = button;
+            index++;
+        });
+    }
+    
+    updateButtonVisuals(button, modifier) {
+        const { x, y, width, height } = modifier.buttonConfig;
+        
+        button.clear();
+        button.lineStyle(2, 0xFFFFFF);
+        button.fillStyle(modifier.isActive ? 0x444444 : 0x222222);
+        button.fillRect(x, y, width, height);
+        button.strokeRect(x, y, width, height);
+        
+        button.fillStyle(0xFFFFFF);
+        modifier.iconDrawer(button, x, y, width, height);
+    }
 }
 
