@@ -666,25 +666,27 @@ function fireLockOnMissiles() {
         this.time.addEvent({
             delay: 16,
             callback: () => {
-                if (!missile.active || !missile.target.active) {
-                    if (missile.active) missile.destroy();
-                    return;
+                if (!missile.active) return;
+
+                // If target is still active, home in on it
+                if (missile.target.active) {
+                    const targetAngle = Phaser.Math.Angle.Between(
+                        missile.x, missile.y,
+                        missile.target.x, missile.target.y
+                    );
+
+                    let currentAngle = missile.rotation;
+                    const angleDiff = Phaser.Math.Angle.Wrap(targetAngle - currentAngle);
+                    
+                    if (Math.abs(angleDiff) > 0.01) {
+                        currentAngle += Phaser.Math.Clamp(angleDiff, -missile.turnRate, missile.turnRate);
+                    }
+
+                    missile.rotation = currentAngle;
+                    this.physics.velocityFromRotation(currentAngle, missile.speed, missile.body.velocity);
                 }
-
-                const targetAngle = Phaser.Math.Angle.Between(
-                    missile.x, missile.y,
-                    missile.target.x, missile.target.y
-                );
-
-                let currentAngle = missile.rotation;
-                const angleDiff = Phaser.Math.Angle.Wrap(targetAngle - currentAngle);
-                
-                if (Math.abs(angleDiff) > 0.01) {
-                    currentAngle += Phaser.Math.Clamp(angleDiff, -missile.turnRate, missile.turnRate);
-                }
-
-                missile.rotation = currentAngle;
-                this.physics.velocityFromRotation(currentAngle, missile.speed, missile.body.velocity);
+                // If target is destroyed, missile continues in its current direction
+                // No need to update velocity as it will maintain its last direction
             },
             callbackScope: this,
             loop: true
