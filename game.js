@@ -11,6 +11,76 @@ Game mechanics:
 - the player continuously fires bullets which spawn at the bottom center and travels in the direction of the targeting reticle.
 */
 
+// First, declare all helper functions that will be used by FireMode
+function createBullet(scene, x, y, angle, config = {}) {
+    const bullet = scene.bullets.create(x, y, 'bullet');
+    const speed = config.speed || 400;
+    
+    scene.physics.velocityFromRotation(angle, speed, bullet.body.velocity);
+    bullet.rotation = angle;
+
+    scene.physics.add.overlap(bullet, scene.enemies, (bullet, enemy) => {
+        createExplosion(scene, bullet.x, bullet.y);
+        bullet.destroy();
+        
+        const damage = config.damage || 10;
+        enemy.health = Math.max(0, enemy.health - damage);
+        
+        if (enemy.health <= 0) {
+            enemy.healthBar.destroy();
+            enemy.destroy();
+            scene.time.delayedCall(1000, () => {
+                createEnemy.call(scene);
+            });
+        } else {
+            updateEnemyHealthBar(enemy);
+        }
+    });
+
+    scene.time.delayedCall(2000, () => {
+        if (bullet.active) bullet.destroy();
+    });
+
+    return bullet;
+}
+
+// FireMode class definition
+class FireMode {
+    constructor(config) {
+        this.name = config.name;
+        this.isActive = config.isActive || false;
+        this.iconDrawer = config.iconDrawer;
+        this.damage = config.damage || 10;
+        this.cooldown = config.cooldown || 100;
+        this.buttonConfig = {
+            x: 0,
+            y: 0,
+            width: 40,
+            height: 40
+        };
+
+        // Safely bind methods if they exist
+        if (typeof config.fire === 'function') {
+            this.fire = config.fire.bind(this);
+        } else {
+            this.fire = () => {};
+        }
+
+        if (typeof config.update === 'function') {
+            this.update = config.update.bind(this);
+        } else {
+            this.update = () => {};
+        }
+
+        if (typeof config.onToggle === 'function') {
+            this.onToggle = config.onToggle.bind(this);
+        } else {
+            this.onToggle = () => {};
+        }
+    }
+}
+
+// Game configuration
 const config = {
     // 2340 x 1080
     type: Phaser.AUTO,
@@ -35,23 +105,133 @@ const config = {
     }
 };
 
-const game = new Phaser.Game(config);
-
-let enemies;  // Group to hold all enemies
-let reticle;
-let joystickPoint;
-let bullets;
-let isPointerDown = false;
-let lastPointerPosition = { x: 0, y: 0 };
-let isEnemyMoving = false;
-let fireModes = {
-    rapidFire: true,
-    dualShot: false,
-    tripleShot: false,
-    beam: false,
-    lockOn: false
+// Fire modes configuration - move after config but before game initialization
+const FIRE_MODES = {
+    rapidFire: new FireMode({
+        name: 'rapidFire',
+        isActive: true,
+        damage: 10,
+        cooldown: 100,
+        iconDrawer: (graphics, x, y, width, height) => {
+            const circleY = y + height/2;
+            for (let i = 0; i < 3; i++) {
+                graphics.fillCircle(x + 10 + (i * 10), circleY, 3);
+            }
+        },
+        fire: function(scene) {
+            const centerX = config.width / 2;
+            const bottomY = config.height - 20;
+            const angle = Phaser.Math.Angle.Between(
+                centerX, bottomY,
+                scene.reticle.x, scene.reticle.y
+            );
+            createBullet(scene, centerX, bottomY, angle);
+        }
+    }),
+    
+    dualShot: new FireMode({
+        name: 'dualShot',
+        damage: 10,
+        cooldown: 100,
+        iconDrawer: (graphics, x, y, width, height) => {
+            const circleY = y + height/2;
+            graphics.fillCircle(x + 13, circleY, 5);
+            graphics.fillCircle(x + 27, circleY, 5);
+        },
+        fire: function(scene) {
+            const centerX = config.width / 2;
+            const bottomY = config.height - 20;
+            const baseAngle = Phaser.Math.Angle.Between(
+                centerX, bottomY,
+                scene.reticle.x, scene.reticle.y
+            );
+            
+            const offset = 10;
+            const perpAngle = baseAngle + Math.PI / 2;
+            const offsetX = Math.cos(perpAngle) * offset;
+            const offsetY = Math.sin(perpAngle) * offset;
+            
+            createBullet(scene, centerX - offsetX, bottomY - offsetY, baseAngle);
+            createBullet(scene, centerX + offsetX, bottomY + offsetY, baseAngle);
+        }
+    }),
+    
+    tripleShot: new FireMode({
+        name: 'tripleShot',
+        damage: 10,
+        cooldown: 100,
+        iconDrawer: (graphics, x, y, width, height) => {
+            const circleY = y + height/2;
+            graphics.fillCircle(x + 8, circleY, 5);
+            graphics.fillCircle(x + 20, circleY, 5);
+            graphics.fillCircle(x + 32, circleY, 5);
+        },
+        fire: function(scene) {
+            const centerX = config.width / 2;
+            const bottomY = config.height - 20;
+            const baseAngle = Phaser.Math.Angle.Between(
+                centerX, bottomY,
+                scene.reticle.x, scene.reticle.y
+            );
+            
+            const spread = Math.PI / 32;
+            createBullet(scene, centerX, bottomY, baseAngle);
+            createBullet(scene, centerX, bottomY, baseAngle - spread);
+            createBullet(scene, centerX, bottomY, baseAngle + spread);
+        }
+    }),
+    
+    beam: new FireMode({
+        name: 'beam',
+        damage: 2,
+        cooldown: 100,
+        iconDrawer: (graphics, x, y, width, height) => {
+            graphics.lineStyle(3, 0xFFFFFF);
+            graphics.beginPath();
+            graphics.moveTo(x + width/2, y + 5);
+            graphics.lineTo(x + width/2, y + height - 5);
+            graphics.stroke();
+            for (let i = 0; i < 3; i++) {
+                graphics.fillCircle(x + width/2, y + 10 + (i * 10), 2);
+            }
+        },
+        update: function(scene) {
+            if (!this.isActive) return;
+            checkBeamCollision.call(scene);
+        }
+    }),
+    
+    lockOn: new FireMode({
+        name: 'lockOn',
+        damage: 15,
+        cooldown: 500,
+        iconDrawer: (graphics, x, y, width, height) => {
+            graphics.lineStyle(2, 0xFFFFFF);
+            graphics.strokeCircle(x + width/2, y + height/2, 12);
+            graphics.lineStyle(1, 0xFFFFFF);
+            graphics.strokeCircle(x + width/2 - 8, y + height/2 - 8, 5);
+            graphics.strokeCircle(x + width/2 + 8, y + height/2 + 8, 5);
+        },
+        fire: function(scene) {
+            if (this.isActive && scene.lockedTargets.length > 0) {
+                fireLockOnMissiles.call(scene);
+            }
+        },
+        update: function(scene) {
+            if (this.isActive) {
+                updateLockOnTargets.call(scene);
+            }
+        },
+        onToggle: function(scene, isActive) {
+            if (!isActive) {
+                scene.lockedTargets = [];
+            }
+        }
+    })
 };
-let beamGraphics;  // Add this line to store beam graphics
+
+// Initialize game last
+const game = new Phaser.Game(config);
 
 function preload() {
     // Remove the bullet image preload since we'll create it with graphics
@@ -89,7 +269,7 @@ function createEnemy() {
     updateEnemyHealthBar(enemy);
 
     // Add to enemies group
-    enemies.add(enemy);
+    this.enemies.add(enemy);
 
     // Start enemy movement
     moveEnemyToNewPosition.call(this, enemy);
@@ -98,8 +278,12 @@ function createEnemy() {
 }
 
 function create() {
-    // Create enemies group
-    enemies = this.physics.add.group();
+    // Store all state in the scene instead of global variables
+    this.enemies = this.physics.add.group();
+    this.bullets = this.physics.add.group();
+    this.isPointerDown = false;
+    this.lastPointerPosition = { x: 0, y: 0 };
+    this.isEnemyMoving = false;
     
     // Create initial enemies (3 of them)
     for (let i = 0; i < 3; i++) {
@@ -119,9 +303,9 @@ function create() {
     const reticleTexture = reticleGraphics.generateTexture('reticle', 50, 50);
     reticleGraphics.destroy();
 
-    // Create reticle at center of screen
-    reticle = this.add.sprite(config.width / 2, config.height / 2, 'reticle');
-    reticle.setDepth(2);  // Set reticle depth to 2 (above enemy)
+    // Create reticle at center of screen and store it in the scene
+    this.reticle = this.add.sprite(config.width / 2, config.height / 2, 'reticle');
+    this.reticle.setDepth(2);  // Set reticle depth to 2 (above enemy)
 
     // Create bullet texture using graphics
     const bulletGraphics = this.add.graphics();
@@ -134,32 +318,26 @@ function create() {
     const bulletTexture = bulletGraphics.generateTexture('bullet', 8, 8);
     bulletGraphics.destroy();
 
-    // Create bullet group
-    bullets = this.physics.add.group();
-
-    // Create beam graphics
-    beamGraphics = this.add.graphics();
-    beamGraphics.setDepth(1);  // Set depth between enemies and reticle
+    // Create beam graphics and store in scene
+    this.beamGraphics = this.add.graphics();
+    this.beamGraphics.setDepth(1);  // Set depth between enemies and reticle
 
     // Setup continuous bullet firing
     this.time.addEvent({
         delay: 100,
         callback: () => {
-            if (fireModes.rapidFire || fireModes.dualShot || fireModes.tripleShot) {
-                fireBullet.call(this);
-            }
-        },
-        callbackScope: this,
-        loop: true
-    });
-
-    // Setup continuous beam damage
-    this.time.addEvent({
-        delay: 100,  // Check for beam damage every 100ms
-        callback: () => {
-            if (fireModes.beam) {
-                checkBeamCollision.call(this);
-            }
+            Object.values(FIRE_MODES).forEach(mode => {
+                try {
+                    if (mode.isActive && typeof mode.fire === 'function') {
+                        mode.fire(this);
+                    }
+                    if (typeof mode.update === 'function') {
+                        mode.update(this);
+                    }
+                } catch (error) {
+                    console.error(`Error in fire mode ${mode.name}:`, error);
+                }
+            });
         },
         callbackScope: this,
         loop: true
@@ -167,30 +345,30 @@ function create() {
 
     // Setup input handlers
     this.input.on('pointerdown', (pointer) => {
-        isPointerDown = true;
-        joystickPoint = { x: pointer.x, y: pointer.y };
-        lastPointerPosition = { x: pointer.x, y: pointer.y };
+        this.isPointerDown = true;
+        this.joystickPoint = { x: pointer.x, y: pointer.y };
+        this.lastPointerPosition = { x: pointer.x, y: pointer.y };
     });
 
     this.input.on('pointermove', (pointer) => {
-        if (isPointerDown) {
-            const dx = pointer.x - joystickPoint.x;
-            const dy = pointer.y - joystickPoint.y;
+        if (this.isPointerDown) {
+            const dx = pointer.x - this.joystickPoint.x;
+            const dy = pointer.y - this.joystickPoint.y;
             
             // Move reticle at 2x the distance of the drag
-            reticle.x += (pointer.x - lastPointerPosition.x) * 2;
-            reticle.y += (pointer.y - lastPointerPosition.y) * 2;
+            this.reticle.x += (pointer.x - this.lastPointerPosition.x) * 2;
+            this.reticle.y += (pointer.y - this.lastPointerPosition.y) * 2;
 
             // Keep reticle within game bounds
-            reticle.x = Phaser.Math.Clamp(reticle.x, 0, config.width);
-            reticle.y = Phaser.Math.Clamp(reticle.y, 0, config.height);
+            this.reticle.x = Phaser.Math.Clamp(this.reticle.x, 0, config.width);
+            this.reticle.y = Phaser.Math.Clamp(this.reticle.y, 0, config.height);
 
-            lastPointerPosition = { x: pointer.x, y: pointer.y };
+            this.lastPointerPosition = { x: pointer.x, y: pointer.y };
         }
     });
 
     this.input.on('pointerup', () => {
-        isPointerDown = false;
+        this.isPointerDown = false;
     });
 
     createFireModeToggles.call(this);
@@ -204,7 +382,7 @@ function create() {
     this.time.addEvent({
         delay: 500,
         callback: () => {
-            if (fireModes.lockOn && this.lockedTargets.length > 0) {
+            if (FIRE_MODES.lockOn.isActive && this.lockedTargets.length > 0) {
                 fireLockOnMissiles.call(this);
             }
         },
@@ -251,81 +429,6 @@ function createExplosion(scene, x, y) {
     });
 }
 
-function fireBullet() {
-    const centerX = config.width / 2;
-    const bottomY = config.height - 20;
-    const speed = 400;
-
-    // Helper function to create a single bullet
-    const createSingleBullet = (x, y, angle) => {
-        const bullet = bullets.create(x, y, 'bullet');
-        this.physics.velocityFromRotation(angle, speed, bullet.body.velocity);
-        bullet.rotation = angle;
-
-        // Add collision with all enemies
-        this.physics.add.overlap(bullet, enemies, (bullet, enemy) => {
-            // Create explosion at bullet's position
-            createExplosion(this, bullet.x, bullet.y);
-            
-            bullet.destroy();
-            const damage = 10;
-            enemy.health = Math.max(0, enemy.health - damage);
-            
-            if (enemy.health <= 0) {
-                enemy.healthBar.destroy();
-                enemy.destroy();
-                this.time.delayedCall(1000, () => {
-                    createEnemy.call(this);
-                });
-            } else {
-                updateEnemyHealthBar(enemy);
-            }
-        });
-
-        // Destroy bullet after 2 seconds
-        this.time.delayedCall(2000, () => {
-            if (bullet.active) bullet.destroy();
-        });
-
-        return bullet;
-    };
-
-    // Calculate base angle to reticle
-    const baseAngle = Phaser.Math.Angle.Between(
-        centerX, bottomY,
-        reticle.x, reticle.y
-    );
-
-    let bulletsToFire = [];
-
-    // Add bullets based on active modes
-    if (fireModes.tripleShot) {
-        const spread = Math.PI / 32;  // ~5.625 degrees
-        bulletsToFire.push({ x: centerX, y: bottomY, angle: baseAngle });  // Center
-        bulletsToFire.push({ x: centerX, y: bottomY, angle: baseAngle - spread });  // Left
-        bulletsToFire.push({ x: centerX, y: bottomY, angle: baseAngle + spread });  // Right
-    }
-
-    if (fireModes.dualShot) {
-        const offset = 10;
-        const perpAngle = baseAngle + Math.PI / 2;
-        const offsetX = Math.cos(perpAngle) * offset;
-        const offsetY = Math.sin(perpAngle) * offset;
-        
-        bulletsToFire.push({ x: centerX - offsetX, y: bottomY - offsetY, angle: baseAngle });  // Left
-        bulletsToFire.push({ x: centerX + offsetX, y: bottomY + offsetY, angle: baseAngle });  // Right
-    }
-
-    if (fireModes.rapidFire) {
-        bulletsToFire.push({ x: centerX, y: bottomY, angle: baseAngle });
-    }
-
-    // Fire all bullets
-    bulletsToFire.forEach(bullet => {
-        createSingleBullet(bullet.x, bullet.y, bullet.angle);
-    });
-}
-
 function moveEnemyToNewPosition(enemy) {
     if (!enemy || !enemy.active) return;
 
@@ -359,14 +462,14 @@ function moveEnemyToNewPosition(enemy) {
 
 function update() {
     // Update all enemy health bars
-    enemies.getChildren().forEach(enemy => {
+    this.enemies.getChildren().forEach(enemy => {
         if (enemy && enemy.active) {
             updateEnemyHealthBar(enemy);
         }
     });
 
     // Clean up bullets that are out of bounds
-    bullets.getChildren().forEach((bullet) => {
+    this.bullets.getChildren().forEach((bullet) => {
         if (bullet.x < 0 || bullet.x > config.width || 
             bullet.y < 0 || bullet.y > config.height) {
             bullet.destroy();
@@ -374,53 +477,53 @@ function update() {
     });
 
     // Allow reticle movement at any time
-    if (isPointerDown) {
+    if (this.isPointerDown) {
         // Move reticle at 2x the distance of the drag
-        reticle.x += (this.input.activePointer.x - lastPointerPosition.x) * 2;
-        reticle.y += (this.input.activePointer.y - lastPointerPosition.y) * 2;
+        this.reticle.x += (this.input.activePointer.x - this.lastPointerPosition.x) * 2;
+        this.reticle.y += (this.input.activePointer.y - this.lastPointerPosition.y) * 2;
 
         // Keep reticle within game bounds
-        reticle.x = Phaser.Math.Clamp(reticle.x, 0, config.width);
-        reticle.y = Phaser.Math.Clamp(reticle.y, 0, config.height);
+        this.reticle.x = Phaser.Math.Clamp(this.reticle.x, 0, config.width);
+        this.reticle.y = Phaser.Math.Clamp(this.reticle.y, 0, config.height);
 
-        lastPointerPosition = { 
+        this.lastPointerPosition = { 
             x: this.input.activePointer.x, 
             y: this.input.activePointer.y 
         };
     }
 
     // Update beam graphics
-    beamGraphics.clear();
-    if (fireModes.beam) {
+    this.beamGraphics.clear();
+    if (FIRE_MODES.beam.isActive) {
         const startX = config.width / 2;
         const startY = config.height - 20;
-        const endX = reticle.x;
-        const endY = reticle.y;
+        const endX = this.reticle.x;
+        const endY = this.reticle.y;
 
         // Draw beam glow effect
-        beamGraphics.lineStyle(6, 0x00FFFF, 0.3);  // Wider, semi-transparent cyan
-        beamGraphics.beginPath();
-        beamGraphics.moveTo(startX, startY);
-        beamGraphics.lineTo(endX, endY);
-        beamGraphics.strokePath();
+        this.beamGraphics.lineStyle(6, 0x00FFFF, 0.3);
+        this.beamGraphics.beginPath();
+        this.beamGraphics.moveTo(startX, startY);
+        this.beamGraphics.lineTo(endX, endY);
+        this.beamGraphics.strokePath();
 
         // Draw beam core
-        beamGraphics.lineStyle(2, 0xFFFFFF, 1);  // Thin, solid white
-        beamGraphics.beginPath();
-        beamGraphics.moveTo(startX, startY);
-        beamGraphics.lineTo(endX, endY);
-        beamGraphics.strokePath();
+        this.beamGraphics.lineStyle(2, 0xFFFFFF, 1);
+        this.beamGraphics.beginPath();
+        this.beamGraphics.moveTo(startX, startY);
+        this.beamGraphics.lineTo(endX, endY);
+        this.beamGraphics.strokePath();
     }
 
     // Update lock-on targeting
-    if (fireModes.lockOn) {
+    if (FIRE_MODES.lockOn.isActive) {
         updateLockOnTargets.call(this);
     } else {
         this.lockOnGraphics.clear();
     }
 
     // Update beam collision with proper scene context
-    if (fireModes.beam) {
+    if (FIRE_MODES.beam.isActive) {
         checkBeamCollision.call(this);
     }
 }
@@ -431,126 +534,43 @@ function createFireModeToggles() {
     const margin = 10;
     const y = config.height - buttonHeight - margin;
 
-    // Rapid fire toggle
-    const rapidFireButton = this.add.graphics();
-    rapidFireButton.setInteractive(new Phaser.Geom.Rectangle(margin, y, buttonWidth, buttonHeight), Phaser.Geom.Rectangle.Contains);
-    rapidFireButton.name = 'rapidFire';
-    
-    // Dual shot toggle
-    const dualShotButton = this.add.graphics();
-    dualShotButton.setInteractive(new Phaser.Geom.Rectangle(margin * 2 + buttonWidth, y, buttonWidth, buttonHeight), Phaser.Geom.Rectangle.Contains);
-    dualShotButton.name = 'dualShot';
-
-    // Triple shot toggle
-    const tripleShotButton = this.add.graphics();
-    tripleShotButton.setInteractive(new Phaser.Geom.Rectangle(margin * 3 + buttonWidth * 2, y, buttonWidth, buttonHeight), Phaser.Geom.Rectangle.Contains);
-    tripleShotButton.name = 'tripleShot';
-
-    // Beam toggle
-    const beamButton = this.add.graphics();
-    beamButton.setInteractive(new Phaser.Geom.Rectangle(margin * 4 + buttonWidth * 3, y, buttonWidth, buttonHeight), Phaser.Geom.Rectangle.Contains);
-    beamButton.name = 'beam';
-
-    // Lock-on toggle
-    const lockOnButton = this.add.graphics();
-    lockOnButton.setInteractive(new Phaser.Geom.Rectangle(margin * 5 + buttonWidth * 4, y, buttonWidth, buttonHeight), Phaser.Geom.Rectangle.Contains);
-    lockOnButton.name = 'lockOn';
-
-    // Draw initial button states
-    updateButtonVisuals.call(this, rapidFireButton, fireModes.rapidFire);
-    updateButtonVisuals.call(this, dualShotButton, fireModes.dualShot);
-    updateButtonVisuals.call(this, tripleShotButton, fireModes.tripleShot);
-    updateButtonVisuals.call(this, beamButton, fireModes.beam);
-    updateButtonVisuals.call(this, lockOnButton, fireModes.lockOn);
-
-    // Add click handlers
-    rapidFireButton.on('pointerdown', () => {
-        fireModes.rapidFire = !fireModes.rapidFire;
-        updateButtonVisuals.call(this, rapidFireButton, fireModes.rapidFire);
+    Object.values(FIRE_MODES).forEach((mode, index) => {
+        const x = margin * (index + 1) + buttonWidth * index;
+        mode.buttonConfig.x = x;
+        mode.buttonConfig.y = y;
+        
+        const button = this.add.graphics();
+        button.setInteractive(
+            new Phaser.Geom.Rectangle(x, y, buttonWidth, buttonHeight),
+            Phaser.Geom.Rectangle.Contains
+        );
+        
+        updateButtonVisuals.call(this, button, mode);
+        
+        button.on('pointerdown', () => {
+            mode.isActive = !mode.isActive;
+            mode.onToggle(this, mode.isActive);
+            updateButtonVisuals.call(this, button, mode);
+        });
+        
+        this[`${mode.name}Button`] = button;
     });
-
-    dualShotButton.on('pointerdown', () => {
-        fireModes.dualShot = !fireModes.dualShot;
-        updateButtonVisuals.call(this, dualShotButton, fireModes.dualShot);
-    });
-
-    tripleShotButton.on('pointerdown', () => {
-        fireModes.tripleShot = !fireModes.tripleShot;
-        updateButtonVisuals.call(this, tripleShotButton, fireModes.tripleShot);
-    });
-
-    beamButton.on('pointerdown', () => {
-        fireModes.beam = !fireModes.beam;
-        updateButtonVisuals.call(this, beamButton, fireModes.beam);
-    });
-
-    lockOnButton.on('pointerdown', () => {
-        fireModes.lockOn = !fireModes.lockOn;
-        updateButtonVisuals.call(this, lockOnButton, fireModes.lockOn);
-        // Clear locked targets when disabling
-        if (!fireModes.lockOn) {
-            this.lockedTargets = [];
-        }
-    });
-
-    // Store buttons for later reference
-    this.rapidFireButton = rapidFireButton;
-    this.dualShotButton = dualShotButton;
-    this.tripleShotButton = tripleShotButton;
-    this.beamButton = beamButton;
-    this.lockOnButton = lockOnButton;
 }
 
-function updateButtonVisuals(button, isActive) {
-    const x = button.input.hitArea.x;
-    const y = button.input.hitArea.y;
-    const width = button.input.hitArea.width;
-    const height = button.input.hitArea.height;
+function updateButtonVisuals(button, mode) {
+    const { x, y, width, height } = mode.buttonConfig;
 
     button.clear();
     
     // Draw button background
     button.lineStyle(2, 0xFFFFFF);
-    button.fillStyle(isActive ? 0x444444 : 0x222222);
+    button.fillStyle(mode.isActive ? 0x444444 : 0x222222);
     button.fillRect(x, y, width, height);
     button.strokeRect(x, y, width, height);
 
     // Draw button icon
     button.fillStyle(0xFFFFFF);
-    const circleY = y + height/2;
-
-    if (button.name === 'rapidFire') {
-        // Draw rapid fire icon (three small circles in a row)
-        for (let i = 0; i < 3; i++) {
-            button.fillCircle(x + 10 + (i * 10), circleY, 3);
-        }
-    } else if (button.name === 'dualShot') {
-        // Draw dual shot icon (two larger circles side by side)
-        button.fillCircle(x + 13, circleY, 5);
-        button.fillCircle(x + 27, circleY, 5);
-    } else if (button.name === 'tripleShot') {
-        // Draw triple shot icon (three larger circles side by side)
-        button.fillCircle(x + 8, circleY, 5);
-        button.fillCircle(x + 20, circleY, 5);
-        button.fillCircle(x + 32, circleY, 5);
-    } else if (button.name === 'beam') {
-        // Draw beam icon (vertical line with small circles)
-        button.lineStyle(3, 0xFFFFFF);
-        button.beginPath();
-        button.moveTo(x + width/2, y + 5);
-        button.lineTo(x + width/2, y + height - 5);
-        button.stroke();
-        for (let i = 0; i < 3; i++) {
-            button.fillCircle(x + width/2, y + 10 + (i * 10), 2);
-        }
-    } else if (button.name === 'lockOn') {
-        // Draw lock-on icon (crosshair with target circles)
-        button.lineStyle(2, 0xFFFFFF);
-        button.strokeCircle(x + width/2, y + height/2, 12);
-        button.lineStyle(1, 0xFFFFFF);
-        button.strokeCircle(x + width/2 - 8, y + height/2 - 8, 5);
-        button.strokeCircle(x + width/2 + 8, y + height/2 + 8, 5);
-    }
+    mode.iconDrawer(button, x, y, width, height);
 }
 
 function updateLockOnTargets() {
@@ -562,11 +582,11 @@ function updateLockOnTargets() {
 
     // Find new targets if we have less than 2
     if (this.lockedTargets.length < 2) {
-        enemies.getChildren().forEach(enemy => {
+        this.enemies.getChildren().forEach(enemy => {
             if (enemy && enemy.active && !this.lockedTargets.includes(enemy)) {
                 const distance = Phaser.Math.Distance.Between(
                     enemy.x, enemy.y,
-                    reticle.x, reticle.y
+                    this.reticle.x, this.reticle.y
                 );
 
                 if (distance < lockOnRange && this.lockedTargets.length < 2) {
@@ -625,7 +645,7 @@ function fireLockOnMissiles() {
         if (!target.active) return;
 
         // Create missile
-        const missile = bullets.create(centerX, y, 'bullet');
+        const missile = this.bullets.create(centerX, y, 'bullet');
         missile.setTint(0xFF4444);  // Give missiles a reddish tint
         missile.scaleX = 1.5;  // Make missiles longer
         missile.isHoming = true;  // Flag to identify homing missiles
@@ -672,7 +692,7 @@ function fireLockOnMissiles() {
         });
 
         // Add collision with target
-        this.physics.add.overlap(missile, enemies, (missile, enemy) => {
+        this.physics.add.overlap(missile, this.enemies, (missile, enemy) => {
             // Create explosion at missile's position
             createExplosion(this, missile.x, missile.y);
             
@@ -734,15 +754,15 @@ function pointToLineDistance(point, lineStart, lineEnd) {
 }
 
 function checkBeamCollision() {
-    if (!fireModes.beam) return;
+    if (!FIRE_MODES.beam.isActive) return;
 
     const startX = config.width / 2;
     const startY = config.height - 20;
-    const endX = reticle.x;
-    const endY = reticle.y;
+    const endX = this.reticle.x;
+    const endY = this.reticle.y;
 
     // Check each enemy for intersection with the beam line
-    enemies.getChildren().forEach(enemy => {
+    this.enemies.getChildren().forEach(enemy => {
         if (!enemy || !enemy.active) return;
 
         // Calculate if enemy intersects with beam line using our custom function
