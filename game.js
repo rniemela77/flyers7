@@ -626,18 +626,45 @@ class Enemy extends Phaser.Physics.Arcade.Sprite {
         
         this.scene = scene;
         this.health = 100;
+        this.isFrozen = false;
+        this.currentTween = null;
         
         // Add to scene and physics
         scene.add.existing(this);
         scene.physics.add.existing(this);
         
-        // Create health bar
+        // Create health bar and status effects container
         this.healthBar = scene.add.graphics();
+        this.statusEffects = scene.add.graphics();
         this.healthBar.setDepth(1);
+        this.statusEffects.setDepth(1);
         this.updateHealthBar();
         
         // Start movement
         this.startMoving();
+    }
+    
+    freeze() {
+        if (this.isFrozen) return;
+        
+        this.isFrozen = true;
+        
+        // Stop current movement
+        if (this.currentTween) {
+            this.currentTween.stop();
+        }
+        
+        // Create freeze visual effect
+        this.setTint(0x00FFFF);
+        
+        // Unfreeze after 1 second
+        this.scene.time.delayedCall(1000, () => {
+            if (this.active) {
+                this.isFrozen = false;
+                this.clearTint();
+                this.startMoving();
+            }
+        });
     }
     
     damage(amount) {
@@ -652,12 +679,11 @@ class Enemy extends Phaser.Physics.Arcade.Sprite {
     }
     
     die() {
-        // Store scene reference before destroying the enemy
         const scene = this.scene;
         this.healthBar.destroy();
+        this.statusEffects.destroy();
         this.destroy();
         
-        // Use stored scene reference
         scene.time.delayedCall(1000, () => {
             createEnemy.call(scene);
         });
@@ -665,6 +691,7 @@ class Enemy extends Phaser.Physics.Arcade.Sprite {
     
     updateHealthBar() {
         this.healthBar.clear();
+        this.statusEffects.clear();
         
         const barWidth = 40;
         const barHeight = 5;
@@ -677,19 +704,25 @@ class Enemy extends Phaser.Physics.Arcade.Sprite {
         // Health (red)
         this.healthBar.fillStyle(0xFF0000);
         this.healthBar.fillRect(barX, barY, (this.health / 100) * barWidth, barHeight);
+        
+        // Draw freeze status if frozen
+        if (this.isFrozen) {
+            this.statusEffects.fillStyle(0x00FFFF);
+            // Position above and left-aligned with health bar
+            this.statusEffects.fillCircle(barX, barY - 5, 3);
+        }
     }
     
     startMoving() {
-        if (!this.active) return;
+        if (!this.active || this.isFrozen) return;
         
         const margin = 50;
         const newX = Phaser.Math.Between(margin, config.width - margin);
         const newY = Phaser.Math.Between(margin, (config.height / 2) - margin);
         
-        // Store scene reference
         const scene = this.scene;
         
-        scene.tweens.add({
+        this.currentTween = scene.tweens.add({
             targets: this,
             x: newX,
             y: newY,
@@ -1477,6 +1510,32 @@ const WEAPON_MODIFIERS = {
                 // Deal chain damage directly without triggering more modifiers
                 targetEnemy.damage(chainDamage);
             });
+        }
+    }),
+    freeze: new WeaponModifier({
+        name: 'freeze',
+        iconDrawer: (graphics, x, y, width, height) => {
+            graphics.lineStyle(2, 0x00FFFF);
+            const centerX = x + width/2;
+            const centerY = y + height/2;
+            
+            // Draw a snowflake-like icon
+            const radius = 10;
+            for (let i = 0; i < 6; i++) {
+                const angle = (i * Math.PI / 3);
+                const endX = centerX + Math.cos(angle) * radius;
+                const endY = centerY + Math.sin(angle) * radius;
+                graphics.beginPath();
+                graphics.moveTo(centerX, centerY);
+                graphics.lineTo(endX, endY);
+                graphics.strokePath();
+            }
+        },
+        onHit: (scene, enemy, hitInfo) => {
+            const freezeChance = 0.3; // 30% chance to freeze
+            if (Math.random() > freezeChance) return;
+            
+            enemy.freeze();
         }
     })
 };
