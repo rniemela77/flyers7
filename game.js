@@ -1537,6 +1537,78 @@ const WEAPON_MODIFIERS = {
             
             enemy.freeze();
         }
+    }),
+    explosive: new WeaponModifier({
+        name: 'explosive',
+        iconDrawer: (graphics, x, y, width, height) => {
+            graphics.lineStyle(2, 0xFF6600);
+            const centerX = x + width/2;
+            const centerY = y + height/2;
+            
+            // Draw an explosion-like icon
+            const radius = 8;
+            // Draw outer spikes
+            for (let i = 0; i < 8; i++) {
+                const angle = (i * Math.PI / 4);
+                const innerX = centerX + Math.cos(angle) * radius;
+                const innerY = centerY + Math.sin(angle) * radius;
+                const outerX = centerX + Math.cos(angle) * (radius * 1.5);
+                const outerY = centerY + Math.sin(angle) * (radius * 1.5);
+                graphics.beginPath();
+                graphics.moveTo(innerX, innerY);
+                graphics.lineTo(outerX, outerY);
+                graphics.strokePath();
+            }
+            // Draw inner circle
+            graphics.strokeCircle(centerX, centerY, radius);
+        },
+        onHit: (scene, enemy, hitInfo) => {
+            const explosionRadius = 80;
+            const explosionDamage = hitInfo.damage * 0.4; // 40% of original damage
+            const explosionChance = 0.3; // 30% chance to explode
+            
+            // Check if explosion should occur
+            if (Math.random() > explosionChance) {
+                return;
+            }
+            
+            const x = hitInfo.position.x;
+            const y = hitInfo.position.y;
+            
+            // Create simple explosion effect
+            const explosion = scene.add.graphics();
+            explosion.setDepth(3);
+            
+            // Single quick expanding ring
+            scene.tweens.add({
+                targets: { progress: 0 },
+                progress: 1,
+                duration: 200,
+                onUpdate: (tween) => {
+                    const progress = tween.targets[0].progress;
+                    explosion.clear();
+                    
+                    // Just a simple ring that expands and fades
+                    const radius = explosionRadius * progress;
+                    explosion.lineStyle(5, 0xFF6600, 0.8 * (1 - progress));
+                    explosion.strokeCircle(x, y, radius);
+                },
+                onComplete: () => explosion.destroy()
+            });
+            
+            // Apply damage to nearby enemies
+            scene.enemies.getChildren().forEach(nearbyEnemy => {
+                if (!nearbyEnemy.active || nearbyEnemy === enemy) return;
+                
+                const distance = Phaser.Math.Distance.Between(x, y, nearbyEnemy.x, nearbyEnemy.y);
+                
+                if (distance <= explosionRadius) {
+                    const damageMultiplier = 1 - (distance / explosionRadius);
+                    const damage = explosionDamage * damageMultiplier;
+                    nearbyEnemy.damage(damage);
+                }
+            });
+        }
     })
 };
 
