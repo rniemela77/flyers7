@@ -52,6 +52,7 @@ class FireMode {
             width: 40,
             height: 40
         };
+        this.lastFireTime = 0;  // Track when this mode last fired
 
         // Safely bind methods if they exist
         if (typeof config.fire === 'function') {
@@ -71,6 +72,10 @@ class FireMode {
         } else {
             this.onToggle = () => {};
         }
+    }
+
+    canFire(currentTime) {
+        return currentTime - this.lastFireTime >= this.cooldown;
     }
 }
 
@@ -313,6 +318,53 @@ const FIRE_MODES = {
                 scene.lockedTargets = [];
             }
         }
+    }),
+
+    shotgun: new FireMode({
+        name: 'shotgun',
+        damage: 8,
+        cooldown: 1000,  // Fire once every second
+        iconDrawer: (graphics, x, y, width, height) => {
+            // Draw a shotgun-like spread pattern icon
+            graphics.lineStyle(2, 0xFFFFFF);
+            const centerX = x + width/2;
+            const centerY = y + height/2;
+            // Draw three diverging lines
+            graphics.beginPath();
+            graphics.moveTo(centerX - 10, centerY + 10);
+            graphics.lineTo(centerX - 5, centerY - 10);
+            graphics.moveTo(centerX, centerY + 10);
+            graphics.lineTo(centerX, centerY - 10);
+            graphics.moveTo(centerX + 10, centerY + 10);
+            graphics.lineTo(centerX + 5, centerY - 10);
+            graphics.strokePath();
+        },
+        fire: function(scene) {
+            const centerX = config.width / 2;
+            const bottomY = config.height - 20;
+            const baseAngle = Phaser.Math.Angle.Between(
+                centerX, bottomY,
+                scene.reticle.x, scene.reticle.y
+            );
+            
+            // Calculate spread based on distance to target
+            const distanceToTarget = Phaser.Math.Distance.Between(
+                centerX, bottomY,
+                scene.reticle.x, scene.reticle.y
+            );
+            const baseSpread = Math.PI / 64;  // Tighter base spread angle (half of previous)
+            const distanceSpreadFactor = distanceToTarget / 800;  // Reduced distance spread factor
+            const totalSpread = baseSpread * (1 + distanceSpreadFactor);
+            
+            // Fire 8 pellets in a spread pattern
+            for (let i = 0; i < 8; i++) {
+                const spreadAngle = baseAngle + (Math.random() * 2 - 1) * totalSpread;
+                createBullet(scene, centerX, bottomY, spreadAngle, {
+                    speed: 800,  // Keep the same fast bullet speed
+                    damage: this.damage
+                });
+            }
+        }
     })
 };
 
@@ -404,10 +456,12 @@ function create() {
     this.time.addEvent({
         delay: 100,
         callback: () => {
+            const currentTime = this.time.now;
             Object.values(FIRE_MODES).forEach(mode => {
                 try {
-                    if (mode.isActive && typeof mode.fire === 'function') {
+                    if (mode.isActive && typeof mode.fire === 'function' && mode.canFire(currentTime)) {
                         mode.fire(this);
+                        mode.lastFireTime = currentTime;
                     }
                     if (typeof mode.update === 'function') {
                         mode.update(this);
