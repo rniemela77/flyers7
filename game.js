@@ -11,6 +11,202 @@ Game mechanics:
 - the player continuously fires bullets which spawn at the bottom center and travels in the direction of the targeting reticle.
 */
 
+const GAME_CONFIG = {
+    display: {
+        width: 400,
+        height: 800,
+        scale: Phaser.Scale.FIT,
+        centerOffset: 20  // Distance from bottom center for projectile spawning
+    },
+    combat: {
+        projectiles: {
+            bullet: {
+                baseSpeed: 400,
+                lifetime: 2000,
+                baseDamage: 10,
+                size: 8
+            },
+            beam: {
+                damage: 2,
+                range: 20,
+                width: 6,
+                glowWidth: 6,
+                glowAlpha: 0.3
+            },
+            lockOn: {
+                maxTargets: 2,
+                range: 100,
+                missileSpeed: 300,
+                missileDamage: 15,
+                turnRate: 0.05,
+                lifetime: 3000
+            },
+            shotgun: {
+                pelletCount: 8,
+                speed: 800,
+                damage: 8,
+                baseSpread: Math.PI / 64
+            }
+        },
+        fireModes: {
+            rapidFire: {
+                cooldown: 100,
+                damage: 10
+            },
+            dualShot: {
+                cooldown: 100,
+                damage: 10,
+                offset: 10
+            },
+            tripleShot: {
+                cooldown: 100,
+                damage: 10,
+                spread: Math.PI / 32
+            },
+            beam: {
+                cooldown: 100,
+                damage: 2
+            },
+            lockOn: {
+                cooldown: 500,
+                damage: 15
+            },
+            shotgun: {
+                cooldown: 1000,
+                damage: 8
+            }
+        }
+    },
+    enemy: {
+        health: 100,
+        movementMargin: 50,
+        movementDuration: 1500,
+        respawnDelay: 1000,
+        healthBar: {
+            width: 40,
+            height: 5,
+            yOffset: 5
+        }
+    },
+    ui: {
+        buttons: {
+            width: 40,
+            height: 40,
+            margin: 10
+        }
+    }
+};
+
+class Projectile extends Phaser.Physics.Arcade.Sprite {
+    constructor(scene, config) {
+        super(scene, config.x, config.y, config.texture || 'bullet');
+        
+        this.scene = scene;
+        this.damage = config.damage || GAME_CONFIG.combat.projectiles.bullet.baseDamage;
+        this.speed = config.speed || GAME_CONFIG.combat.projectiles.bullet.baseSpeed;
+        this.lifetime = config.lifetime || GAME_CONFIG.combat.projectiles.bullet.lifetime;
+        
+        scene.add.existing(this);
+        scene.physics.add.existing(this);
+        scene.bullets.add(this);  // Add to bullets group
+        
+        this.setupCollision();
+        this.setupLifetime();
+        
+        if (config.angle !== undefined) {
+            this.setRotation(config.angle);
+            scene.physics.velocityFromRotation(config.angle, this.speed, this.body.velocity);
+        }
+    }
+    
+    setupCollision() {
+        this.scene.physics.add.overlap(this, this.scene.enemies, (projectile, enemy) => {
+            createExplosion(this.scene, projectile.x, projectile.y);
+            projectile.destroy();
+            enemy.damage(this.damage);
+        });
+    }
+    
+    setupLifetime() {
+        this.scene.time.delayedCall(this.lifetime, () => {
+            if (this.active) this.destroy();
+        });
+    }
+}
+
+class HomingMissile extends Projectile {
+    constructor(scene, target, config) {
+        super(scene, {
+            x: config.x,
+            y: config.y,
+            damage: GAME_CONFIG.combat.projectiles.lockOn.missileDamage,
+            speed: GAME_CONFIG.combat.projectiles.lockOn.missileSpeed,
+            lifetime: GAME_CONFIG.combat.projectiles.lockOn.lifetime
+        });
+        
+        this.target = target;
+        this.turnRate = GAME_CONFIG.combat.projectiles.lockOn.turnRate;
+        this.setTint(0xFF4444);
+        this.scaleX = 1.5;
+        this.scaleY = 1.5;  // Also scale Y to make missile more visible
+        
+        this.setupHoming();
+    }
+    
+    setupHoming() {
+        this.scene.time.addEvent({
+            delay: 16,
+            callback: () => {
+                if (!this.active) return;
+                
+                if (this.target.active) {
+                    const targetAngle = Phaser.Math.Angle.Between(
+                        this.x, this.y,
+                        this.target.x, this.target.y
+                    );
+                    
+                    let currentAngle = this.rotation;
+                    const angleDiff = Phaser.Math.Angle.Wrap(targetAngle - currentAngle);
+                    
+                    if (Math.abs(angleDiff) > 0.01) {
+                        currentAngle += Phaser.Math.Clamp(angleDiff, -this.turnRate, this.turnRate);
+                    }
+                    
+                    this.rotation = currentAngle;
+                    this.scene.physics.velocityFromRotation(currentAngle, this.speed, this.body.velocity);
+                }
+            },
+            loop: true
+        });
+    }
+}
+
+class ShotgunPellet extends Projectile {
+    constructor(scene, config) {
+        super(scene, {
+            x: config.x,
+            y: config.y,
+            angle: config.angle,
+            damage: GAME_CONFIG.combat.projectiles.shotgun.damage,
+            speed: GAME_CONFIG.combat.projectiles.shotgun.speed
+        });
+    }
+}
+
+// Helper function to create projectiles
+function createProjectile(scene, type, config) {
+    switch (type) {
+        case 'bullet':
+            return new Projectile(scene, config);
+        case 'missile':
+            return new HomingMissile(scene, config.target, config);
+        case 'pellet':
+            return new ShotgunPellet(scene, config);
+        default:
+            return new Projectile(scene, config);
+    }
+}
+
 // First, declare all helper functions that will be used by FireMode
 function createBullet(scene, x, y, angle, config = {}) {
     const bullet = scene.bullets.create(x, y, 'bullet');
@@ -38,44 +234,357 @@ function createBullet(scene, x, y, angle, config = {}) {
     return bullet;
 }
 
-// FireMode class definition
+// Add this function before the WeaponStateManager class
+function checkBeamCollision(scene) {
+    const startX = GAME_CONFIG.display.width / 2;
+    const startY = GAME_CONFIG.display.height - GAME_CONFIG.display.centerOffset;
+    const endX = scene.reticle.x;
+    const endY = scene.reticle.y;
+
+    scene.enemies.getChildren().forEach(enemy => {
+        if (!enemy || !enemy.active) return;
+
+        const distToLine = pointToLineDistance(
+            { x: enemy.x, y: enemy.y },
+            { x: startX, y: startY },
+            { x: endX, y: endY }
+        );
+
+        if (distToLine < GAME_CONFIG.combat.projectiles.beam.range) {
+            createExplosion(scene, enemy.x, enemy.y + 20);
+            enemy.damage(GAME_CONFIG.combat.projectiles.beam.damage);
+        }
+    });
+}
+
+class WeaponStateManager {
+    constructor(scene) {
+        this.scene = scene;
+        this.modes = new Map();
+        this.setupModes();
+    }
+    
+    setupModes() {
+        const modeConfigs = {
+            rapidFire: {
+                name: 'rapidFire',
+                isActive: true,
+                damage: GAME_CONFIG.combat.fireModes.rapidFire.damage,
+                cooldown: GAME_CONFIG.combat.fireModes.rapidFire.cooldown,
+                iconDrawer: (graphics, x, y, width, height) => {
+                    const circleY = y + height/2;
+                    for (let i = 0; i < 3; i++) {
+                        graphics.fillCircle(x + 10 + (i * 10), circleY, 3);
+                    }
+                },
+                fire: (scene) => {
+                    const centerX = GAME_CONFIG.display.width / 2;
+                    const bottomY = GAME_CONFIG.display.height - GAME_CONFIG.display.centerOffset;
+                    const angle = Phaser.Math.Angle.Between(
+                        centerX, bottomY,
+                        scene.reticle.x, scene.reticle.y
+                    );
+                    createProjectile(scene, 'bullet', {
+                        x: centerX,
+                        y: bottomY,
+                        angle: angle
+                    });
+                }
+            },
+            dualShot: {
+                name: 'dualShot',
+                damage: GAME_CONFIG.combat.fireModes.dualShot.damage,
+                cooldown: GAME_CONFIG.combat.fireModes.dualShot.cooldown,
+                iconDrawer: (graphics, x, y, width, height) => {
+                    const circleY = y + height/2;
+                    graphics.fillCircle(x + 13, circleY, 5);
+                    graphics.fillCircle(x + 27, circleY, 5);
+                },
+                fire: (scene) => {
+                    const centerX = GAME_CONFIG.display.width / 2;
+                    const bottomY = GAME_CONFIG.display.height - GAME_CONFIG.display.centerOffset;
+                    const baseAngle = Phaser.Math.Angle.Between(
+                        centerX, bottomY,
+                        scene.reticle.x, scene.reticle.y
+                    );
+                    
+                    const offset = GAME_CONFIG.combat.fireModes.dualShot.offset;
+                    const perpAngle = baseAngle + Math.PI / 2;
+                    const offsetX = Math.cos(perpAngle) * offset;
+                    const offsetY = Math.sin(perpAngle) * offset;
+                    
+                    createProjectile(scene, 'bullet', {
+                        x: centerX - offsetX,
+                        y: bottomY - offsetY,
+                        angle: baseAngle
+                    });
+                    createProjectile(scene, 'bullet', {
+                        x: centerX + offsetX,
+                        y: bottomY + offsetY,
+                        angle: baseAngle
+                    });
+                }
+            },
+            tripleShot: {
+                name: 'tripleShot',
+                damage: GAME_CONFIG.combat.fireModes.tripleShot.damage,
+                cooldown: GAME_CONFIG.combat.fireModes.tripleShot.cooldown,
+                iconDrawer: (graphics, x, y, width, height) => {
+                    const circleY = y + height/2;
+                    graphics.fillCircle(x + 8, circleY, 5);
+                    graphics.fillCircle(x + 20, circleY, 5);
+                    graphics.fillCircle(x + 32, circleY, 5);
+                },
+                fire: (scene) => {
+                    const centerX = GAME_CONFIG.display.width / 2;
+                    const bottomY = GAME_CONFIG.display.height - GAME_CONFIG.display.centerOffset;
+                    const baseAngle = Phaser.Math.Angle.Between(
+                        centerX, bottomY,
+                        scene.reticle.x, scene.reticle.y
+                    );
+                    
+                    const spread = GAME_CONFIG.combat.fireModes.tripleShot.spread;
+                    createProjectile(scene, 'bullet', {
+                        x: centerX,
+                        y: bottomY,
+                        angle: baseAngle
+                    });
+                    createProjectile(scene, 'bullet', {
+                        x: centerX,
+                        y: bottomY,
+                        angle: baseAngle - spread
+                    });
+                    createProjectile(scene, 'bullet', {
+                        x: centerX,
+                        y: bottomY,
+                        angle: baseAngle + spread
+                    });
+                }
+            },
+            beam: {
+                name: 'beam',
+                damage: GAME_CONFIG.combat.fireModes.beam.damage,
+                cooldown: GAME_CONFIG.combat.fireModes.beam.cooldown,
+                iconDrawer: (graphics, x, y, width, height) => {
+                    graphics.lineStyle(3, 0xFFFFFF);
+                    graphics.beginPath();
+                    graphics.moveTo(x + width/2, y + 5);
+                    graphics.lineTo(x + width/2, y + height - 5);
+                    graphics.stroke();
+                    for (let i = 0; i < 3; i++) {
+                        graphics.fillCircle(x + width/2, y + 10 + (i * 10), 2);
+                    }
+                },
+                update: (scene) => {
+                    checkBeamCollision(scene);
+                }
+            },
+            lockOn: {
+                name: 'lockOn',
+                damage: GAME_CONFIG.combat.fireModes.lockOn.damage,
+                cooldown: GAME_CONFIG.combat.fireModes.lockOn.cooldown,
+                iconDrawer: (graphics, x, y, width, height) => {
+                    graphics.lineStyle(2, 0xFFFFFF);
+                    graphics.strokeCircle(x + width/2, y + height/2, 12);
+                    graphics.lineStyle(1, 0xFFFFFF);
+                    graphics.strokeCircle(x + width/2 - 8, y + height/2 - 8, 5);
+                    graphics.strokeCircle(x + width/2 + 8, y + height/2 + 8, 5);
+                },
+                fire: (scene) => {
+                    if (scene.lockedTargets.length > 0) {
+                        fireLockOnMissiles.call(scene);
+                    }
+                },
+                update: (scene) => {
+                    updateLockOnTargets.call(scene);
+                },
+                onToggle: (scene, isActive) => {
+                    if (!isActive) {
+                        scene.lockedTargets = [];
+                    }
+                }
+            },
+            shotgun: {
+                name: 'shotgun',
+                damage: GAME_CONFIG.combat.fireModes.shotgun.damage,
+                cooldown: GAME_CONFIG.combat.fireModes.shotgun.cooldown,
+                iconDrawer: (graphics, x, y, width, height) => {
+                    graphics.lineStyle(2, 0xFFFFFF);
+                    const centerX = x + width/2;
+                    const centerY = y + height/2;
+                    graphics.beginPath();
+                    graphics.moveTo(centerX - 10, centerY + 10);
+                    graphics.lineTo(centerX - 5, centerY - 10);
+                    graphics.moveTo(centerX, centerY + 10);
+                    graphics.lineTo(centerX, centerY - 10);
+                    graphics.moveTo(centerX + 10, centerY + 10);
+                    graphics.lineTo(centerX + 5, centerY - 10);
+                    graphics.strokePath();
+                },
+                fire: (scene) => {
+                    const centerX = GAME_CONFIG.display.width / 2;
+                    const bottomY = GAME_CONFIG.display.height - GAME_CONFIG.display.centerOffset;
+                    const baseAngle = Phaser.Math.Angle.Between(
+                        centerX, bottomY,
+                        scene.reticle.x, scene.reticle.y
+                    );
+                    
+                    const distanceToTarget = Phaser.Math.Distance.Between(
+                        centerX, bottomY,
+                        scene.reticle.x, scene.reticle.y
+                    );
+                    const baseSpread = GAME_CONFIG.combat.projectiles.shotgun.baseSpread;
+                    const distanceSpreadFactor = distanceToTarget / 800;
+                    const totalSpread = baseSpread * (1 + distanceSpreadFactor);
+                    
+                    for (let i = 0; i < GAME_CONFIG.combat.projectiles.shotgun.pelletCount; i++) {
+                        const spreadAngle = baseAngle + (Math.random() * 2 - 1) * totalSpread;
+                        createProjectile(scene, 'pellet', {
+                            x: centerX,
+                            y: bottomY,
+                            angle: spreadAngle
+                        });
+                    }
+                }
+            }
+        };
+        
+        Object.entries(modeConfigs).forEach(([name, config]) => {
+            this.addMode(name, new FireMode(config));
+        });
+    }
+    
+    addMode(name, mode) {
+        this.modes.set(name, mode);
+        mode.onStateChange = (active) => this.handleModeStateChange(name, active);
+    }
+    
+    handleModeStateChange(modeName, active) {
+        if (active) {
+            // Handle exclusive modes if needed
+            this.modes.forEach((mode, name) => {
+                if (name !== modeName && mode.isExclusive) {
+                    mode.deactivate();
+                }
+            });
+        }
+    }
+    
+    update(currentTime) {
+        this.modes.forEach(mode => {
+            if (mode.isActive) {
+                try {
+                    if (mode.canFire(currentTime)) {
+                        mode.fire(this.scene);
+                        mode.lastFireTime = currentTime;
+                    }
+                    mode.update?.(this.scene);
+                } catch (error) {
+                    console.error(`Error in fire mode ${mode.name}:`, error);
+                }
+            }
+        });
+    }
+    
+    getMode(name) {
+        return this.modes.get(name);
+    }
+    
+    createToggleButtons() {
+        const { width, height, margin } = GAME_CONFIG.ui.buttons;
+        const y = GAME_CONFIG.display.height - height - margin;
+        
+        let index = 0;
+        this.modes.forEach((mode, name) => {
+            const x = margin * (index + 1) + width * index;
+            mode.buttonConfig = { x, y, width, height };
+            
+            const button = this.scene.add.graphics();
+            button.setInteractive(
+                new Phaser.Geom.Rectangle(x, y, width, height),
+                Phaser.Geom.Rectangle.Contains
+            );
+            
+            this.updateButtonVisuals(button, mode);
+            
+            button.on('pointerdown', () => {
+                mode.toggle(this.scene);
+                this.updateButtonVisuals(button, mode);
+            });
+            
+            this.scene[`${name}Button`] = button;
+            index++;
+        });
+    }
+    
+    updateButtonVisuals(button, mode) {
+        const { x, y, width, height } = mode.buttonConfig;
+        
+        button.clear();
+        button.lineStyle(2, 0xFFFFFF);
+        button.fillStyle(mode.isActive ? 0x444444 : 0x222222);
+        button.fillRect(x, y, width, height);
+        button.strokeRect(x, y, width, height);
+        
+        button.fillStyle(0xFFFFFF);
+        mode.iconDrawer(button, x, y, width, height);
+    }
+}
+
+// Update FireMode class to work with WeaponStateManager
 class FireMode {
     constructor(config) {
         this.name = config.name;
         this.isActive = config.isActive || false;
         this.iconDrawer = config.iconDrawer;
-        this.damage = config.damage || 10;
-        this.cooldown = config.cooldown || 100;
-        this.buttonConfig = {
-            x: 0,
-            y: 0,
-            width: 40,
-            height: 40
-        };
-        this.lastFireTime = 0;  // Track when this mode last fired
-
-        // Safely bind methods if they exist
+        this.damage = config.damage;
+        this.cooldown = config.cooldown;
+        this.buttonConfig = null;
+        this.lastFireTime = 0;
+        this.isExclusive = config.isExclusive || false;
+        
+        // Bind fire function if provided
         if (typeof config.fire === 'function') {
             this.fire = config.fire.bind(this);
         } else {
-            this.fire = () => {};
+            this.fire = () => {};  // Default empty function
         }
-
+        
+        // Bind update function if provided
         if (typeof config.update === 'function') {
             this.update = config.update.bind(this);
         } else {
-            this.update = () => {};
+            this.update = () => {};  // Default empty function
         }
 
+        // Bind onToggle function if provided
         if (typeof config.onToggle === 'function') {
             this.onToggle = config.onToggle.bind(this);
         } else {
-            this.onToggle = () => {};
+            this.onToggle = () => {};  // Default empty function
         }
     }
-
+    
     canFire(currentTime) {
         return currentTime - this.lastFireTime >= this.cooldown;
+    }
+    
+    toggle(scene) {
+        this.isActive = !this.isActive;
+        this.onToggle(scene, this.isActive);
+        if (typeof this.onStateChange === 'function') {
+            this.onStateChange(this.isActive);
+        }
+    }
+    
+    deactivate() {
+        if (this.isActive) {
+            this.isActive = false;
+            this.onToggle(this.scene, false);
+            if (typeof this.onStateChange === 'function') {
+                this.onStateChange(false);
+            }
+        }
     }
 }
 
@@ -287,8 +796,7 @@ const FIRE_MODES = {
             }
         },
         update: function(scene) {
-            if (!this.isActive) return;
-            checkBeamCollision.call(scene);
+            checkBeamCollision(scene);
         }
     }),
     
@@ -309,9 +817,7 @@ const FIRE_MODES = {
             }
         },
         update: function(scene) {
-            if (this.isActive) {
-                updateLockOnTargets.call(scene);
-            }
+            updateLockOnTargets.call(scene);
         },
         onToggle: function(scene, isActive) {
             if (!isActive) {
@@ -359,9 +865,10 @@ const FIRE_MODES = {
             // Fire 8 pellets in a spread pattern
             for (let i = 0; i < 8; i++) {
                 const spreadAngle = baseAngle + (Math.random() * 2 - 1) * totalSpread;
-                createBullet(scene, centerX, bottomY, spreadAngle, {
-                    speed: 800,  // Keep the same fast bullet speed
-                    damage: this.damage
+                createBullet(scene, 'pellet', {
+                    x: centerX,
+                    y: bottomY,
+                    angle: spreadAngle
                 });
             }
         }
@@ -423,7 +930,6 @@ function create() {
     // Create targeting reticle
     const reticleGraphics = this.add.graphics();
     reticleGraphics.lineStyle(2, 0xFFFFFF);
-    // Draw a simple crosshair in a 50x50 texture
     reticleGraphics.strokeCircle(25, 25, 15);
     reticleGraphics.moveTo(5, 25);
     reticleGraphics.lineTo(45, 25);
@@ -433,43 +939,32 @@ function create() {
     const reticleTexture = reticleGraphics.generateTexture('reticle', 50, 50);
     reticleGraphics.destroy();
 
-    // Create reticle at center of screen and store it in the scene
-    this.reticle = this.add.sprite(config.width / 2, config.height / 2, 'reticle');
-    this.reticle.setDepth(2);  // Set reticle depth to 2 (above enemy)
+    this.reticle = this.add.sprite(GAME_CONFIG.display.width / 2, GAME_CONFIG.display.height / 2, 'reticle');
+    this.reticle.setDepth(2);
 
     // Create bullet texture using graphics
     const bulletGraphics = this.add.graphics();
-    bulletGraphics.fillStyle(0xFFFFFF);  // White fill
+    bulletGraphics.fillStyle(0xFFFFFF);
     bulletGraphics.beginPath();
-    bulletGraphics.arc(4, 4, 4, 0, Math.PI * 2);  // Draw circle at (4,4) with radius 4
+    bulletGraphics.arc(4, 4, 4, 0, Math.PI * 2);
     bulletGraphics.closePath();
     bulletGraphics.fill();
     
-    const bulletTexture = bulletGraphics.generateTexture('bullet', 8, 8);
+    const bulletTexture = bulletGraphics.generateTexture('bullet', GAME_CONFIG.combat.projectiles.bullet.size, GAME_CONFIG.combat.projectiles.bullet.size);
     bulletGraphics.destroy();
 
     // Create beam graphics and store in scene
     this.beamGraphics = this.add.graphics();
-    this.beamGraphics.setDepth(1);  // Set depth between enemies and reticle
+    this.beamGraphics.setDepth(1);
 
-    // Setup continuous bullet firing
+    // Initialize weapon state manager
+    this.weaponManager = new WeaponStateManager(this);
+
+    // Setup continuous weapon updates
     this.time.addEvent({
         delay: 100,
         callback: () => {
-            const currentTime = this.time.now;
-            Object.values(FIRE_MODES).forEach(mode => {
-                try {
-                    if (mode.isActive && typeof mode.fire === 'function' && mode.canFire(currentTime)) {
-                        mode.fire(this);
-                        mode.lastFireTime = currentTime;
-                    }
-                    if (typeof mode.update === 'function') {
-                        mode.update(this);
-                    }
-                } catch (error) {
-                    console.error(`Error in fire mode ${mode.name}:`, error);
-                }
-            });
+            this.weaponManager.update(this.time.now);
         },
         callbackScope: this,
         loop: true
@@ -487,13 +982,11 @@ function create() {
             const dx = pointer.x - this.joystickPoint.x;
             const dy = pointer.y - this.joystickPoint.y;
             
-            // Move reticle at 2x the distance of the drag
             this.reticle.x += (pointer.x - this.lastPointerPosition.x) * 2;
             this.reticle.y += (pointer.y - this.lastPointerPosition.y) * 2;
 
-            // Keep reticle within game bounds
-            this.reticle.x = Phaser.Math.Clamp(this.reticle.x, 0, config.width);
-            this.reticle.y = Phaser.Math.Clamp(this.reticle.y, 0, config.height);
+            this.reticle.x = Phaser.Math.Clamp(this.reticle.x, 0, GAME_CONFIG.display.width);
+            this.reticle.y = Phaser.Math.Clamp(this.reticle.y, 0, GAME_CONFIG.display.height);
 
             this.lastPointerPosition = { x: pointer.x, y: pointer.y };
         }
@@ -503,33 +996,20 @@ function create() {
         this.isPointerDown = false;
     });
 
-    createFireModeToggles.call(this);
+    // Create weapon mode toggle buttons
+    this.weaponManager.createToggleButtons();
 
-    // Initialize locked targets array
+    // Initialize locked targets array for lock-on mode
     this.lockedTargets = [];
     this.lockOnGraphics = this.add.graphics();
     this.lockOnGraphics.setDepth(2);
-
-    // Setup lock-on missile firing
-    this.time.addEvent({
-        delay: 500,
-        callback: () => {
-            if (FIRE_MODES.lockOn.isActive && this.lockedTargets.length > 0) {
-                fireLockOnMissiles.call(this);
-            }
-        },
-        callbackScope: this,
-        loop: true
-    });
 }
 
 function update() {
-    // Remove enemy health bar updates since they're handled by the Enemy class
-    
     // Clean up bullets that are out of bounds
     this.bullets.getChildren().forEach((bullet) => {
-        if (bullet.x < 0 || bullet.x > config.width || 
-            bullet.y < 0 || bullet.y > config.height) {
+        if (bullet.x < 0 || bullet.x > GAME_CONFIG.display.width || 
+            bullet.y < 0 || bullet.y > GAME_CONFIG.display.height) {
             bullet.destroy();
         }
     });
@@ -541,8 +1021,8 @@ function update() {
         this.reticle.y += (this.input.activePointer.y - this.lastPointerPosition.y) * 2;
 
         // Keep reticle within game bounds
-        this.reticle.x = Phaser.Math.Clamp(this.reticle.x, 0, config.width);
-        this.reticle.y = Phaser.Math.Clamp(this.reticle.y, 0, config.height);
+        this.reticle.x = Phaser.Math.Clamp(this.reticle.x, 0, GAME_CONFIG.display.width);
+        this.reticle.y = Phaser.Math.Clamp(this.reticle.y, 0, GAME_CONFIG.display.height);
 
         this.lastPointerPosition = { 
             x: this.input.activePointer.x, 
@@ -552,37 +1032,76 @@ function update() {
 
     // Update beam graphics
     this.beamGraphics.clear();
-    if (FIRE_MODES.beam.isActive) {
-        const startX = config.width / 2;
-        const startY = config.height - 20;
+    const beamMode = this.weaponManager.getMode('beam');
+    if (beamMode?.isActive) {
+        const startX = GAME_CONFIG.display.width / 2;
+        const bottomY = GAME_CONFIG.display.height - GAME_CONFIG.display.centerOffset;
         const endX = this.reticle.x;
         const endY = this.reticle.y;
 
         // Draw beam glow effect
-        this.beamGraphics.lineStyle(6, 0x00FFFF, 0.3);
+        this.beamGraphics.lineStyle(
+            GAME_CONFIG.combat.projectiles.beam.glowWidth,
+            0x00FFFF,
+            GAME_CONFIG.combat.projectiles.beam.glowAlpha
+        );
         this.beamGraphics.beginPath();
-        this.beamGraphics.moveTo(startX, startY);
+        this.beamGraphics.moveTo(startX, bottomY);
         this.beamGraphics.lineTo(endX, endY);
         this.beamGraphics.strokePath();
 
         // Draw beam core
-        this.beamGraphics.lineStyle(2, 0xFFFFFF, 1);
+        this.beamGraphics.lineStyle(GAME_CONFIG.combat.projectiles.beam.width, 0xFFFFFF, 1);
         this.beamGraphics.beginPath();
-        this.beamGraphics.moveTo(startX, startY);
+        this.beamGraphics.moveTo(startX, bottomY);
         this.beamGraphics.lineTo(endX, endY);
         this.beamGraphics.strokePath();
     }
 
     // Update lock-on targeting
-    if (FIRE_MODES.lockOn.isActive) {
-        updateLockOnTargets.call(this);
-    } else {
-        this.lockOnGraphics.clear();
-    }
+    this.lockOnGraphics.clear();
+    const lockOnMode = this.weaponManager.getMode('lockOn');
+    if (lockOnMode?.isActive) {
+        this.lockedTargets.forEach(target => {
+            if (!target.active) return;
+            
+            // Draw targeting circle
+            this.lockOnGraphics.lineStyle(2, 0xFF0000);
+            this.lockOnGraphics.strokeCircle(target.x, target.y, 30);
 
-    // Update beam collision with proper scene context
-    if (FIRE_MODES.beam.isActive) {
-        checkBeamCollision.call(this);
+            // Draw corner brackets
+            const size = 10;
+            const offset = 20;
+            this.lockOnGraphics.lineStyle(2, 0xFF0000);
+            
+            // Top-left bracket
+            this.lockOnGraphics.beginPath();
+            this.lockOnGraphics.moveTo(target.x - offset, target.y - offset + size);
+            this.lockOnGraphics.lineTo(target.x - offset, target.y - offset);
+            this.lockOnGraphics.lineTo(target.x - offset + size, target.y - offset);
+            this.lockOnGraphics.strokePath();
+
+            // Top-right bracket
+            this.lockOnGraphics.beginPath();
+            this.lockOnGraphics.moveTo(target.x + offset - size, target.y - offset);
+            this.lockOnGraphics.lineTo(target.x + offset, target.y - offset);
+            this.lockOnGraphics.lineTo(target.x + offset, target.y - offset + size);
+            this.lockOnGraphics.strokePath();
+
+            // Bottom-left bracket
+            this.lockOnGraphics.beginPath();
+            this.lockOnGraphics.moveTo(target.x - offset, target.y + offset - size);
+            this.lockOnGraphics.lineTo(target.x - offset, target.y + offset);
+            this.lockOnGraphics.lineTo(target.x - offset + size, target.y + offset);
+            this.lockOnGraphics.strokePath();
+
+            // Bottom-right bracket
+            this.lockOnGraphics.beginPath();
+            this.lockOnGraphics.moveTo(target.x + offset - size, target.y + offset);
+            this.lockOnGraphics.lineTo(target.x + offset, target.y + offset);
+            this.lockOnGraphics.lineTo(target.x + offset, target.y + offset - size);
+            this.lockOnGraphics.strokePath();
+        });
     }
 }
 
@@ -792,30 +1311,6 @@ function pointToLineDistance(point, lineStart, lineEnd) {
     const dy = point.y - yy;
 
     return Math.sqrt(dx * dx + dy * dy);
-}
-
-function checkBeamCollision() {
-    if (!FIRE_MODES.beam.isActive) return;
-
-    const startX = config.width / 2;
-    const startY = config.height - 20;
-    const endX = this.reticle.x;
-    const endY = this.reticle.y;
-
-    this.enemies.getChildren().forEach(enemy => {
-        if (!enemy || !enemy.active) return;
-
-        const distToLine = pointToLineDistance(
-            { x: enemy.x, y: enemy.y },
-            { x: startX, y: startY },
-            { x: endX, y: endY }
-        );
-
-        if (distToLine < 20) {
-            createExplosion(this, enemy.x, enemy.y + 20);
-            enemy.damage(2);  // Continuous small damage
-        }
-    });
 }
 
 function createExplosion(scene, x, y) {
