@@ -293,7 +293,7 @@ function fireBullet() {
         bulletsToFire.push({ x: centerX + offsetX, y: bottomY + offsetY, angle: baseAngle });  // Right
     }
 
-    if (fireModes.rapidFire && !fireModes.tripleShot && !fireModes.dualShot) {
+    if (fireModes.rapidFire) {
         bulletsToFire.push({ x: centerX, y: bottomY, angle: baseAngle });
     }
 
