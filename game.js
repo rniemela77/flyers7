@@ -24,16 +24,10 @@ function createBullet(scene, x, y, angle, config = {}) {
         bullet.destroy();
         
         const damage = config.damage || 10;
-        enemy.health = Math.max(0, enemy.health - damage);
+        const killed = enemy.damage(damage);
         
-        if (enemy.health <= 0) {
-            enemy.healthBar.destroy();
-            enemy.destroy();
-            scene.time.delayedCall(1000, () => {
-                createEnemy.call(scene);
-            });
-        } else {
-            updateEnemyHealthBar(enemy);
+        if (!killed) {
+            enemy.updateHealthBar();
         }
     });
 
@@ -77,6 +71,98 @@ class FireMode {
         } else {
             this.onToggle = () => {};
         }
+    }
+}
+
+// Enemy class definition
+class Enemy extends Phaser.Physics.Arcade.Sprite {
+    constructor(scene, x, y) {
+        super(scene, x, y, 'enemy');
+        
+        this.scene = scene;
+        this.health = 100;
+        
+        // Add to scene and physics
+        scene.add.existing(this);
+        scene.physics.add.existing(this);
+        
+        // Create health bar
+        this.healthBar = scene.add.graphics();
+        this.healthBar.setDepth(1);
+        this.updateHealthBar();
+        
+        // Start movement
+        this.startMoving();
+    }
+    
+    damage(amount) {
+        this.health = Math.max(0, this.health - amount);
+        this.updateHealthBar();
+        
+        if (this.health <= 0) {
+            this.die();
+        }
+        
+        return this.health <= 0;
+    }
+    
+    die() {
+        // Store scene reference before destroying the enemy
+        const scene = this.scene;
+        this.healthBar.destroy();
+        this.destroy();
+        
+        // Use stored scene reference
+        scene.time.delayedCall(1000, () => {
+            createEnemy.call(scene);
+        });
+    }
+    
+    updateHealthBar() {
+        this.healthBar.clear();
+        
+        const barWidth = 40;
+        const barHeight = 5;
+        const barY = this.y - this.height/2 - barHeight - 5;
+        const barX = this.x - barWidth/2;
+        
+        // Background (gray)
+        this.healthBar.fillStyle(0x333333);
+        this.healthBar.fillRect(barX, barY, barWidth, barHeight);
+        // Health (red)
+        this.healthBar.fillStyle(0xFF0000);
+        this.healthBar.fillRect(barX, barY, (this.health / 100) * barWidth, barHeight);
+    }
+    
+    startMoving() {
+        if (!this.active) return;
+        
+        const margin = 50;
+        const newX = Phaser.Math.Between(margin, config.width - margin);
+        const newY = Phaser.Math.Between(margin, (config.height / 2) - margin);
+        
+        // Store scene reference
+        const scene = this.scene;
+        
+        scene.tweens.add({
+            targets: this,
+            x: newX,
+            y: newY,
+            duration: 1500,
+            ease: 'Power2',
+            onComplete: () => {
+                scene.time.delayedCall(Phaser.Math.Between(1000, 2000), () => {
+                    if (this.active) {
+                        this.startMoving();
+                    }
+                });
+            },
+            onUpdate: () => {
+                if (this.active) {
+                    this.updateHealthBar();
+                }
+            }
+        });
     }
 }
 
@@ -238,41 +324,33 @@ function preload() {
 }
 
 function createEnemy() {
-    // Create enemy (red triangle)
-    const enemyGraphics = this.add.graphics();
-    enemyGraphics.lineStyle(2, 0xFF0000);
-    enemyGraphics.fillStyle(0xFF0000);
-    enemyGraphics.beginPath();
-    // Draw a simple triangle in the middle of a 40x40 texture
-    enemyGraphics.moveTo(20, 5);   // Top
-    enemyGraphics.lineTo(35, 35);  // Bottom right
-    enemyGraphics.lineTo(5, 35);   // Bottom left
-    enemyGraphics.closePath();
-    enemyGraphics.fill();
-    enemyGraphics.stroke();
+    // Create enemy texture if it doesn't exist
+    if (!this.textures.exists('enemy')) {
+        const enemyGraphics = this.add.graphics();
+        enemyGraphics.lineStyle(2, 0xFF0000);
+        enemyGraphics.fillStyle(0xFF0000);
+        enemyGraphics.beginPath();
+        enemyGraphics.moveTo(20, 5);   // Top
+        enemyGraphics.lineTo(35, 35);  // Bottom right
+        enemyGraphics.lineTo(5, 35);   // Bottom left
+        enemyGraphics.closePath();
+        enemyGraphics.fill();
+        enemyGraphics.stroke();
 
-    const texture = enemyGraphics.generateTexture('enemy', 40, 40);
-    enemyGraphics.destroy();
+        enemyGraphics.generateTexture('enemy', 40, 40);
+        enemyGraphics.destroy();
+    }
 
-    // Spawn enemy in top half of screen
-    const enemy = this.physics.add.sprite(
+    // Create enemy at random position in top half
+    const enemy = new Enemy(
+        this,
         Phaser.Math.Between(50, config.width - 50),
-        Phaser.Math.Between(50, config.height / 2 - 50),
-        'enemy'
+        Phaser.Math.Between(50, config.height / 2 - 50)
     );
     enemy.setDepth(1);
-    enemy.health = 100;  // Add health property to enemy
-
-    // Create enemy health bar
-    enemy.healthBar = this.add.graphics();
-    enemy.healthBar.setDepth(1);
-    updateEnemyHealthBar(enemy);
 
     // Add to enemies group
     this.enemies.add(enemy);
-
-    // Start enemy movement
-    moveEnemyToNewPosition.call(this, enemy);
 
     return enemy;
 }
@@ -391,83 +469,9 @@ function create() {
     });
 }
 
-function updateEnemyHealthBar(enemy) {
-    if (!enemy || !enemy.healthBar) return;
-    
-    enemy.healthBar.clear();
-    
-    const barWidth = 40;
-    const barHeight = 5;
-    const barY = enemy.y - enemy.height/2 - barHeight - 5;
-    const barX = enemy.x - barWidth/2;
-    
-    // Background (gray)
-    enemy.healthBar.fillStyle(0x333333);
-    enemy.healthBar.fillRect(barX, barY, barWidth, barHeight);
-    // Health (red)
-    enemy.healthBar.fillStyle(0xFF0000);
-    enemy.healthBar.fillRect(barX, barY, (enemy.health / 100) * barWidth, barHeight);
-}
-
-function createExplosion(scene, x, y) {
-    const explosion = scene.add.graphics();
-    explosion.setDepth(3);  // Above enemies (which are at depth 1) and reticle (at depth 2)
-    explosion.fillStyle(0xFFFFFF);  // White fill
-    
-    // Add random offset (-2 to +2 pixels) to position
-    const offsetX = Phaser.Math.Between(-2, 2);
-    const offsetY = Phaser.Math.Between(-2, 2);
-    
-    // Add random variation to size (12 +/- 2 pixels)
-    const radius = 12 + Phaser.Math.Between(-2, 2);
-    
-    explosion.fillCircle(x + offsetX, y + offsetY, radius);
-    
-    // Destroy the circle after 50ms
-    scene.time.delayedCall(50, () => {
-        explosion.destroy();
-    });
-}
-
-function moveEnemyToNewPosition(enemy) {
-    if (!enemy || !enemy.active) return;
-
-    // Calculate new random position in top half, keeping away from edges
-    const margin = 50;
-    const newX = Phaser.Math.Between(margin, config.width - margin);
-    const newY = Phaser.Math.Between(margin, (config.height / 2) - margin);
-
-    // Move enemy to new position
-    this.tweens.add({
-        targets: enemy,
-        x: newX,
-        y: newY,
-        duration: 1500,
-        ease: 'Power2',
-        onComplete: () => {
-            // Wait 1-2 seconds before moving again
-            this.time.delayedCall(Phaser.Math.Between(1000, 2000), () => {
-        if (enemy && enemy.active) {
-                    moveEnemyToNewPosition.call(this, enemy);
-        }
-    });
-        },
-        onUpdate: () => {
-        if (enemy && enemy.active) {
-            updateEnemyHealthBar(enemy);
-                }
-        }
-    });
-}
-
 function update() {
-    // Update all enemy health bars
-    this.enemies.getChildren().forEach(enemy => {
-        if (enemy && enemy.active) {
-            updateEnemyHealthBar(enemy);
-        }
-    });
-
+    // Remove enemy health bar updates since they're handled by the Enemy class
+    
     // Clean up bullets that are out of bounds
     this.bullets.getChildren().forEach((bullet) => {
         if (bullet.x < 0 || bullet.x > config.width || 
@@ -644,16 +648,14 @@ function fireLockOnMissiles() {
     this.lockedTargets.forEach((target, index) => {
         if (!target.active) return;
 
-        // Create missile
         const missile = this.bullets.create(centerX, y, 'bullet');
-        missile.setTint(0xFF4444);  // Give missiles a reddish tint
-        missile.scaleX = 1.5;  // Make missiles longer
-        missile.isHoming = true;  // Flag to identify homing missiles
-        missile.target = target;  // Store target reference
-        missile.turnRate = 0.05;  // How quickly missile can turn
-        missile.speed = 300;      // Missile speed
+        missile.setTint(0xFF4444);
+        missile.scaleX = 1.5;
+        missile.isHoming = true;
+        missile.target = target;
+        missile.turnRate = 0.05;
+        missile.speed = 300;
 
-        // Initial angle towards target
         const angle = Phaser.Math.Angle.Between(
             missile.x, missile.y,
             target.x, target.y
@@ -661,22 +663,19 @@ function fireLockOnMissiles() {
         missile.rotation = angle;
         this.physics.velocityFromRotation(angle, missile.speed, missile.body.velocity);
 
-        // Add update listener for homing behavior
         this.time.addEvent({
-            delay: 16,  // Update every frame
+            delay: 16,
             callback: () => {
                 if (!missile.active || !missile.target.active) {
                     if (missile.active) missile.destroy();
                     return;
                 }
 
-                // Calculate desired angle to target
                 const targetAngle = Phaser.Math.Angle.Between(
                     missile.x, missile.y,
                     missile.target.x, missile.target.y
                 );
 
-                // Gradually rotate towards target
                 let currentAngle = missile.rotation;
                 const angleDiff = Phaser.Math.Angle.Wrap(targetAngle - currentAngle);
                 
@@ -691,26 +690,12 @@ function fireLockOnMissiles() {
             loop: true
         });
 
-        // Add collision with target
         this.physics.add.overlap(missile, this.enemies, (missile, enemy) => {
-            // Create explosion at missile's position
             createExplosion(this, missile.x, missile.y);
-            
             missile.destroy();
-            enemy.health = Math.max(0, enemy.health - 15);  // Missiles do more damage
-            
-            if (enemy.health <= 0) {
-                enemy.healthBar.destroy();
-                enemy.destroy();
-                this.time.delayedCall(1000, () => {
-                    createEnemy.call(this);
-                });
-            } else {
-                updateEnemyHealthBar(enemy);
-            }
+            enemy.damage(15);  // Missiles do more damage
         });
 
-        // Destroy missile after 3 seconds if it hasn't hit anything
         this.time.delayedCall(3000, () => {
             if (missile.active) {
                 missile.destroy();
@@ -761,34 +746,39 @@ function checkBeamCollision() {
     const endX = this.reticle.x;
     const endY = this.reticle.y;
 
-    // Check each enemy for intersection with the beam line
     this.enemies.getChildren().forEach(enemy => {
         if (!enemy || !enemy.active) return;
 
-        // Calculate if enemy intersects with beam line using our custom function
         const distToLine = pointToLineDistance(
             { x: enemy.x, y: enemy.y },
             { x: startX, y: startY },
             { x: endX, y: endY }
         );
 
-        // If enemy is close enough to beam line (using enemy width as threshold)
         if (distToLine < 20) {
-            // Simpler approach: show explosion at enemy's position
-            createExplosion(this, enemy.x, enemy.y + 20);  // Offset slightly down from center
-            
-            enemy.health = Math.max(0, enemy.health - 2);  // Continuous small damage
-
-            if (enemy.health <= 0) {
-                enemy.healthBar.destroy();
-                enemy.destroy();
-                this.time.delayedCall(1000, () => {
-                    createEnemy.call(this);
-                });
-            } else {
-                updateEnemyHealthBar(enemy);
-            }
+            createExplosion(this, enemy.x, enemy.y + 20);
+            enemy.damage(2);  // Continuous small damage
         }
+    });
+}
+
+function createExplosion(scene, x, y) {
+    const explosion = scene.add.graphics();
+    explosion.setDepth(3);  // Above enemies (which are at depth 1) and reticle (at depth 2)
+    explosion.fillStyle(0xFFFFFF);  // White fill
+    
+    // Add random offset (-2 to +2 pixels) to position
+    const offsetX = Phaser.Math.Between(-2, 2);
+    const offsetY = Phaser.Math.Between(-2, 2);
+    
+    // Add random variation to size (12 +/- 2 pixels)
+    const radius = 12 + Phaser.Math.Between(-2, 2);
+    
+    explosion.fillCircle(x + offsetX, y + offsetY, radius);
+    
+    // Destroy the circle after 50ms
+    scene.time.delayedCall(50, () => {
+        explosion.destroy();
     });
 }
 
