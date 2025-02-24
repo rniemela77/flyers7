@@ -821,13 +821,13 @@ class Enemy extends Phaser.GameObjects.Triangle {
         this.body.setVelocity(0, 0);
         
         // Create freeze visual effect
-        this.setTint(0x00FFFF);
+        this.setFillStyle(0x00FFFF);
         
         // Unfreeze after 1 second
         this.scene.time.delayedCall(1000, () => {
             if (this.active) {
                 this.isFrozen = false;
-                this.clearTint();
+                this.setFillStyle(0x4444FF); // Reset to original blue color
                 this.startMoving();
             }
         });
@@ -1002,13 +1002,13 @@ class SwooperEnemy extends Phaser.GameObjects.Rectangle {
         this.body.setVelocity(0, 0);
         
         // Create freeze visual effect
-        this.setTint(0x00FFFF);
+        this.setFillStyle(0x00FFFF);
         
         // Unfreeze after 1 second
         this.scene.time.delayedCall(1000, () => {
             if (this.active) {
                 this.isFrozen = false;
-                this.clearTint();
+                this.setFillStyle(0x4444FF); // Reset to original blue color
                 this.startSwooping();
             }
         });
@@ -2270,12 +2270,12 @@ class DiveBomber extends Phaser.GameObjects.Rectangle {
         
         this.isFrozen = true;
         this.body.setVelocity(0, 0);
-        this.setTint(0x00FFFF);
+        this.setFillStyle(0x00FFFF);
         
         this.scene.time.delayedCall(1000, () => {
             if (this.active) {
                 this.isFrozen = false;
-                this.clearTint();
+                this.setFillStyle(0xFF0000); // Reset to original red color
                 this.startPatrolling();
             }
         });
