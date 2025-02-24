@@ -149,21 +149,22 @@ const GAME_CONFIG = {
     }
 };
 
-function handleEnemyHit(scene, enemy, damage, hitPosition, skipModifiers = false) {
-    createExplosion(scene, hitPosition.x, hitPosition.y);
+function handleEnemyHit(scene, enemy, damage, hitInfo, skipModifiers = false) {
+    createExplosion(scene, hitInfo.x, hitInfo.y);
 
     // Create a standardized hit info object that all modifiers can use
-    const hitInfo = {
+    const hitData = {
         damage: damage,
-        position: hitPosition,
-        scene: scene
+        position: hitInfo,
+        scene: scene,
+        projectile: hitInfo.projectile // Add projectile reference
     };
 
     // Apply modifiers before damage, unless skipModifiers is true
     if (!skipModifiers && scene.weaponModifierManager?.modifiers) {
         scene.weaponModifierManager.modifiers.forEach(modifier => {
             if (modifier?.isActive) {
-                modifier.onHit(scene, enemy, hitInfo);
+                modifier.onHit(scene, enemy, hitData);
             }
         });
     }
@@ -177,19 +178,33 @@ class Projectile extends Phaser.Physics.Arcade.Sprite {
         super(scene, config.x, config.y, config.texture || 'bullet');
         
         this.scene = scene;
-        this.damage = config.damage || GAME_CONFIG.combat.weapons.rapidFire.projectile.damage;
-        this.speed = config.speed || GAME_CONFIG.combat.weapons.rapidFire.projectile.speed;
-        this.lifetime = config.lifetime || GAME_CONFIG.combat.weapons.rapidFire.projectile.lifetime;
+        this.damage = config.damage;
+        this.speed = config.speed;
+        this.lifetime = config.lifetime;
+        this.shouldPierce = false;
+        this.hasPierced = false;
+        
+        if (config.scale) {
+            this.setScale(config.scale);
+        }
         
         scene.add.existing(this);
         scene.physics.add.existing(this);
-        scene.bullets.add(this);  // Add to bullets group
+        scene.bullets.add(this);
         
-        // Set up collision after a short delay to ensure scene is initialized
-        scene.time.delayedCall(0, () => {
-            this.setupCollision();
-        });
+        // Apply modifiers ONLY here, not in createProjectile
+        if (scene.weaponModifierManager) {
+            // Use values() to get the modifiers from the Map
+            Array.from(scene.weaponModifierManager.modifiers.values()).forEach(modifier => {
+                if (modifier.isActive) {
+                    console.log('Active modifier:', modifier.name);  // Log active modifiers
+                    modifier.onProjectileCreate?.(this);
+                }
+            });
+        }
+        console.log('Bullet created, shouldPierce:', this.shouldPierce);  // Log pierce state after modifiers
         
+        this.setupCollision();
         this.setupLifetime();
         
         if (config.angle !== undefined) {
@@ -199,12 +214,45 @@ class Projectile extends Phaser.Physics.Arcade.Sprite {
     }
     
     setupCollision() {
-        // Only set up collision if the projectile is still active
         if (!this.active) return;
         
-        this.scene.physics.add.overlap(this, this.scene.enemies, (projectile, enemy) => {
-            handleEnemyHit(this.scene, enemy, this.damage, { x: projectile.x, y: projectile.y }, false);
-            projectile.destroy();
+        // Add Set to track hit enemies
+        this.hitEnemies = new Set();
+        
+        this.scene.physics.add.overlap(this, this.scene.enemies, (proj, enemy) => {
+            if (!proj.active || !enemy.active) return;
+            
+            // Check if we've already hit this enemy
+            if (proj.hitEnemies.has(enemy)) return;
+            
+            // Add this enemy to our hit list
+            proj.hitEnemies.add(enemy);
+            
+            console.log('Collision detected, shouldPierce:', proj.shouldPierce, 'hasPierced:', proj.hasPierced);  // Log state at collision
+            
+            // Handle hit
+            handleEnemyHit(proj.scene, enemy, proj.damage, {
+                x: proj.x,
+                y: proj.y,
+                projectile: proj
+            }, false);
+            
+            // Handle pierce logic
+            if (proj.shouldPierce) {
+                if (!proj.hasPierced) {
+                    // First pierce - mark as pierced but don't destroy
+                    proj.hasPierced = true;
+                    console.log('passed');  // Log when bullet passes through
+                } else {
+                    // Second hit - destroy projectile
+                    console.log('disappeared');  // Log when bullet is destroyed
+                    proj.destroy();
+                }
+            } else {
+                // Non-piercing projectile - destroy immediately
+                console.log('disappeared');  // Log when bullet is destroyed
+                proj.destroy();
+            }
         });
     }
     
@@ -274,18 +322,36 @@ class ShotgunPellet extends Projectile {
     }
 }
 
-// Helper function to create projectiles
+// Helper function to create projectiles - this will be our single source of truth for projectile creation
 function createProjectile(scene, type, config) {
+    let projectile;
+    
     switch (type) {
         case 'bullet':
-            return new Projectile(scene, config);
+            projectile = new Projectile(scene, {
+                ...config,
+                damage: GAME_CONFIG.combat.weapons.rapidFire.projectile.damage,
+                speed: GAME_CONFIG.combat.weapons.rapidFire.projectile.speed,
+                lifetime: GAME_CONFIG.combat.weapons.rapidFire.projectile.lifetime
+            });
+            break;
         case 'missile':
-            return new HomingMissile(scene, config.target, config);
+            projectile = new HomingMissile(scene, config.target, config);
+            break;
         case 'pellet':
-            return new ShotgunPellet(scene, config);
+            projectile = new Projectile(scene, {
+                ...config,
+                damage: GAME_CONFIG.combat.weapons.shotgun.projectile.damage,
+                speed: GAME_CONFIG.combat.weapons.shotgun.projectile.speed,
+                lifetime: GAME_CONFIG.combat.weapons.shotgun.projectile.lifetime,
+                scale: GAME_CONFIG.combat.weapons.shotgun.projectile.scale
+            });
+            break;
         default:
-            return new Projectile(scene, config);
+            projectile = new Projectile(scene, config);
     }
+
+    return projectile;
 }
 
 // First, declare all helper functions that will be used by FireMode
@@ -826,81 +892,105 @@ const FIRE_MODES = {
     rapidFire: new FireMode({
         name: 'rapidFire',
         isActive: true,
-        damage: 10,
-        cooldown: 100,
+        damage: GAME_CONFIG.combat.weapons.rapidFire.projectile.damage,
+        cooldown: GAME_CONFIG.combat.weapons.rapidFire.fireMode.cooldown,
         iconDrawer: (graphics, x, y, width, height) => {
             const circleY = y + height/2;
             for (let i = 0; i < 3; i++) {
                 graphics.fillCircle(x + 10 + (i * 10), circleY, 3);
             }
         },
-        fire: function(scene) {
-            const centerX = config.width / 2;
-            const bottomY = config.height - 20;
+        fire: (scene) => {
+            const centerX = GAME_CONFIG.display.width / 2;
+            const bottomY = GAME_CONFIG.display.height - GAME_CONFIG.display.centerOffset;
             const angle = Phaser.Math.Angle.Between(
                 centerX, bottomY,
                 scene.reticle.x, scene.reticle.y
             );
-            createBullet(scene, centerX, bottomY, angle);
+            createProjectile(scene, 'bullet', {
+                x: centerX,
+                y: bottomY,
+                angle: angle
+            });
         }
     }),
     
     dualShot: new FireMode({
         name: 'dualShot',
-        damage: 10,
-        cooldown: 100,
+        damage: GAME_CONFIG.combat.weapons.dualShot.projectile.damage,
+        cooldown: GAME_CONFIG.combat.weapons.dualShot.fireMode.cooldown,
         iconDrawer: (graphics, x, y, width, height) => {
             const circleY = y + height/2;
             graphics.fillCircle(x + 13, circleY, 5);
             graphics.fillCircle(x + 27, circleY, 5);
         },
-        fire: function(scene) {
-            const centerX = config.width / 2;
-            const bottomY = config.height - 20;
+        fire: (scene) => {
+            const centerX = GAME_CONFIG.display.width / 2;
+            const bottomY = GAME_CONFIG.display.height - GAME_CONFIG.display.centerOffset;
             const baseAngle = Phaser.Math.Angle.Between(
                 centerX, bottomY,
                 scene.reticle.x, scene.reticle.y
             );
             
-            const offset = 10;
+            const offset = GAME_CONFIG.combat.weapons.dualShot.fireMode.offset;
             const perpAngle = baseAngle + Math.PI / 2;
             const offsetX = Math.cos(perpAngle) * offset;
             const offsetY = Math.sin(perpAngle) * offset;
             
-            createBullet(scene, centerX - offsetX, bottomY - offsetY, baseAngle);
-            createBullet(scene, centerX + offsetX, bottomY + offsetY, baseAngle);
+            createProjectile(scene, 'bullet', {
+                x: centerX - offsetX,
+                y: bottomY - offsetY,
+                angle: baseAngle
+            });
+            createProjectile(scene, 'bullet', {
+                x: centerX + offsetX,
+                y: bottomY + offsetY,
+                angle: baseAngle
+            });
         }
     }),
     
     tripleShot: new FireMode({
         name: 'tripleShot',
-        damage: 10,
-        cooldown: 100,
+        damage: GAME_CONFIG.combat.weapons.tripleShot.projectile.damage,
+        cooldown: GAME_CONFIG.combat.weapons.tripleShot.fireMode.cooldown,
         iconDrawer: (graphics, x, y, width, height) => {
             const circleY = y + height/2;
             graphics.fillCircle(x + 8, circleY, 5);
             graphics.fillCircle(x + 20, circleY, 5);
             graphics.fillCircle(x + 32, circleY, 5);
         },
-        fire: function(scene) {
-            const centerX = config.width / 2;
-            const bottomY = config.height - 20;
+        fire: (scene) => {
+            const centerX = GAME_CONFIG.display.width / 2;
+            const bottomY = GAME_CONFIG.display.height - GAME_CONFIG.display.centerOffset;
             const baseAngle = Phaser.Math.Angle.Between(
                 centerX, bottomY,
                 scene.reticle.x, scene.reticle.y
             );
             
-            const spread = Math.PI / 32;
-            createBullet(scene, centerX, bottomY, baseAngle);
-            createBullet(scene, centerX, bottomY, baseAngle - spread);
-            createBullet(scene, centerX, bottomY, baseAngle + spread);
+            const spread = GAME_CONFIG.combat.weapons.tripleShot.fireMode.spread;
+            createProjectile(scene, 'bullet', {
+                x: centerX,
+                y: bottomY,
+                angle: baseAngle
+            });
+            createProjectile(scene, 'bullet', {
+                x: centerX,
+                y: bottomY,
+                angle: baseAngle - spread
+            });
+            createProjectile(scene, 'bullet', {
+                x: centerX,
+                y: bottomY,
+                angle: baseAngle + spread
+            });
         }
     }),
     
     beam: new FireMode({
         name: 'beam',
-        damage: 2,
-        cooldown: 100,
+        damage: GAME_CONFIG.combat.weapons.beam.projectile.damage,
+        cooldown: GAME_CONFIG.combat.weapons.beam.fireMode.cooldown,
         iconDrawer: (graphics, x, y, width, height) => {
             graphics.lineStyle(3, 0xFFFFFF);
             graphics.beginPath();
@@ -918,8 +1008,8 @@ const FIRE_MODES = {
     
     lockOn: new FireMode({
         name: 'lockOn',
-        damage: 15,
-        cooldown: 500,
+        damage: GAME_CONFIG.combat.weapons.lockOn.projectile.damage,
+        cooldown: GAME_CONFIG.combat.weapons.lockOn.fireMode.cooldown,
         iconDrawer: (graphics, x, y, width, height) => {
             graphics.lineStyle(2, 0xFFFFFF);
             graphics.strokeCircle(x + width/2, y + height/2, 12);
@@ -944,14 +1034,12 @@ const FIRE_MODES = {
 
     shotgun: new FireMode({
         name: 'shotgun',
-        damage: 8,
-        cooldown: 1000,  // Fire once every second
+        damage: GAME_CONFIG.combat.weapons.shotgun.projectile.damage,
+        cooldown: GAME_CONFIG.combat.weapons.shotgun.fireMode.cooldown,
         iconDrawer: (graphics, x, y, width, height) => {
-            // Draw a shotgun-like spread pattern icon
             graphics.lineStyle(2, 0xFFFFFF);
             const centerX = x + width/2;
             const centerY = y + height/2;
-            // Draw three diverging lines
             graphics.beginPath();
             graphics.moveTo(centerX - 10, centerY + 10);
             graphics.lineTo(centerX - 5, centerY - 10);
@@ -969,19 +1057,17 @@ const FIRE_MODES = {
                 scene.reticle.x, scene.reticle.y
             );
             
-            // Calculate spread based on distance to target
             const distanceToTarget = Phaser.Math.Distance.Between(
                 centerX, bottomY,
                 scene.reticle.x, scene.reticle.y
             );
-            const baseSpread = Math.PI / 64;  // Tighter base spread angle (half of previous)
-            const distanceSpreadFactor = distanceToTarget / 800;  // Reduced distance spread factor
+            const baseSpread = GAME_CONFIG.combat.weapons.shotgun.fireMode.baseSpread;
+            const distanceSpreadFactor = distanceToTarget / 800;
             const totalSpread = baseSpread * (1 + distanceSpreadFactor);
             
-            // Fire 8 pellets in a spread pattern
-            for (let i = 0; i < 8; i++) {
+            for (let i = 0; i < GAME_CONFIG.combat.weapons.shotgun.fireMode.count; i++) {
                 const spreadAngle = baseAngle + (Math.random() * 2 - 1) * totalSpread;
-                createBullet(scene, 'pellet', {
+                createProjectile(scene, 'pellet', {
                     x: centerX,
                     y: bottomY,
                     angle: spreadAngle
@@ -1248,7 +1334,7 @@ function createFireModeToggles() {
         
         button.on('pointerdown', () => {
             mode.isActive = !mode.isActive;
-            mode.onToggle(this, mode.isActive);
+            mode.onToggle(this.scene);
             updateButtonVisuals.call(this, button, mode);
         });
         
@@ -1465,6 +1551,7 @@ class WeaponModifier {
         this.buttonConfig = null;
         this.onHit = config.onHit || (() => {});
         this.isExclusive = config.isExclusive || false;
+        this.onProjectileCreate = config.onProjectileCreate;
         
         if (typeof config.onToggle === 'function') {
             this.onToggle = config.onToggle.bind(this);
@@ -1475,6 +1562,7 @@ class WeaponModifier {
     
     toggle(scene) {
         this.isActive = !this.isActive;
+        console.log(`${this.name} modifier toggled:`, this.isActive);  // Log modifier toggle
         this.onToggle(scene, this.isActive);
         if (typeof this.onStateChange === 'function') {
             this.onStateChange(this.isActive);
@@ -1661,6 +1749,49 @@ const WEAPON_MODIFIERS = {
                 }
             });
         }
+    }),
+    pierce: new WeaponModifier({
+        name: 'pierce',
+        iconDrawer: (graphics, x, y, width, height) => {
+            graphics.lineStyle(2, 0x00FF00);
+            const centerX = x + width/2;
+            const centerY = y + height/2;
+            
+            // Draw an arrow piercing through a circle
+            const radius = 8;
+            
+            // Draw the circle
+            graphics.strokeCircle(centerX + 2, centerY, radius);
+            
+            // Draw the arrow
+            graphics.beginPath();
+            graphics.moveTo(centerX - 12, centerY);
+            graphics.lineTo(centerX + 16, centerY);
+            graphics.strokePath();
+            
+            // Arrow head
+            graphics.beginPath();
+            graphics.moveTo(centerX + 16, centerY);
+            graphics.lineTo(centerX + 12, centerY - 4);
+            graphics.lineTo(centerX + 12, centerY + 4);
+            graphics.closePath();
+            graphics.fillStyle(0x00FF00);
+            graphics.fill();
+            
+            // Add "1" to indicate single pierce
+            graphics.lineStyle(1, 0x00FF00);
+            graphics.fillStyle(0x00FF00);
+            const textSize = 10;
+            graphics.fillRect(centerX + 8, centerY - textSize/2, textSize/2, textSize);
+        },
+        // Apply pierce property when projectile is created
+        onProjectileCreate: (projectile) => {
+            projectile.shouldPierce = true;
+        },
+        // Still keep onHit for any hit effects we might want to add later
+        onHit: (scene, enemy, hitInfo) => {
+            // No need to do anything here anymore
+        }
     })
 };
 
@@ -1669,6 +1800,7 @@ class WeaponModifierManager {
         this.scene = scene;
         this.modifiers = new Map();
         this.setupModifiers();
+        console.log('Modifiers initialized:', Array.from(this.modifiers.keys()));  // Debug line
     }
     
     setupModifiers() {
