@@ -420,15 +420,15 @@ class WeaponStateManager {
                     }
                 },
                 fire: (scene) => {
-                    const centerX = GAME_CONFIG.display.width / 2;
-                    const bottomY = GAME_CONFIG.display.height - GAME_CONFIG.display.centerOffset;
+                    const centerX = scene.homeBase.x;
+                    const centerY = scene.homeBase.y;
                     const angle = Phaser.Math.Angle.Between(
-                        centerX, bottomY,
+                        centerX, centerY,
                         scene.reticle.x, scene.reticle.y
                     );
                     createProjectile(scene, 'bullet', {
                         x: centerX,
-                        y: bottomY,
+                        y: centerY,
                         angle: angle
                     });
                 }
@@ -443,10 +443,10 @@ class WeaponStateManager {
                     graphics.fillCircle(x + 27, circleY, 5);
                 },
                 fire: (scene) => {
-                    const centerX = GAME_CONFIG.display.width / 2;
-                    const bottomY = GAME_CONFIG.display.height - GAME_CONFIG.display.centerOffset;
+                    const centerX = scene.homeBase.x;
+                    const centerY = scene.homeBase.y;
                     const baseAngle = Phaser.Math.Angle.Between(
-                        centerX, bottomY,
+                        centerX, centerY,
                         scene.reticle.x, scene.reticle.y
                     );
                     
@@ -457,12 +457,12 @@ class WeaponStateManager {
                     
                     createProjectile(scene, 'bullet', {
                         x: centerX - offsetX,
-                        y: bottomY - offsetY,
+                        y: centerY - offsetY,
                         angle: baseAngle
                     });
                     createProjectile(scene, 'bullet', {
                         x: centerX + offsetX,
-                        y: bottomY + offsetY,
+                        y: centerY + offsetY,
                         angle: baseAngle
                     });
                 }
@@ -478,27 +478,27 @@ class WeaponStateManager {
                     graphics.fillCircle(x + 32, circleY, 5);
                 },
                 fire: (scene) => {
-                    const centerX = GAME_CONFIG.display.width / 2;
-                    const bottomY = GAME_CONFIG.display.height - GAME_CONFIG.display.centerOffset;
+                    const centerX = scene.homeBase.x;
+                    const centerY = scene.homeBase.y;
                     const baseAngle = Phaser.Math.Angle.Between(
-                        centerX, bottomY,
+                        centerX, centerY,
                         scene.reticle.x, scene.reticle.y
                     );
                     
                     const spread = GAME_CONFIG.combat.weapons.tripleShot.fireMode.spread;
                     createProjectile(scene, 'bullet', {
                         x: centerX,
-                        y: bottomY,
+                        y: centerY,
                         angle: baseAngle
                     });
                     createProjectile(scene, 'bullet', {
                         x: centerX,
-                        y: bottomY,
+                        y: centerY,
                         angle: baseAngle - spread
                     });
                     createProjectile(scene, 'bullet', {
                         x: centerX,
-                        y: bottomY,
+                        y: centerY,
                         angle: baseAngle + spread
                     });
                 }
@@ -518,7 +518,27 @@ class WeaponStateManager {
                     }
                 },
                 update: (scene) => {
-                    checkBeamCollision(scene);
+                    const startX = scene.homeBase.x;
+                    const startY = scene.homeBase.y;
+                    const endX = scene.reticle.x;
+                    const endY = scene.reticle.y;
+
+                    scene.enemies.getChildren().forEach(enemy => {
+                        if (!enemy || !enemy.active) return;
+
+                        const distToLine = pointToLineDistance(
+                            { x: enemy.x, y: enemy.y },
+                            { x: startX, y: startY },
+                            { x: endX, y: endY }
+                        );
+
+                        if (distToLine < GAME_CONFIG.combat.weapons.beam.projectile.range) {
+                            handleEnemyHit(scene, enemy, GAME_CONFIG.combat.weapons.beam.projectile.damage, { 
+                                x: enemy.x, 
+                                y: enemy.y 
+                            }, false);
+                        }
+                    });
                 }
             },
             lockOn: {
@@ -564,15 +584,15 @@ class WeaponStateManager {
                     graphics.strokePath();
                 },
                 fire: (scene) => {
-                    const centerX = GAME_CONFIG.display.width / 2;
-                    const bottomY = GAME_CONFIG.display.height - GAME_CONFIG.display.centerOffset;
+                    const centerX = scene.homeBase.x;
+                    const centerY = scene.homeBase.y;
                     const baseAngle = Phaser.Math.Angle.Between(
-                        centerX, bottomY,
+                        centerX, centerY,
                         scene.reticle.x, scene.reticle.y
                     );
                     
                     const distanceToTarget = Phaser.Math.Distance.Between(
-                        centerX, bottomY,
+                        centerX, centerY,
                         scene.reticle.x, scene.reticle.y
                     );
                     const baseSpread = GAME_CONFIG.combat.weapons.shotgun.fireMode.baseSpread;
@@ -583,7 +603,7 @@ class WeaponStateManager {
                         const spreadAngle = baseAngle + (Math.random() * 2 - 1) * totalSpread;
                         createProjectile(scene, 'pellet', {
                             x: centerX,
-                            y: bottomY,
+                            y: centerY,
                             angle: spreadAngle
                         });
                     }
@@ -1072,15 +1092,15 @@ const FIRE_MODES = {
             }
         },
         fire: (scene) => {
-            const centerX = GAME_CONFIG.display.width / 2;
-            const bottomY = GAME_CONFIG.display.height - GAME_CONFIG.display.centerOffset;
+            const centerX = scene.homeBase.x;
+            const centerY = scene.homeBase.y;
             const angle = Phaser.Math.Angle.Between(
-                centerX, bottomY,
+                centerX, centerY,
                 scene.reticle.x, scene.reticle.y
             );
             createProjectile(scene, 'bullet', {
                 x: centerX,
-                y: bottomY,
+                y: centerY,
                 angle: angle
             });
         }
@@ -1096,10 +1116,10 @@ const FIRE_MODES = {
             graphics.fillCircle(x + 27, circleY, 5);
         },
         fire: (scene) => {
-            const centerX = GAME_CONFIG.display.width / 2;
-            const bottomY = GAME_CONFIG.display.height - GAME_CONFIG.display.centerOffset;
+            const centerX = scene.homeBase.x;
+            const centerY = scene.homeBase.y;
             const baseAngle = Phaser.Math.Angle.Between(
-                centerX, bottomY,
+                centerX, centerY,
                 scene.reticle.x, scene.reticle.y
             );
             
@@ -1110,12 +1130,12 @@ const FIRE_MODES = {
             
             createProjectile(scene, 'bullet', {
                 x: centerX - offsetX,
-                y: bottomY - offsetY,
+                y: centerY - offsetY,
                 angle: baseAngle
             });
             createProjectile(scene, 'bullet', {
                 x: centerX + offsetX,
-                y: bottomY + offsetY,
+                y: centerY + offsetY,
                 angle: baseAngle
             });
         }
@@ -1132,27 +1152,27 @@ const FIRE_MODES = {
             graphics.fillCircle(x + 32, circleY, 5);
         },
         fire: (scene) => {
-            const centerX = GAME_CONFIG.display.width / 2;
-            const bottomY = GAME_CONFIG.display.height - GAME_CONFIG.display.centerOffset;
+            const centerX = scene.homeBase.x;
+            const centerY = scene.homeBase.y;
             const baseAngle = Phaser.Math.Angle.Between(
-                centerX, bottomY,
+                centerX, centerY,
                 scene.reticle.x, scene.reticle.y
             );
             
             const spread = GAME_CONFIG.combat.weapons.tripleShot.fireMode.spread;
             createProjectile(scene, 'bullet', {
                 x: centerX,
-                y: bottomY,
+                y: centerY,
                 angle: baseAngle
             });
             createProjectile(scene, 'bullet', {
                 x: centerX,
-                y: bottomY,
+                y: centerY,
                 angle: baseAngle - spread
             });
             createProjectile(scene, 'bullet', {
                 x: centerX,
-                y: bottomY,
+                y: centerY,
                 angle: baseAngle + spread
             });
         }
@@ -1172,8 +1192,28 @@ const FIRE_MODES = {
                 graphics.fillCircle(x + width/2, y + 10 + (i * 10), 2);
             }
         },
-        update: function(scene) {
-            checkBeamCollision(scene);
+        update: (scene) => {
+            const startX = scene.homeBase.x;
+            const startY = scene.homeBase.y;
+            const endX = scene.reticle.x;
+            const endY = scene.reticle.y;
+
+            scene.enemies.getChildren().forEach(enemy => {
+                if (!enemy || !enemy.active) return;
+
+                const distToLine = pointToLineDistance(
+                    { x: enemy.x, y: enemy.y },
+                    { x: startX, y: startY },
+                    { x: endX, y: endY }
+                );
+
+                if (distToLine < GAME_CONFIG.combat.weapons.beam.projectile.range) {
+                    handleEnemyHit(scene, enemy, GAME_CONFIG.combat.weapons.beam.projectile.damage, { 
+                        x: enemy.x, 
+                        y: enemy.y 
+                    }, false);
+                }
+            });
         }
     }),
     
@@ -1221,15 +1261,15 @@ const FIRE_MODES = {
             graphics.strokePath();
         },
         fire: function(scene) {
-            const centerX = config.width / 2;
-            const bottomY = config.height - 20;
+            const centerX = scene.homeBase.x;
+            const centerY = scene.homeBase.y;
             const baseAngle = Phaser.Math.Angle.Between(
-                centerX, bottomY,
+                centerX, centerY,
                 scene.reticle.x, scene.reticle.y
             );
             
             const distanceToTarget = Phaser.Math.Distance.Between(
-                centerX, bottomY,
+                centerX, centerY,
                 scene.reticle.x, scene.reticle.y
             );
             const baseSpread = GAME_CONFIG.combat.weapons.shotgun.fireMode.baseSpread;
@@ -1240,7 +1280,7 @@ const FIRE_MODES = {
                 const spreadAngle = baseAngle + (Math.random() * 2 - 1) * totalSpread;
                 createProjectile(scene, 'pellet', {
                     x: centerX,
-                    y: bottomY,
+                    y: centerY,
                     angle: spreadAngle
                 });
             }
@@ -1300,6 +1340,22 @@ function create() {
     for (let i = 0; i < 3; i++) {
         createEnemy.call(this);
     }
+
+    // Create home base circle
+    const homeBaseRadius = GAME_CONFIG.display.width / 10; // 1/5th of screen width
+    const homeBaseY = GAME_CONFIG.display.height * 0.6; // Just below center
+    const homeBaseX = GAME_CONFIG.display.width / 2;
+    
+    const homeBaseGraphics = this.add.graphics();
+    homeBaseGraphics.fillStyle(0xFFFFFF);
+    homeBaseGraphics.fillCircle(homeBaseX, homeBaseY, homeBaseRadius);
+    homeBaseGraphics.setDepth(1); // Below reticle but above beam
+    
+    // Store home base position for bullet spawning
+    this.homeBase = {
+        x: homeBaseX,
+        y: homeBaseY
+    };
 
     // Create targeting reticle
     const reticleGraphics = this.add.graphics();
@@ -1424,8 +1480,8 @@ function update() {
     this.beamGraphics.clear();
     const beamMode = this.weaponManager.getMode('beam');
     if (beamMode?.isActive) {
-        const startX = GAME_CONFIG.display.width / 2;
-        const bottomY = GAME_CONFIG.display.height - GAME_CONFIG.display.centerOffset;
+        const startX = this.homeBase.x;
+        const startY = this.homeBase.y;
         const endX = this.reticle.x;
         const endY = this.reticle.y;
 
@@ -1436,14 +1492,14 @@ function update() {
             GAME_CONFIG.combat.weapons.beam.visuals.glowAlpha
         );
         this.beamGraphics.beginPath();
-        this.beamGraphics.moveTo(startX, bottomY);
+        this.beamGraphics.moveTo(startX, startY);
         this.beamGraphics.lineTo(endX, endY);
         this.beamGraphics.strokePath();
 
         // Draw beam core
         this.beamGraphics.lineStyle(GAME_CONFIG.combat.weapons.beam.projectile.width, 0xFFFFFF, 1);
         this.beamGraphics.beginPath();
-        this.beamGraphics.moveTo(startX, bottomY);
+        this.beamGraphics.moveTo(startX, startY);
         this.beamGraphics.lineTo(endX, endY);
         this.beamGraphics.strokePath();
     }
