@@ -129,6 +129,16 @@ const GAME_CONFIG = {
             }
         }
     },
+    homeBase: {
+        health: 100,
+        maxHealth: 100,
+        damageFromCollision: 20,
+        healthBar: {
+            width: 200,
+            height: 20,
+            margin: 10
+        }
+    },
     enemy: {
         health: 100,
         movementMargin: 50,
@@ -753,7 +763,7 @@ class FireMode {
 // Enemy class definition
 class Enemy extends Phaser.GameObjects.Triangle {
     constructor(scene, x, y) {
-        super(scene, x, y, 20, 5, 35, 35, 5, 35, 0xFF0000);
+        super(scene, x, y, 20, 5, 35, 35, 5, 35, 0x4444FF); // Changed to blue triangle
         
         this.scene = scene;
         this.health = 100;
@@ -875,7 +885,7 @@ class Enemy extends Phaser.GameObjects.Triangle {
 // Swooper enemy that dives towards the player
 class SwooperEnemy extends Phaser.GameObjects.Rectangle {
     constructor(scene, x, y) {
-        super(scene, x, y, 30, 30, 0x4444FF); // Blue square, 30x30 pixels
+        super(scene, x, y, 30, 30, 0xFF0000); // Changed to red square, 30x30 pixels
         
         this.scene = scene;
         this.health = 100;
@@ -1296,30 +1306,13 @@ function preload() {
 }
 
 function createEnemy() {
-    // Create enemy texture if it doesn't exist
-    if (!this.textures.exists('enemy')) {
-        const enemyGraphics = this.add.graphics();
-        enemyGraphics.lineStyle(2, 0xFF0000);
-        enemyGraphics.fillStyle(0xFF0000);
-        enemyGraphics.beginPath();
-        enemyGraphics.moveTo(20, 5);   // Top
-        enemyGraphics.lineTo(35, 35);  // Bottom right
-        enemyGraphics.lineTo(5, 35);   // Bottom left
-        enemyGraphics.closePath();
-        enemyGraphics.fill();
-        enemyGraphics.stroke();
-
-        enemyGraphics.generateTexture('enemy', 40, 40);
-        enemyGraphics.destroy();
-    }
-
     // Create enemy at random position in top half
     const x = Phaser.Math.Between(50, config.width - 50);
     const y = Phaser.Math.Between(50, config.height / 2 - 50);
     
-    // 30% chance to spawn a swooper enemy
+    // 30% chance to spawn a dive bomber
     const enemy = Math.random() < 0.3 ? 
-        new SwooperEnemy(this, x, y) :
+        new DiveBomber(this, x, y) :
         new Enemy(this, x, y);
     
     enemy.setDepth(1);
@@ -1336,26 +1329,74 @@ function create() {
     this.lastPointerPosition = { x: 0, y: 0 };
     this.isEnemyMoving = false;
     
-    // Create initial enemies (3 of them)
-    for (let i = 0; i < 3; i++) {
-        createEnemy.call(this);
-    }
+    // Initialize home base health
+    this.homeBaseHealth = GAME_CONFIG.homeBase.maxHealth;
+    
+    // Create home base health bar
+    this.homeBaseHealthBar = this.add.graphics();
+    this.homeBaseHealthBar.setDepth(3);
+    
+    // Define updateHomeBaseHealth method for the scene
+    this.updateHomeBaseHealth = function(damage) {
+        this.homeBaseHealth = Math.max(0, this.homeBaseHealth - damage);
+        
+        // Add screen shake when damage is taken
+        if (damage > 0) {
+            this.cameras.main.shake(200, 0.0015 * damage);  // Duration based on damage amount
+        }
+        
+        // Update health bar display
+        const { width, height, margin } = GAME_CONFIG.homeBase.healthBar;
+        const barX = (GAME_CONFIG.display.width - width) / 2;
+        const barY = margin;
+        
+        this.homeBaseHealthBar.clear();
+        
+        // Background (gray)
+        this.homeBaseHealthBar.fillStyle(0x333333);
+        this.homeBaseHealthBar.fillRect(barX, barY, width, height);
+        
+        // Health (green to red based on percentage)
+        const healthPercent = this.homeBaseHealth / GAME_CONFIG.homeBase.maxHealth;
+        const color = Phaser.Display.Color.Interpolate.ColorWithColor(
+            { r: 255, g: 0, b: 0 },
+            { r: 0, g: 255, b: 0 },
+            100,
+            healthPercent * 100
+        );
+        this.homeBaseHealthBar.fillStyle(Phaser.Display.Color.GetColor(color.r, color.g, color.b));
+        this.homeBaseHealthBar.fillRect(barX, barY, width * healthPercent, height);
+        
+        // Game over if health reaches 0
+        if (this.homeBaseHealth <= 0) {
+            // TODO: Implement game over state
+            console.log('Game Over - Base Destroyed');
+        }
+    };
+    
+    // Initial draw of health bar
+    this.updateHomeBaseHealth(0);
 
     // Create home base circle
-    const homeBaseRadius = GAME_CONFIG.display.width / 10; // 1/5th of screen width
-    const homeBaseY = GAME_CONFIG.display.height * 0.6; // Just below center
+    const homeBaseRadius = GAME_CONFIG.display.width / 10;
+    const homeBaseY = GAME_CONFIG.display.height * 0.6;
     const homeBaseX = GAME_CONFIG.display.width / 2;
     
     const homeBaseGraphics = this.add.graphics();
     homeBaseGraphics.fillStyle(0xFFFFFF);
     homeBaseGraphics.fillCircle(homeBaseX, homeBaseY, homeBaseRadius);
-    homeBaseGraphics.setDepth(1); // Below reticle but above beam
+    homeBaseGraphics.setDepth(1);
     
-    // Store home base position for bullet spawning
+    // Store home base position and radius for bullet spawning and collision detection
     this.homeBase = {
         x: homeBaseX,
-        y: homeBaseY
+        y: homeBaseY,
+        radius: homeBaseRadius
     };
+
+    // Create beam graphics and store in scene
+    this.beamGraphics = this.add.graphics();
+    this.beamGraphics.setDepth(1);
 
     // Create targeting reticle
     const reticleGraphics = this.add.graphics();
@@ -1382,10 +1423,6 @@ function create() {
     
     const bulletTexture = bulletGraphics.generateTexture('bullet', GAME_CONFIG.combat.weapons.rapidFire.projectile.size, GAME_CONFIG.combat.weapons.rapidFire.projectile.size);
     bulletGraphics.destroy();
-
-    // Create beam graphics and store in scene
-    this.beamGraphics = this.add.graphics();
-    this.beamGraphics.setDepth(1);
 
     // Initialize weapon state manager
     this.weaponManager = new WeaponStateManager(this);
@@ -1439,6 +1476,11 @@ function create() {
     this.lockedTargets = [];
     this.lockOnGraphics = this.add.graphics();
     this.lockOnGraphics.setDepth(2);
+
+    // Create initial enemies (3 of them) AFTER home base is created
+    for (let i = 0; i < 3; i++) {
+        createEnemy.call(this);
+    }
 
     // Add collision between enemies
     this.physics.add.collider(this.enemies, this.enemies);
@@ -1661,13 +1703,14 @@ function updateLockOnTargets() {
 }
 
 function fireLockOnMissiles() {
-    const centerX = config.width / 2;
-    const y = config.height - 20;
+    // Use home base position for missile spawning
+    const startX = this.homeBase.x;
+    const startY = this.homeBase.y;
 
     this.lockedTargets.forEach((target, index) => {
         if (!target.active) return;
 
-        const missile = this.bullets.create(centerX, y, 'bullet');
+        const missile = this.bullets.create(startX, startY, 'bullet');
         missile.setTint(0xFF4444);
         missile.scaleX = 1.5;
         missile.isHoming = true;
@@ -2102,6 +2145,222 @@ class WeaponModifierManager {
         
         button.fillStyle(0xFFFFFF);
         modifier.iconDrawer(button, x, y, width, height);
+    }
+}
+
+// DiveBomber enemy that targets the home base
+class DiveBomber extends Phaser.GameObjects.Rectangle {
+    constructor(scene, x, y) {
+        super(scene, x, y, 30, 30, 0xFF0000); // Red square
+        
+        this.scene = scene;
+        this.health = 100;
+        this.isFrozen = false;
+        this.currentTween = null;
+        this.state = 'patrolling';
+        this.stateTimer = 0;
+        this.patrolDuration = Phaser.Math.Between(2000, 4000); // Random patrol time before diving
+        this.diveSpeed = 300;
+        this.patrolSpeed = 100;
+        
+        // Bind all methods that need 'this' context
+        this.updateMovement = this.updateMovement.bind(this);
+        this.startPatrolling = this.startPatrolling.bind(this);
+        this.explodeAtHomeBase = this.explodeAtHomeBase.bind(this);
+        
+        scene.add.existing(this);
+        scene.physics.add.existing(this);
+        scene.enemies.add(this);
+        
+        // Enable collision with other enemies
+        this.body.setCollideWorldBounds(true);
+        this.body.setBounce(0.8, 0.8);
+        this.body.setDrag(50);
+        this.body.setMass(1);
+        
+        // Create health bar
+        this.healthBar = scene.add.graphics();
+        this.healthBar.setDepth(2);
+        
+        // Create status effects container
+        this.statusEffects = scene.add.graphics();
+        this.statusEffects.setDepth(2);
+        
+        this.updateHealthBar();
+        this.startPatrolling();
+    }
+    
+    startPatrolling() {
+        if (!this.active || this.isFrozen) return;
+        
+        this.state = 'patrolling';
+        this.stateTimer = 0;
+        
+        // Move side to side while patrolling
+        const margin = 50;
+        const newX = Phaser.Math.Between(margin, config.width - margin);
+        const newY = Phaser.Math.Between(margin, config.height / 4); // Stay in top quarter
+        
+        // Calculate velocity for side movement
+        const angle = Phaser.Math.Angle.Between(this.x, this.y, newX, newY);
+        this.scene.physics.velocityFromRotation(angle, this.patrolSpeed, this.body.velocity);
+        
+        // Start movement loop with bound method
+        this.scene.time.addEvent({
+            delay: 16,
+            callback: this.updateMovement,
+            callbackScope: this,
+            loop: false
+        });
+    }
+    
+    updateMovement() {
+        if (!this.active || this.isFrozen) return;
+        
+        this.stateTimer += 16;
+        
+        switch (this.state) {
+            case 'patrolling':
+                // Check if it's time to dive
+                if (this.stateTimer >= this.patrolDuration) {
+                    this.state = 'diving';
+                    this.stateTimer = 0;
+                    
+                    // Start diving towards home base
+                    const angle = Phaser.Math.Angle.Between(
+                        this.x, this.y,
+                        this.scene.homeBase.x, this.scene.homeBase.y
+                    );
+                    this.scene.physics.velocityFromRotation(angle, this.diveSpeed, this.body.velocity);
+                }
+                // Bounce off screen edges during patrol
+                else if (this.x <= 50 || this.x >= config.width - 50) {
+                    this.body.velocity.x *= -1;
+                }
+                break;
+                
+            case 'diving':
+                // Check for collision with home base
+                const distance = Phaser.Math.Distance.Between(
+                    this.x, this.y,
+                    this.scene.homeBase.x, this.scene.homeBase.y
+                );
+                
+                if (distance <= this.scene.homeBase.radius) {
+                    // Create explosion effect and deal damage
+                    this.explodeAtHomeBase();
+                    return;
+                }
+                break;
+        }
+        
+        // Continue updating movement if still active
+        if (this.active && !this.isFrozen) {
+            this.scene.time.addEvent({
+                delay: 16,
+                callback: this.updateMovement,
+                callbackScope: this,
+                loop: false
+            });
+        }
+    }
+    
+    freeze() {
+        if (this.isFrozen) return;
+        
+        this.isFrozen = true;
+        this.body.setVelocity(0, 0);
+        this.setTint(0x00FFFF);
+        
+        this.scene.time.delayedCall(1000, () => {
+            if (this.active) {
+                this.isFrozen = false;
+                this.clearTint();
+                this.startPatrolling();
+            }
+        });
+    }
+    
+    updateHealthBar() {
+        if (!this.active) return;
+        
+        this.healthBar.clear();
+        this.statusEffects.clear();
+        
+        const barWidth = GAME_CONFIG.enemy.healthBar.width;
+        const barHeight = GAME_CONFIG.enemy.healthBar.height;
+        const barY = this.y - 25 - barHeight - GAME_CONFIG.enemy.healthBar.yOffset;
+        const barX = this.x - barWidth/2;
+        
+        // Background (gray)
+        this.healthBar.fillStyle(0x333333);
+        this.healthBar.fillRect(barX, barY, barWidth, barHeight);
+        // Health (red)
+        this.healthBar.fillStyle(0xFF0000);
+        this.healthBar.fillRect(barX, barY, (this.health / 100) * barWidth, barHeight);
+        
+        if (this.isFrozen) {
+            this.statusEffects.fillStyle(0x00FFFF);
+            this.statusEffects.fillCircle(barX, barY - 5, 3);
+        }
+    }
+    
+    damage(amount) {
+        this.health = Math.max(0, this.health - amount);
+        this.updateHealthBar();
+        
+        if (this.health <= 0) {
+            this.die();
+        }
+        
+        return this.health <= 0;
+    }
+    
+    die() {
+        const scene = this.scene;
+        this.healthBar.destroy();
+        this.statusEffects.destroy();
+        this.destroy();
+        
+        scene.time.delayedCall(1000, () => {
+            createEnemy.call(scene);
+        });
+    }
+
+    explodeAtHomeBase() {
+        // Store scene reference and apply damage first
+        const scene = this.scene;
+        scene.updateHomeBaseHealth(GAME_CONFIG.homeBase.damageFromCollision);
+        
+        // Create explosion graphics
+        const explosion = scene.add.graphics();
+        explosion.setDepth(3);
+        
+        // Start explosion animation
+        scene.tweens.add({
+            targets: { progress: 0 },
+            progress: 1,
+            duration: 200,
+            onUpdate: (tween) => {
+                const progress = tween.targets[0].progress;
+                explosion.clear();
+                
+                // Simple expanding circle that fades out
+                const radius = 30 * (1 + progress);
+                explosion.fillStyle(0xFF4444, 1 - progress);
+                explosion.fillCircle(this.x, this.y, radius);
+                
+                // Inner bright flash
+                explosion.fillStyle(0xFFFFFF, (1 - progress) * 0.8);
+                explosion.fillCircle(this.x, this.y, radius * 0.6);
+            },
+            onComplete: () => {
+                explosion.destroy();
+            }
+        });
+        
+        // Die after creating explosion
+        this.die();
     }
 }
 
