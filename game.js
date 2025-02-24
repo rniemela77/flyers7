@@ -19,61 +19,113 @@ const GAME_CONFIG = {
         centerOffset: 20  // Distance from bottom center for projectile spawning
     },
     combat: {
-        projectiles: {
-            bullet: {
-                baseSpeed: 400,
-                lifetime: 2000,
-                baseDamage: 10,
-                size: 8
-            },
-            beam: {
-                damage: 2,
-                range: 20,
-                width: 6,
-                glowWidth: 6,
-                glowAlpha: 0.3
-            },
-            lockOn: {
-                maxTargets: 2,
-                range: 100,
-                missileSpeed: 300,
-                missileDamage: 15,
-                turnRate: 0.05,
-                lifetime: 3000
-            },
-            shotgun: {
-                pelletCount: 8,
-                speed: 800,
-                damage: 8,
-                baseSpread: Math.PI / 64
-            }
-        },
-        fireModes: {
+        weapons: {
             rapidFire: {
-                cooldown: 100,
-                damage: 10
+                projectile: {
+                    type: 'bullet',
+                    speed: 400,
+                    lifetime: 2000,
+                    damage: 10,
+                    size: 8,
+                    color: 0xFFFFFF,
+                    scale: 1
+                },
+                fireMode: {
+                    cooldown: 100,
+                    pattern: 'single',
+                    spread: 0
+                }
             },
             dualShot: {
-                cooldown: 100,
-                damage: 10,
-                offset: 10
+                projectile: {
+                    type: 'bullet',
+                    speed: 400,
+                    lifetime: 2000,
+                    damage: 10,
+                    size: 8,
+                    color: 0xFFFFFF,
+                    scale: 1
+                },
+                fireMode: {
+                    cooldown: 100,
+                    pattern: 'dual',
+                    offset: 10,
+                    spread: 0
+                }
             },
             tripleShot: {
-                cooldown: 100,
-                damage: 10,
-                spread: Math.PI / 32
+                projectile: {
+                    type: 'bullet',
+                    speed: 400,
+                    lifetime: 2000,
+                    damage: 10,
+                    size: 8,
+                    color: 0xFFFFFF,
+                    scale: 1
+                },
+                fireMode: {
+                    cooldown: 100,
+                    pattern: 'spread',
+                    count: 3,
+                    spread: Math.PI / 32
+                }
             },
             beam: {
-                cooldown: 100,
-                damage: 2
+                projectile: {
+                    type: 'beam',
+                    damage: 2,
+                    range: 20,
+                    width: 6,
+                    color: 0xFFFFFF
+                },
+                fireMode: {
+                    cooldown: 100,
+                    continuous: true
+                },
+                visuals: {
+                    glowWidth: 6,
+                    glowAlpha: 0.3,
+                    glowColor: 0x00FFFF
+                }
             },
             lockOn: {
-                cooldown: 500,
-                damage: 15
+                projectile: {
+                    type: 'missile',
+                    speed: 300,
+                    lifetime: 3000,
+                    damage: 15,
+                    size: 8,
+                    color: 0xFF4444,
+                    scale: 1.5,
+                    turnRate: 0.05
+                },
+                fireMode: {
+                    cooldown: 500,
+                    maxTargets: 2,
+                    targetingRange: 100,
+                    pattern: 'homing'
+                },
+                visuals: {
+                    targetingColor: 0xFF0000
+                }
             },
             shotgun: {
-                cooldown: 1000,
-                damage: 8
+                projectile: {
+                    type: 'pellet',
+                    speed: 900,
+                    lifetime: 1500,
+                    damage: 14,
+                    size: 6,
+                    color: 0xFFFFFF,
+                    scale: 0.8
+                },
+                fireMode: {
+                    cooldown: 1000,
+                    pattern: 'spread',
+                    count: 8,
+                    baseSpread: Math.PI / 64,
+                    distanceSpreadFactor: 1/800
+                }
             }
         }
     },
@@ -125,9 +177,9 @@ class Projectile extends Phaser.Physics.Arcade.Sprite {
         super(scene, config.x, config.y, config.texture || 'bullet');
         
         this.scene = scene;
-        this.damage = config.damage || GAME_CONFIG.combat.projectiles.bullet.baseDamage;
-        this.speed = config.speed || GAME_CONFIG.combat.projectiles.bullet.baseSpeed;
-        this.lifetime = config.lifetime || GAME_CONFIG.combat.projectiles.bullet.lifetime;
+        this.damage = config.damage || GAME_CONFIG.combat.weapons.rapidFire.projectile.damage;
+        this.speed = config.speed || GAME_CONFIG.combat.weapons.rapidFire.projectile.speed;
+        this.lifetime = config.lifetime || GAME_CONFIG.combat.weapons.rapidFire.projectile.lifetime;
         
         scene.add.existing(this);
         scene.physics.add.existing(this);
@@ -168,13 +220,13 @@ class HomingMissile extends Projectile {
         super(scene, {
             x: config.x,
             y: config.y,
-            damage: GAME_CONFIG.combat.projectiles.lockOn.missileDamage,
-            speed: GAME_CONFIG.combat.projectiles.lockOn.missileSpeed,
-            lifetime: GAME_CONFIG.combat.projectiles.lockOn.lifetime
+            damage: GAME_CONFIG.combat.weapons.lockOn.projectile.damage,
+            speed: GAME_CONFIG.combat.weapons.lockOn.projectile.speed,
+            lifetime: GAME_CONFIG.combat.weapons.lockOn.projectile.lifetime
         });
         
         this.target = target;
-        this.turnRate = GAME_CONFIG.combat.projectiles.lockOn.turnRate;
+        this.turnRate = GAME_CONFIG.combat.weapons.lockOn.projectile.turnRate;
         this.setTint(0xFF4444);
         this.scaleX = 1.5;
         this.scaleY = 1.5;  // Also scale Y to make missile more visible
@@ -216,8 +268,8 @@ class ShotgunPellet extends Projectile {
             x: config.x,
             y: config.y,
             angle: config.angle,
-            damage: GAME_CONFIG.combat.projectiles.shotgun.damage,
-            speed: GAME_CONFIG.combat.projectiles.shotgun.speed
+            damage: GAME_CONFIG.combat.weapons.shotgun.projectile.damage,
+            speed: GAME_CONFIG.combat.weapons.shotgun.projectile.speed
         });
     }
 }
@@ -279,8 +331,8 @@ function checkBeamCollision(scene) {
             { x: endX, y: endY }
         );
 
-        if (distToLine < GAME_CONFIG.combat.projectiles.beam.range) {
-            handleEnemyHit(scene, enemy, GAME_CONFIG.combat.projectiles.beam.damage, { 
+        if (distToLine < GAME_CONFIG.combat.weapons.beam.projectile.range) {
+            handleEnemyHit(scene, enemy, GAME_CONFIG.combat.weapons.beam.projectile.damage, { 
                 x: enemy.x, 
                 y: enemy.y 
             }, false);
@@ -300,8 +352,8 @@ class WeaponStateManager {
             rapidFire: {
                 name: 'rapidFire',
                 isActive: true,
-                damage: GAME_CONFIG.combat.fireModes.rapidFire.damage,
-                cooldown: GAME_CONFIG.combat.fireModes.rapidFire.cooldown,
+                damage: GAME_CONFIG.combat.weapons.rapidFire.projectile.damage,
+                cooldown: GAME_CONFIG.combat.weapons.rapidFire.fireMode.cooldown,
                 iconDrawer: (graphics, x, y, width, height) => {
                     const circleY = y + height/2;
                     for (let i = 0; i < 3; i++) {
@@ -324,8 +376,8 @@ class WeaponStateManager {
             },
             dualShot: {
                 name: 'dualShot',
-                damage: GAME_CONFIG.combat.fireModes.dualShot.damage,
-                cooldown: GAME_CONFIG.combat.fireModes.dualShot.cooldown,
+                damage: GAME_CONFIG.combat.weapons.dualShot.projectile.damage,
+                cooldown: GAME_CONFIG.combat.weapons.dualShot.fireMode.cooldown,
                 iconDrawer: (graphics, x, y, width, height) => {
                     const circleY = y + height/2;
                     graphics.fillCircle(x + 13, circleY, 5);
@@ -339,7 +391,7 @@ class WeaponStateManager {
                         scene.reticle.x, scene.reticle.y
                     );
                     
-                    const offset = GAME_CONFIG.combat.fireModes.dualShot.offset;
+                    const offset = GAME_CONFIG.combat.weapons.dualShot.fireMode.offset;
                     const perpAngle = baseAngle + Math.PI / 2;
                     const offsetX = Math.cos(perpAngle) * offset;
                     const offsetY = Math.sin(perpAngle) * offset;
@@ -358,8 +410,8 @@ class WeaponStateManager {
             },
             tripleShot: {
                 name: 'tripleShot',
-                damage: GAME_CONFIG.combat.fireModes.tripleShot.damage,
-                cooldown: GAME_CONFIG.combat.fireModes.tripleShot.cooldown,
+                damage: GAME_CONFIG.combat.weapons.tripleShot.projectile.damage,
+                cooldown: GAME_CONFIG.combat.weapons.tripleShot.fireMode.cooldown,
                 iconDrawer: (graphics, x, y, width, height) => {
                     const circleY = y + height/2;
                     graphics.fillCircle(x + 8, circleY, 5);
@@ -374,7 +426,7 @@ class WeaponStateManager {
                         scene.reticle.x, scene.reticle.y
                     );
                     
-                    const spread = GAME_CONFIG.combat.fireModes.tripleShot.spread;
+                    const spread = GAME_CONFIG.combat.weapons.tripleShot.fireMode.spread;
                     createProjectile(scene, 'bullet', {
                         x: centerX,
                         y: bottomY,
@@ -394,8 +446,8 @@ class WeaponStateManager {
             },
             beam: {
                 name: 'beam',
-                damage: GAME_CONFIG.combat.fireModes.beam.damage,
-                cooldown: GAME_CONFIG.combat.fireModes.beam.cooldown,
+                damage: GAME_CONFIG.combat.weapons.beam.projectile.damage,
+                cooldown: GAME_CONFIG.combat.weapons.beam.fireMode.cooldown,
                 iconDrawer: (graphics, x, y, width, height) => {
                     graphics.lineStyle(3, 0xFFFFFF);
                     graphics.beginPath();
@@ -412,8 +464,8 @@ class WeaponStateManager {
             },
             lockOn: {
                 name: 'lockOn',
-                damage: GAME_CONFIG.combat.fireModes.lockOn.damage,
-                cooldown: GAME_CONFIG.combat.fireModes.lockOn.cooldown,
+                damage: GAME_CONFIG.combat.weapons.lockOn.projectile.damage,
+                cooldown: GAME_CONFIG.combat.weapons.lockOn.fireMode.cooldown,
                 iconDrawer: (graphics, x, y, width, height) => {
                     graphics.lineStyle(2, 0xFFFFFF);
                     graphics.strokeCircle(x + width/2, y + height/2, 12);
@@ -437,8 +489,8 @@ class WeaponStateManager {
             },
             shotgun: {
                 name: 'shotgun',
-                damage: GAME_CONFIG.combat.fireModes.shotgun.damage,
-                cooldown: GAME_CONFIG.combat.fireModes.shotgun.cooldown,
+                damage: GAME_CONFIG.combat.weapons.shotgun.projectile.damage,
+                cooldown: GAME_CONFIG.combat.weapons.shotgun.fireMode.cooldown,
                 iconDrawer: (graphics, x, y, width, height) => {
                     graphics.lineStyle(2, 0xFFFFFF);
                     const centerX = x + width/2;
@@ -464,11 +516,11 @@ class WeaponStateManager {
                         centerX, bottomY,
                         scene.reticle.x, scene.reticle.y
                     );
-                    const baseSpread = GAME_CONFIG.combat.projectiles.shotgun.baseSpread;
+                    const baseSpread = GAME_CONFIG.combat.weapons.shotgun.fireMode.baseSpread;
                     const distanceSpreadFactor = distanceToTarget / 800;
                     const totalSpread = baseSpread * (1 + distanceSpreadFactor);
                     
-                    for (let i = 0; i < GAME_CONFIG.combat.projectiles.shotgun.pelletCount; i++) {
+                    for (let i = 0; i < GAME_CONFIG.combat.weapons.shotgun.fireMode.count; i++) {
                         const spreadAngle = baseAngle + (Math.random() * 2 - 1) * totalSpread;
                         createProjectile(scene, 'pellet', {
                             x: centerX,
@@ -1014,7 +1066,7 @@ function create() {
     bulletGraphics.closePath();
     bulletGraphics.fill();
     
-    const bulletTexture = bulletGraphics.generateTexture('bullet', GAME_CONFIG.combat.projectiles.bullet.size, GAME_CONFIG.combat.projectiles.bullet.size);
+    const bulletTexture = bulletGraphics.generateTexture('bullet', GAME_CONFIG.combat.weapons.rapidFire.projectile.size, GAME_CONFIG.combat.weapons.rapidFire.projectile.size);
     bulletGraphics.destroy();
 
     // Create beam graphics and store in scene
@@ -1111,9 +1163,9 @@ function update() {
 
         // Draw beam glow effect
         this.beamGraphics.lineStyle(
-            GAME_CONFIG.combat.projectiles.beam.glowWidth,
+            GAME_CONFIG.combat.weapons.beam.visuals.glowWidth,
             0x00FFFF,
-            GAME_CONFIG.combat.projectiles.beam.glowAlpha
+            GAME_CONFIG.combat.weapons.beam.visuals.glowAlpha
         );
         this.beamGraphics.beginPath();
         this.beamGraphics.moveTo(startX, bottomY);
@@ -1121,7 +1173,7 @@ function update() {
         this.beamGraphics.strokePath();
 
         // Draw beam core
-        this.beamGraphics.lineStyle(GAME_CONFIG.combat.projectiles.beam.width, 0xFFFFFF, 1);
+        this.beamGraphics.lineStyle(GAME_CONFIG.combat.weapons.beam.projectile.width, 0xFFFFFF, 1);
         this.beamGraphics.beginPath();
         this.beamGraphics.moveTo(startX, bottomY);
         this.beamGraphics.lineTo(endX, endY);
@@ -1336,7 +1388,7 @@ function fireLockOnMissiles() {
         });
 
         this.physics.add.overlap(missile, this.enemies, (missile, enemy) => {
-            handleEnemyHit(this, enemy, GAME_CONFIG.combat.projectiles.lockOn.missileDamage, { 
+            handleEnemyHit(this, enemy, GAME_CONFIG.combat.weapons.lockOn.projectile.damage, { 
                 x: missile.x, 
                 y: missile.y 
             }, false);
