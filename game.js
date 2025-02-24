@@ -767,6 +767,18 @@ class Enemy extends Phaser.GameObjects.Triangle {
         this.isFrozen = false;
         this.currentTween = null;
         
+        // Add shooting properties
+        this.lastShotTime = 0;
+        this.shootCooldown = 2000; // 2 seconds between shots
+        this.projectileSpeed = 150; // Reduced from 200
+        this.projectileDamage = 5;
+        
+        // Add movement properties
+        this.movementSpeed = 60; // Reduced from 100
+        
+        // Bind shooting method
+        this.tryToShoot = this.tryToShoot.bind(this);
+        
         scene.add.existing(this);
         scene.physics.add.existing(this);
         scene.enemies.add(this);
@@ -789,6 +801,121 @@ class Enemy extends Phaser.GameObjects.Triangle {
         
         this.updateHealthBar();
         this.startMoving();
+        
+        // Start shooting behavior
+        this.startShooting();
+    }
+    
+    startShooting() {
+        if (!this.active || this.isFrozen) return;
+        
+        this.scene.time.addEvent({
+            delay: 16,
+            callback: this.tryToShoot,
+            callbackScope: this,
+            loop: false
+        });
+    }
+    
+    tryToShoot() {
+        // First check if we can still shoot
+        if (!this.active || !this.scene || this.isFrozen) return;
+        
+        const currentTime = this.scene.time.now;
+        
+        // Store scene reference to ensure it exists throughout this method
+        const scene = this.scene;
+        const homeBase = scene.homeBase;
+        
+        // Check if cooldown has passed and home base exists
+        if (currentTime - this.lastShotTime >= this.shootCooldown && homeBase) {
+            // Calculate angle to home base
+            const angle = Phaser.Math.Angle.Between(
+                this.x, this.y,
+                homeBase.x, homeBase.y
+            );
+            
+            // Make enemy face the home base
+            this.rotation = angle + Math.PI/2;
+            
+            // Create projectile
+            const projectile = scene.add.circle(this.x, this.y, 4, 0x4444FF);
+            scene.physics.add.existing(projectile);
+            scene.physics.velocityFromRotation(angle, this.projectileSpeed, projectile.body.velocity);
+            
+            // Add cleanup method to projectile
+            projectile.cleanup = () => {
+                if (projectile.active) {
+                    if (scene.activeProjectiles) {
+                        scene.activeProjectiles.delete(projectile);
+                    }
+                    projectile.destroy();
+                }
+            };
+            
+            // Store projectile in scene's bullet group for mass cleanup if needed
+            if (!scene.activeProjectiles) {
+                scene.activeProjectiles = new Set();
+            }
+            scene.activeProjectiles.add(projectile);
+            
+            // Check for collision with home base in update loop
+            const checkCollision = () => {
+                // First verify scene and projectile still exist
+                if (!scene.scene.isActive() || !projectile.active) {
+                    projectile.cleanup();
+                    return;
+                }
+                
+                // Get fresh reference to home base
+                const currentHomeBase = scene.homeBase;
+                if (!currentHomeBase) {
+                    projectile.cleanup();
+                    return;
+                }
+                
+                const distance = Phaser.Math.Distance.Between(
+                    projectile.x, projectile.y,
+                    currentHomeBase.x, currentHomeBase.y
+                );
+                
+                if (distance <= currentHomeBase.radius) {
+                    scene.updateHomeBaseHealth(this.projectileDamage);
+                    createExplosion(scene, projectile.x, projectile.y);
+                    projectile.cleanup();
+                    return;
+                }
+                
+                // Only continue checking if everything is still valid
+                if (scene.scene.isActive() && projectile.active && currentHomeBase) {
+                    scene.time.addEvent({
+                        delay: 16,
+                        callback: checkCollision,
+                        callbackScope: this
+                    });
+                }
+            };
+            
+            // Start collision checking
+            checkCollision();
+            
+            // Destroy projectile after 3 seconds
+            scene.time.delayedCall(3000, () => {
+                projectile.cleanup();
+            });
+            
+            this.lastShotTime = currentTime;
+        }
+        
+        // Continue checking for shots only if scene is still active
+        if (scene.scene.isActive() && homeBase) {
+            scene.time.addEvent({
+                delay: 16,
+                callback: this.tryToShoot,
+                callbackScope: this,
+                loop: false
+            });
+        }
     }
     
     startMoving() {
@@ -800,8 +927,7 @@ class Enemy extends Phaser.GameObjects.Triangle {
         
         // Calculate velocity based on target position
         const angle = Phaser.Math.Angle.Between(this.x, this.y, newX, newY);
-        const speed = 100; // Adjust speed as needed
-        this.scene.physics.velocityFromRotation(angle, speed, this.body.velocity);
+        this.scene.physics.velocityFromRotation(angle, this.movementSpeed, this.body.velocity); // Use the new movementSpeed property
         
         // Set a timer to change direction
         this.scene.time.delayedCall(1500, () => {
@@ -828,6 +954,7 @@ class Enemy extends Phaser.GameObjects.Triangle {
                 this.isFrozen = false;
                 this.setFillStyle(0x4444FF); // Reset to original blue color
                 this.startMoving();
+                this.startShooting(); // Resume shooting when unfrozen
             }
         });
     }
@@ -2161,8 +2288,7 @@ class DiveBomber extends Phaser.GameObjects.Triangle {
         super(scene, x, y, x1, y1, x2, y2, x3, y3, 0xFF4444); // 
         
         this.setOrigin(0.5, 0.5);
-        
-        this.scene = scene;
+                this.scene = scene;
         this.health = 100;
         this.isFrozen = false;
         this.currentTween = null;
@@ -2405,3 +2531,5 @@ class DiveBomber extends Phaser.GameObjects.Triangle {
     }
 }
 
+
+        
