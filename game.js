@@ -731,28 +731,55 @@ class FireMode {
 }
 
 // Enemy class definition
-class Enemy extends Phaser.Physics.Arcade.Sprite {
+class Enemy extends Phaser.GameObjects.Triangle {
     constructor(scene, x, y) {
-        super(scene, x, y, 'enemy');
+        super(scene, x, y, 20, 5, 35, 35, 5, 35, 0xFF0000);
         
         this.scene = scene;
         this.health = 100;
         this.isFrozen = false;
         this.currentTween = null;
         
-        // Add to scene and physics
         scene.add.existing(this);
         scene.physics.add.existing(this);
+        scene.enemies.add(this);
         
-        // Create health bar and status effects container
+        // Enable collision with other enemies
+        this.body.setCollideWorldBounds(true);
+        this.body.setBounce(0.8, 0.8);
+        this.body.setDrag(50);
+        this.body.setMass(1);
+        
+        // Create health bar
         this.healthBar = scene.add.graphics();
-        this.statusEffects = scene.add.graphics();
-        this.healthBar.setDepth(1);
-        this.statusEffects.setDepth(1);
-        this.updateHealthBar();
+        this.healthBar.setDepth(2);
         
-        // Start movement
+        // Create status effects container
+        this.statusEffects = scene.add.graphics();
+        this.statusEffects.setDepth(2);
+        
+        this.updateHealthBar();
         this.startMoving();
+    }
+    
+    startMoving() {
+        if (!this.active || this.isFrozen) return;
+        
+        const margin = 50;
+        const newX = Phaser.Math.Between(margin, config.width - margin);
+        const newY = Phaser.Math.Between(margin, (config.height / 2) - margin);
+        
+        // Calculate velocity based on target position
+        const angle = Phaser.Math.Angle.Between(this.x, this.y, newX, newY);
+        const speed = 100; // Adjust speed as needed
+        this.scene.physics.velocityFromRotation(angle, speed, this.body.velocity);
+        
+        // Set a timer to change direction
+        this.scene.time.delayedCall(1500, () => {
+            if (this.active) {
+                this.startMoving();
+            }
+        });
     }
     
     freeze() {
@@ -761,9 +788,7 @@ class Enemy extends Phaser.Physics.Arcade.Sprite {
         this.isFrozen = true;
         
         // Stop current movement
-        if (this.currentTween) {
-            this.currentTween.stop();
-        }
+        this.body.setVelocity(0, 0);
         
         // Create freeze visual effect
         this.setTint(0x00FFFF);
@@ -776,6 +801,32 @@ class Enemy extends Phaser.Physics.Arcade.Sprite {
                 this.startMoving();
             }
         });
+    }
+    
+    updateHealthBar() {
+        if (!this.active) return;
+        
+        this.healthBar.clear();
+        this.statusEffects.clear();
+        
+        const barWidth = GAME_CONFIG.enemy.healthBar.width;
+        const barHeight = GAME_CONFIG.enemy.healthBar.height;
+        // Position health bar above the triangle's top point
+        const barY = this.y - 30 - barHeight - GAME_CONFIG.enemy.healthBar.yOffset;
+        const barX = this.x - barWidth/2;
+        
+        // Background (gray)
+        this.healthBar.fillStyle(0x333333);
+        this.healthBar.fillRect(barX, barY, barWidth, barHeight);
+        // Health (red)
+        this.healthBar.fillStyle(0xFF0000);
+        this.healthBar.fillRect(barX, barY, (this.health / 100) * barWidth, barHeight);
+        
+        // Draw freeze status if frozen
+        if (this.isFrozen) {
+            this.statusEffects.fillStyle(0x00FFFF);
+            this.statusEffects.fillCircle(barX, barY - 5, 3);
+        }
     }
     
     damage(amount) {
@@ -799,14 +850,150 @@ class Enemy extends Phaser.Physics.Arcade.Sprite {
             createEnemy.call(scene);
         });
     }
+}
+
+// Swooper enemy that dives towards the player
+class SwooperEnemy extends Phaser.GameObjects.Rectangle {
+    constructor(scene, x, y) {
+        super(scene, x, y, 30, 30, 0x4444FF); // Blue square, 30x30 pixels
+        
+        this.scene = scene;
+        this.health = 100;
+        this.isFrozen = false;
+        this.currentTween = null;
+        this.swoopState = 'preparing';
+        this.swoopTimer = 0;
+        this.prepareDuration = 2500; // Longer preparation time
+        this.swoopSpeed = 150; // Slower swooping speed (was 200)
+        
+        scene.add.existing(this);
+        scene.physics.add.existing(this);
+        scene.enemies.add(this);
+        
+        // Enable collision with other enemies
+        this.body.setCollideWorldBounds(true);
+        this.body.setBounce(0.8, 0.8);
+        this.body.setDrag(50);
+        this.body.setMass(1);
+        
+        // Create health bar
+        this.healthBar = scene.add.graphics();
+        this.healthBar.setDepth(2);
+        
+        // Create status effects container
+        this.statusEffects = scene.add.graphics();
+        this.statusEffects.setDepth(2);
+        
+        this.updateHealthBar();
+        this.startSwooping();
+    }
+    
+    startSwooping() {
+        if (!this.active || this.isFrozen) return;
+        
+        this.swoopState = 'preparing';
+        this.swoopTimer = 0;
+        
+        // Move side to side while preparing
+        const margin = 50;
+        const newX = Phaser.Math.Between(margin, config.width - margin);
+        const newY = Phaser.Math.Between(margin, config.height / 4); // Stay in top quarter
+        
+        // Calculate velocity for side movement
+        const angle = Phaser.Math.Angle.Between(this.x, this.y, newX, newY);
+        const speed = 35; // Even slower during preparation (was 50)
+        this.scene.physics.velocityFromRotation(angle, speed, this.body.velocity);
+        
+        // Update movement more frequently
+        this.scene.time.addEvent({
+            delay: 16, // 60fps
+            callback: this.updateSwooping,
+            callbackScope: this,
+            loop: false
+        });
+    }
+    
+    updateSwooping() {
+        if (!this.active || this.isFrozen) return;
+        
+        this.swoopTimer += 16;
+        
+        switch (this.swoopState) {
+            case 'preparing':
+                if (this.swoopTimer >= this.prepareDuration) {
+                    this.swoopState = 'diving';
+                    this.swoopTimer = 0;
+                    
+                    // Start diving towards bottom center
+                    const targetX = config.width / 2;
+                    const targetY = config.height - 100; // Don't dive all the way to bottom
+                    const angle = Phaser.Math.Angle.Between(this.x, this.y, targetX, targetY);
+                    this.scene.physics.velocityFromRotation(angle, this.swoopSpeed, this.body.velocity);
+                }
+                break;
+                
+            case 'diving':
+                if (this.y >= config.height - 100) { // Check if reached dive target
+                    this.swoopState = 'returning';
+                    this.swoopTimer = 0;
+                    
+                    // Return to top of screen at random x position
+                    const returnX = Phaser.Math.Between(50, config.width - 50);
+                    const returnY = 50;
+                    const angle = Phaser.Math.Angle.Between(this.x, this.y, returnX, returnY);
+                    this.scene.physics.velocityFromRotation(angle, this.swoopSpeed * 0.6, this.body.velocity); // Even slower return (was 0.7)
+                }
+                break;
+                
+            case 'returning':
+                if (this.y <= 100) { // Check if returned to top
+                    this.startSwooping(); // Start the cycle again
+                }
+                break;
+        }
+        
+        // Continue updating movement
+        if (this.active && !this.isFrozen) {
+            this.scene.time.addEvent({
+                delay: 16,
+                callback: this.updateSwooping,
+                callbackScope: this,
+                loop: false
+            });
+        }
+    }
+    
+    freeze() {
+        if (this.isFrozen) return;
+        
+        this.isFrozen = true;
+        
+        // Stop current movement
+        this.body.setVelocity(0, 0);
+        
+        // Create freeze visual effect
+        this.setTint(0x00FFFF);
+        
+        // Unfreeze after 1 second
+        this.scene.time.delayedCall(1000, () => {
+            if (this.active) {
+                this.isFrozen = false;
+                this.clearTint();
+                this.startSwooping();
+            }
+        });
+    }
     
     updateHealthBar() {
+        if (!this.active) return;
+        
         this.healthBar.clear();
         this.statusEffects.clear();
         
-        const barWidth = 40;
-        const barHeight = 5;
-        const barY = this.y - this.height/2 - barHeight - 5;
+        const barWidth = GAME_CONFIG.enemy.healthBar.width;
+        const barHeight = GAME_CONFIG.enemy.healthBar.height;
+        // Position health bar above the square
+        const barY = this.y - 25 - barHeight - GAME_CONFIG.enemy.healthBar.yOffset;
         const barX = this.x - barWidth/2;
         
         // Background (gray)
@@ -819,38 +1006,29 @@ class Enemy extends Phaser.Physics.Arcade.Sprite {
         // Draw freeze status if frozen
         if (this.isFrozen) {
             this.statusEffects.fillStyle(0x00FFFF);
-            // Position above and left-aligned with health bar
             this.statusEffects.fillCircle(barX, barY - 5, 3);
         }
     }
     
-    startMoving() {
-        if (!this.active || this.isFrozen) return;
+    damage(amount) {
+        this.health = Math.max(0, this.health - amount);
+        this.updateHealthBar();
         
-        const margin = 50;
-        const newX = Phaser.Math.Between(margin, config.width - margin);
-        const newY = Phaser.Math.Between(margin, (config.height / 2) - margin);
+        if (this.health <= 0) {
+            this.die();
+        }
         
+        return this.health <= 0;
+    }
+    
+    die() {
         const scene = this.scene;
+        this.healthBar.destroy();
+        this.statusEffects.destroy();
+        this.destroy();
         
-        this.currentTween = scene.tweens.add({
-            targets: this,
-            x: newX,
-            y: newY,
-            duration: 1500,
-            ease: 'Power2',
-            onComplete: () => {
-                scene.time.delayedCall(Phaser.Math.Between(1000, 2000), () => {
-                    if (this.active) {
-                        this.startMoving();
-                    }
-                });
-            },
-            onUpdate: () => {
-                if (this.active) {
-                    this.updateHealthBar();
-                }
-            }
+        scene.time.delayedCall(1000, () => {
+            createEnemy.call(scene);
         });
     }
 }
@@ -1096,17 +1274,18 @@ function createEnemy() {
     }
 
     // Create enemy at random position in top half
-    const enemy = new Enemy(
-        this,
-        Phaser.Math.Between(50, config.width - 50),
-        Phaser.Math.Between(50, config.height / 2 - 50)
-    );
+    const x = Phaser.Math.Between(50, config.width - 50);
+    const y = Phaser.Math.Between(50, config.height / 2 - 50);
+    
+    // 30% chance to spawn a swooper enemy
+    const enemy = Math.random() < 0.3 ? 
+        new SwooperEnemy(this, x, y) :
+        new Enemy(this, x, y);
+    
     enemy.setDepth(1);
 
     // Add to enemies group
     this.enemies.add(enemy);
-
-    return enemy;
 }
 
 function create() {
@@ -1204,6 +1383,9 @@ function create() {
     this.lockedTargets = [];
     this.lockOnGraphics = this.add.graphics();
     this.lockOnGraphics.setDepth(2);
+
+    // Add collision between enemies
+    this.physics.add.collider(this.enemies, this.enemies);
 }
 
 function update() {
@@ -1212,6 +1394,13 @@ function update() {
         if (bullet.x < 0 || bullet.x > GAME_CONFIG.display.width || 
             bullet.y < 0 || bullet.y > GAME_CONFIG.display.height) {
             bullet.destroy();
+        }
+    });
+
+    // Update enemy health bars
+    this.enemies.getChildren().forEach(enemy => {
+        if (enemy.active) {
+            enemy.updateHealthBar();
         }
     });
 
