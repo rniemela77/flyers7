@@ -1,16 +1,3 @@
-/*
-Phaser.js game
-
-Game mechanics:
-
-- the enemy (a red triangle) spawns at the top half of the screen.
-- the targeting reticle (a white crosshair) spawns on the enemy
-- on pointerdown, create a virtual joystick at the pointer position.
-- while pointerdown, on pointermove, the targeting reticle moves in the direction of the drag from the pointer down position. (almost like panning the reticle)
-- the targeting reticle moves at 2x the distance of the drag.
-- the player continuously fires bullets which spawn at the bottom center and travels in the direction of the targeting reticle.
-*/
-
 const GAME_CONFIG = {
     display: {
         width: 400,
@@ -763,7 +750,17 @@ class FireMode {
 // Enemy class definition
 class Enemy extends Phaser.GameObjects.Triangle {
     constructor(scene, x, y) {
-        super(scene, x, y, 20, 5, 35, 35, 5, 35, 0x4444FF); // Changed to blue triangle
+        const x1 = 15; // left
+        const y1 = 0; // top
+        const x2 = 30; // right
+        const y2 = 30; // bottom
+        const x3 = 0; // left
+        const y3 = 30; // bottom
+        
+        // Create a triangle with vertices relative to (0,0)
+        super(scene, x, y, x1, y1, x2, y2, x3, y3, 0x4444FF); // 
+        
+        this.setOrigin(0.5, 0.5);
         
         this.scene = scene;
         this.health = 100;
@@ -774,11 +771,13 @@ class Enemy extends Phaser.GameObjects.Triangle {
         scene.physics.add.existing(this);
         scene.enemies.add(this);
         
-        // Enable collision with other enemies
+        // Enable collision with other enemies and set circular hitbox
         this.body.setCollideWorldBounds(true);
         this.body.setBounce(0.8, 0.8);
         this.body.setDrag(50);
         this.body.setMass(1);
+        this.body.setCircle(15);
+        this.body.setOffset(0, 0);
         
         // Create health bar
         this.healthBar = scene.add.graphics();
@@ -1078,7 +1077,7 @@ const config = {
         default: 'arcade',
         arcade: {
             gravity: { y: 0 },
-            debug: false
+            debug: true
         }
     },
     scene: {
@@ -2149,9 +2148,19 @@ class WeaponModifierManager {
 }
 
 // DiveBomber enemy that targets the home base
-class DiveBomber extends Phaser.GameObjects.Rectangle {
+class DiveBomber extends Phaser.GameObjects.Triangle {
     constructor(scene, x, y) {
-        super(scene, x, y, 30, 30, 0xFF0000); // Red square
+        // Create a triangle with vertices relative to (0,0)
+        const x1 = 15; // left
+        const y1 = 0; // top
+        const x2 = 30; // right
+        const y2 = 30; // bottom
+        const x3 = 0; // left
+        const y3 = 30; // bottom
+        
+        super(scene, x, y, x1, y1, x2, y2, x3, y3, 0xFF4444); // 
+        
+        this.setOrigin(0.5, 0.5);
         
         this.scene = scene;
         this.health = 100;
@@ -2159,9 +2168,11 @@ class DiveBomber extends Phaser.GameObjects.Rectangle {
         this.currentTween = null;
         this.state = 'patrolling';
         this.stateTimer = 0;
-        this.patrolDuration = Phaser.Math.Between(2000, 4000); // Random patrol time before diving
+        this.patrolDuration = Phaser.Math.Between(2000, 4000);
         this.diveSpeed = 300;
         this.patrolSpeed = 100;
+        this.horizontalSpeed = 50;
+        this.horizontalDirection = Math.random() < 0.5 ? -1 : 1;
         
         // Bind all methods that need 'this' context
         this.updateMovement = this.updateMovement.bind(this);
@@ -2172,11 +2183,13 @@ class DiveBomber extends Phaser.GameObjects.Rectangle {
         scene.physics.add.existing(this);
         scene.enemies.add(this);
         
-        // Enable collision with other enemies
+        // Enable collision with other enemies and set circular hitbox
         this.body.setCollideWorldBounds(true);
         this.body.setBounce(0.8, 0.8);
         this.body.setDrag(50);
         this.body.setMass(1);
+        this.body.setCircle(15);
+        this.body.setOffset(0, 0);
         
         // Create health bar
         this.healthBar = scene.add.graphics();
@@ -2219,23 +2232,50 @@ class DiveBomber extends Phaser.GameObjects.Rectangle {
         
         this.stateTimer += 16;
         
+        // Always point toward home base
+        const angle = Phaser.Math.Angle.Between(
+            this.x, this.y,
+            this.scene.homeBase.x, this.scene.homeBase.y
+        );
+        this.rotation = angle + Math.PI/2; // Add 90 degrees because triangle points upward by default
+        
         switch (this.state) {
             case 'patrolling':
                 // Check if it's time to dive
                 if (this.stateTimer >= this.patrolDuration) {
-                    this.state = 'diving';
+                    this.state = 'horizontal';
                     this.stateTimer = 0;
+                    this.pauseStarted = false;
                     
-                    // Start diving towards home base
-                    const angle = Phaser.Math.Angle.Between(
-                        this.x, this.y,
-                        this.scene.homeBase.x, this.scene.homeBase.y
-                    );
-                    this.scene.physics.velocityFromRotation(angle, this.diveSpeed, this.body.velocity);
+                    // Start horizontal movement
+                    this.body.setVelocity(this.horizontalSpeed * this.horizontalDirection, 0);
                 }
                 // Bounce off screen edges during patrol
                 else if (this.x <= 50 || this.x >= config.width - 50) {
                     this.body.velocity.x *= -1;
+                }
+                break;
+                
+            case 'horizontal':
+                // After moving horizontally for 1 second, pause for 100ms before diving
+                if (this.stateTimer >= 1000 && !this.pauseStarted) {
+                    this.body.setVelocity(0, 0);
+                    this.pauseStarted = true;
+                    
+                    // After 100ms pause, start diving
+                    this.scene.time.delayedCall(100, () => {
+                        if (this.active && !this.isFrozen) {
+                            this.state = 'diving';
+                            this.stateTimer = 0;
+                            
+                            // Start diving towards home base
+                            const angle = Phaser.Math.Angle.Between(
+                                this.x, this.y,
+                                this.scene.homeBase.x, this.scene.homeBase.y
+                            );
+                            this.scene.physics.velocityFromRotation(angle, this.diveSpeed, this.body.velocity);
+                        }
+                    });
                 }
                 break;
                 
