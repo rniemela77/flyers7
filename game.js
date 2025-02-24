@@ -840,8 +840,8 @@ class Enemy extends Phaser.GameObjects.Triangle {
         
         const barWidth = GAME_CONFIG.enemy.healthBar.width;
         const barHeight = GAME_CONFIG.enemy.healthBar.height;
-        // Position health bar above the triangle's top point
-        const barY = this.y - 30 - barHeight - GAME_CONFIG.enemy.healthBar.yOffset;
+        // Position health bar above the triangle's top point, but slightly lower
+        const barY = this.y - 20 - barHeight - GAME_CONFIG.enemy.healthBar.yOffset;
         const barX = this.x - barWidth/2;
         
         // Background (gray)
@@ -1077,7 +1077,7 @@ const config = {
         default: 'arcade',
         arcade: {
             gravity: { y: 0 },
-            debug: true
+            debug: false
         }
     },
     scene: {
@@ -1410,7 +1410,7 @@ function create() {
     reticleGraphics.destroy();
 
     this.reticle = this.add.sprite(GAME_CONFIG.display.width / 2, GAME_CONFIG.display.height / 2, 'reticle');
-    this.reticle.setDepth(2);
+    this.reticle.setDepth(10); // Increased depth to ensure it's above everything
 
     // Create bullet texture using graphics
     const bulletGraphics = this.add.graphics();
@@ -2329,7 +2329,8 @@ class DiveBomber extends Phaser.GameObjects.Triangle {
         
         const barWidth = GAME_CONFIG.enemy.healthBar.width;
         const barHeight = GAME_CONFIG.enemy.healthBar.height;
-        const barY = this.y - 25 - barHeight - GAME_CONFIG.enemy.healthBar.yOffset;
+        // Position health bar above the triangle, but slightly lower
+        const barY = this.y - 15 - barHeight - GAME_CONFIG.enemy.healthBar.yOffset;
         const barX = this.x - barWidth/2;
         
         // Background (gray)
