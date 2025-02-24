@@ -197,12 +197,10 @@ class Projectile extends Phaser.Physics.Arcade.Sprite {
             // Use values() to get the modifiers from the Map
             Array.from(scene.weaponModifierManager.modifiers.values()).forEach(modifier => {
                 if (modifier.isActive) {
-                    console.log('Active modifier:', modifier.name);  // Log active modifiers
                     modifier.onProjectileCreate?.(this);
                 }
             });
         }
-        console.log('Bullet created, shouldPierce:', this.shouldPierce);  // Log pierce state after modifiers
         
         this.setupCollision();
         this.setupLifetime();
@@ -228,8 +226,6 @@ class Projectile extends Phaser.Physics.Arcade.Sprite {
             // Add this enemy to our hit list
             proj.hitEnemies.add(enemy);
             
-            console.log('Collision detected, shouldPierce:', proj.shouldPierce, 'hasPierced:', proj.hasPierced);  // Log state at collision
-            
             // Handle hit
             handleEnemyHit(proj.scene, enemy, proj.damage, {
                 x: proj.x,
@@ -242,15 +238,12 @@ class Projectile extends Phaser.Physics.Arcade.Sprite {
                 if (!proj.hasPierced) {
                     // First pierce - mark as pierced but don't destroy
                     proj.hasPierced = true;
-                    console.log('passed');  // Log when bullet passes through
                 } else {
                     // Second hit - destroy projectile
-                    console.log('disappeared');  // Log when bullet is destroyed
                     proj.destroy();
                 }
             } else {
                 // Non-piercing projectile - destroy immediately
-                console.log('disappeared');  // Log when bullet is destroyed
                 proj.destroy();
             }
         });
@@ -1562,7 +1555,6 @@ class WeaponModifier {
     
     toggle(scene) {
         this.isActive = !this.isActive;
-        console.log(`${this.name} modifier toggled:`, this.isActive);  // Log modifier toggle
         this.onToggle(scene, this.isActive);
         if (typeof this.onStateChange === 'function') {
             this.onStateChange(this.isActive);
@@ -1800,7 +1792,6 @@ class WeaponModifierManager {
         this.scene = scene;
         this.modifiers = new Map();
         this.setupModifiers();
-        console.log('Modifiers initialized:', Array.from(this.modifiers.keys()));  // Debug line
     }
     
     setupModifiers() {
