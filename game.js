@@ -927,7 +927,29 @@ class Enemy extends Phaser.GameObjects.Triangle {
         
         // Calculate velocity based on target position
         const angle = Phaser.Math.Angle.Between(this.x, this.y, newX, newY);
-        this.scene.physics.velocityFromRotation(angle, this.movementSpeed, this.body.velocity); // Use the new movementSpeed property
+        this.scene.physics.velocityFromRotation(angle, this.movementSpeed, this.body.velocity);
+        
+        // Update rotation to face home base
+        const homeBaseAngle = Phaser.Math.Angle.Between(
+            this.x, this.y,
+            this.scene.homeBase.x, this.scene.homeBase.y
+        );
+        this.rotation = homeBaseAngle + Math.PI/2; // Add 90 degrees because triangle points upward by default
+        
+        // Continuously update rotation
+        this.scene.time.addEvent({
+            delay: 16,  // Update at 60fps
+            callback: () => {
+                if (this.active && !this.isFrozen) {
+                    const currentAngle = Phaser.Math.Angle.Between(
+                        this.x, this.y,
+                        this.scene.homeBase.x, this.scene.homeBase.y
+                    );
+                    this.rotation = currentAngle + Math.PI/2;
+                }
+            },
+            loop: true
+        });
         
         // Set a timer to change direction
         this.scene.time.delayedCall(1500, () => {
