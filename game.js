@@ -42,6 +42,22 @@ let currentScene; // Global scene reference
 let grid = []; // 2D array to represent the grid
 let gridGraphics; // Graphics object for the grid
 let cellHighlight; // Highlight for the current grid cell under the mouse
+let selectedTower = null; // Currently selected tower
+let hudBackground; // Background for the HUD
+let hudText; // Text for the HUD
+
+// Tower types and stats
+const TOWER_TYPES = {
+    BASIC: {
+        name: 'Basic Tower',
+        damage: 1,
+        range: 200,
+        fireRate: 1000, // ms between shots
+        cost: 50,
+        color: 0xffffff,
+        description: 'Standard defensive tower with balanced stats.'
+    }
+};
 
 // Path definition (using grid coordinates)
 const pathCoordinates = [
@@ -90,6 +106,9 @@ function create() {
     livesText = this.add.text(16, 50, 'Lives: 10', { fontSize: '24px', fill: '#fff' });
     goldText = this.add.text(16, 84, 'Gold: 100', { fontSize: '24px', fill: '#fff' });
     
+    // Create HUD at the bottom of the screen
+    createHUD();
+    
     // Create cell highlight that follows the mouse
     cellHighlight = this.add.rectangle(0, 0, GRID_SIZE, GRID_SIZE, 0xffffff, 0.3);
     cellHighlight.setStrokeStyle(2, 0xffffff, 0.8);
@@ -126,20 +145,36 @@ function create() {
         cellHighlight.setVisible(false);
     });
     
-    // Tower placement on click
+    // Tower placement and selection on click
     this.input.on('pointerdown', (pointer) => {
-        if (gold >= 50 && !gameOver) {
-            // Convert mouse position to grid coordinates
-            const gridX = Math.floor(pointer.x / GRID_SIZE);
-            const gridY = Math.floor(pointer.y / GRID_SIZE);
-            
-            // Check if the grid cell is available for tower placement
-            if (gridX >= 0 && gridX < GRID_COLS && gridY >= 0 && gridY < GRID_ROWS && grid[gridY][gridX] === 0) {
+        if (gameOver) return;
+        
+        // Convert mouse position to grid coordinates
+        const gridX = Math.floor(pointer.x / GRID_SIZE);
+        const gridY = Math.floor(pointer.y / GRID_SIZE);
+        
+        // Check if click is within grid bounds
+        if (gridX >= 0 && gridX < GRID_COLS && gridY >= 0 && gridY < GRID_ROWS) {
+            // If clicking on a tower cell, select the tower
+            if (grid[gridY][gridX] === 2) {
+                // Find the tower at this position
+                const towerX = gridX * GRID_SIZE + GRID_SIZE / 2;
+                const towerY = gridY * GRID_SIZE + GRID_SIZE / 2;
+                
+                towers.getChildren().forEach(tower => {
+                    if (Math.abs(tower.x - towerX) < 5 && Math.abs(tower.y - towerY) < 5) {
+                        selectTower(tower);
+                    }
+                });
+            } 
+            // If clicking on an empty cell and have enough gold, place a tower
+            else if (grid[gridY][gridX] === 0 && gold >= TOWER_TYPES.BASIC.cost) {
                 // Place tower at the center of the grid cell
                 const towerX = gridX * GRID_SIZE + GRID_SIZE / 2;
                 const towerY = gridY * GRID_SIZE + GRID_SIZE / 2;
                 
-                placeTower(this, towerX, towerY);
+                const tower = placeTower(this, towerX, towerY);
+                selectTower(tower);
                 
                 // Mark the grid cell as occupied
                 grid[gridY][gridX] = 2; // 2 represents a tower
@@ -148,14 +183,128 @@ function create() {
                 cellHighlight.setFillStyle(0x0000ff, 0.3);
                 cellHighlight.setStrokeStyle(2, 0x0000ff, 0.8);
                 
-                gold -= 50;
+                gold -= TOWER_TYPES.BASIC.cost;
                 goldText.setText('Gold: ' + gold);
             }
+            // If clicking elsewhere, deselect tower
+            else {
+                deselectTower();
+            }
+        } else {
+            // Clicking outside the grid, deselect tower
+            deselectTower();
         }
     });
     
     // Use overlap instead of collider to prevent physics pushing
     this.physics.add.overlap(bullets, enemies, damageEnemy, null, this);
+}
+
+// Create the HUD at the bottom of the screen
+function createHUD() {
+    // Create a background for the HUD
+    hudBackground = currentScene.add.rectangle(
+        config.width / 2,
+        config.height - 40,
+        config.width,
+        80,
+        0x222222
+    );
+    hudBackground.setOrigin(0.5, 0.5);
+    hudBackground.setStrokeStyle(2, 0x444444);
+    
+    // Create text for the HUD
+    hudText = currentScene.add.text(
+        20,
+        config.height - 65,
+        'Select a tower to view its stats',
+        { fontSize: '18px', fill: '#ffffff' }
+    );
+    
+    // Initially hide the HUD
+    updateHUD();
+}
+
+// Select a tower and show its stats
+function selectTower(tower) {
+    // Deselect previous tower if any
+    if (selectedTower && selectedTower !== tower) {
+        // Remove highlight from previous tower
+        if (selectedTower.selectionCircle) {
+            selectedTower.selectionCircle.setVisible(false);
+        }
+    }
+    
+    // Select new tower
+    selectedTower = tower;
+    
+    // Create or show selection circle
+    if (!tower.selectionCircle) {
+        tower.selectionCircle = currentScene.add.circle(
+            tower.x, tower.y, 
+            GRID_SIZE / 2 + 5, 
+            0x00ffff, 0
+        );
+        tower.selectionCircle.setStrokeStyle(3, 0x00ffff);
+    }
+    tower.selectionCircle.setVisible(true);
+    
+    // Show tower range
+    if (tower.rangeCircle) {
+        tower.rangeCircle.setVisible(true);
+        tower.rangeCircle.setAlpha(0.2);
+    }
+    
+    // Update HUD with tower stats
+    updateHUD();
+}
+
+// Deselect the current tower
+function deselectTower() {
+    if (selectedTower) {
+        // Hide selection circle
+        if (selectedTower.selectionCircle) {
+            selectedTower.selectionCircle.setVisible(false);
+        }
+        
+        // Hide range circle
+        if (selectedTower.rangeCircle) {
+            selectedTower.rangeCircle.setAlpha(0.1);
+        }
+        
+        selectedTower = null;
+        
+        // Update HUD
+        updateHUD();
+    }
+}
+
+// Update the HUD with tower stats or default message
+function updateHUD() {
+    // Show HUD background
+    hudBackground.setVisible(true);
+    
+    if (selectedTower) {
+        // Calculate stats based on tower properties
+        const type = TOWER_TYPES.BASIC; // Currently only one type
+        const kills = selectedTower.kills || 0;
+        const damageDealt = selectedTower.damageDealt || 0;
+        
+        // Format time since placement
+        const timeSincePlacement = currentScene.time.now - (selectedTower.placementTime || 0);
+        const seconds = Math.floor(timeSincePlacement / 1000);
+        const minutes = Math.floor(seconds / 60);
+        const timeString = `${minutes}m ${seconds % 60}s`;
+        
+        // Update HUD text with tower stats
+        hudText.setText(
+            `${type.name} | Damage: ${type.damage} | Range: ${type.range} | Fire Rate: ${type.fireRate}ms\n` +
+            `Kills: ${kills} | Damage Dealt: ${damageDealt} | Placed: ${timeString} ago`
+        );
+    } else {
+        // Default message when no tower is selected
+        hudText.setText('Select a tower to view its stats');
+    }
 }
 
 // Initialize the grid with empty cells
@@ -423,7 +572,7 @@ function update(time) {
         if (time > tower.nextFire && enemies.getChildren().length > 0) {
             // Find closest enemy
             let closestEnemy = null;
-            let minDistance = 200; // Tower range
+            let minDistance = TOWER_TYPES.BASIC.range; // Tower range
             
             enemies.getChildren().forEach(enemy => {
                 const distance = Phaser.Math.Distance.Between(tower.x, tower.y, enemy.x, enemy.y);
@@ -437,6 +586,7 @@ function update(time) {
                 // Create bullet
                 const bullet = bullets.create(tower.x, tower.y, 'bullet');
                 bullet.setScale(0.5);
+                bullet.tower = tower; // Reference to the tower that fired this bullet
                 
                 // Configure bullet physics to not push enemies
                 bullet.body.setImmovable(false);
@@ -450,7 +600,7 @@ function update(time) {
                     bullet.destroy();
                 });
                 
-                tower.nextFire = time + 1000; // Fire every 1 second
+                tower.nextFire = time + TOWER_TYPES.BASIC.fireRate; // Fire based on tower type
             }
         }
     });
@@ -469,10 +619,16 @@ function placeTower(scene, x, y) {
     const tower = towers.create(x, y, 'tower');
     tower.setScale(1.5);
     tower.nextFire = 0;
+    tower.kills = 0;
+    tower.damageDealt = 0;
+    tower.placementTime = scene.time.now;
+    tower.type = 'BASIC';
     
     // Visualize tower range
-    const rangeCircle = scene.add.circle(x, y, 200, 0xffffff, 0.1);
+    const rangeCircle = scene.add.circle(x, y, TOWER_TYPES.BASIC.range, 0xffffff, 0.1);
     tower.rangeCircle = rangeCircle;
+    
+    return tower;
 }
 
 // Handle enemy damage
@@ -503,10 +659,20 @@ function damageEnemy(bullet, enemy) {
         console.warn('Error creating hit effect:', e);
     }
     
+    // Update tower stats if this bullet has a reference to its tower
+    if (bullet.tower) {
+        bullet.tower.damageDealt = (bullet.tower.damageDealt || 0) + TOWER_TYPES.BASIC.damage;
+        
+        // Update HUD if this is the selected tower
+        if (selectedTower === bullet.tower) {
+            updateHUD();
+        }
+    }
+    
     // Destroy the bullet
     bullet.destroy();
     
-    enemy.health--;
+    enemy.health -= TOWER_TYPES.BASIC.damage;
     
     // Update health bar immediately after damage
     if (enemy.update) {
@@ -514,6 +680,16 @@ function damageEnemy(bullet, enemy) {
     }
     
     if (enemy.health <= 0) {
+        // Update tower kill count if this bullet has a reference to its tower
+        if (bullet.tower) {
+            bullet.tower.kills = (bullet.tower.kills || 0) + 1;
+            
+            // Update HUD if this is the selected tower
+            if (selectedTower === bullet.tower) {
+                updateHUD();
+            }
+        }
+        
         // Destroy health bars when enemy is destroyed
         if (enemy.healthBarBackground) {
             enemy.healthBarBackground.destroy();
