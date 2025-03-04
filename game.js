@@ -7,7 +7,7 @@ const config = {
     backgroundColor: '#111',
     physics: {
       default: 'arcade',
-      arcade: { debug: true }
+      arcade: { debug: false }
     },
     scene: {
       preload: preload,
@@ -32,6 +32,9 @@ const config = {
   let powerUpTimer;
   let powerUpActive = false;
   let powerUpDuration = 5000; // 5 seconds
+  let bullets = [];
+  let bulletTimer;
+  let currentAngle = 0; // Initial angle in degrees
   
   function preload() {
     // (Optional) Load images/sounds here.
@@ -40,6 +43,15 @@ const config = {
   function create() {
     centerX = config.width / 2;
     centerY = config.height / 2;
+    playerAngle = 0;
+    angularVelocity = 0.005;
+    score = 0;
+    gameOver = false;
+    powerUpActive = false;
+    currentAngle = 0;
+    bullets = [];
+    obstacles = [];
+    powerUps = [];
     
     // Create a central planet
     this.add.circle(centerX, centerY, 30, 0x8888ff);
@@ -74,6 +86,14 @@ const config = {
     powerUpTimer = this.time.addEvent({
       delay: 10000, // every 10 seconds
       callback: spawnPowerUp,
+      callbackScope: this,
+      loop: true
+    });
+    
+    // Spawn bullets in a 2-winged spiral pattern periodically
+    bulletTimer = this.time.addEvent({
+      delay: 500, // every 0.5 seconds
+      callback: spawnBullets,
       callbackScope: this,
       loop: true
     });
@@ -152,6 +172,22 @@ const config = {
     obstacles.forEach(obs => {
       obs.speed += 0.01 * delta / 1000; // slight acceleration over time
     });
+
+    // Update each bullet
+    bullets.forEach((bullet, index) => {
+      // Remove bullets that have moved beyond the screen
+      if (bullet.x < 0 || bullet.x > config.width || bullet.y < 0 || bullet.y > config.height) {
+        bullet.destroy();
+        bullets.splice(index, 1);
+      }
+    });
+
+    // Check for collision between player and bullets
+    bullets.forEach((bullet) => {
+      this.physics.add.overlap(player, bullet, () => {
+        this.scene.restart(); // Restart the scene
+      });
+    });
   }
   
   function updatePlayerPosition() {
@@ -191,5 +227,24 @@ const config = {
     this.physics.add.existing(powerUp.sprite);
     powerUp.sprite.body.setCircle(10);
     powerUps.push(powerUp);
+  }
+  
+  function spawnBullets() {
+    const speed = 50;
+    const angle1 = Phaser.Math.DegToRad(currentAngle);
+    const angle2 = Phaser.Math.DegToRad(currentAngle + 180); // Opposite direction
+
+    const bullet1 = this.add.circle(centerX, centerY, 5, 0xff0000);
+    this.physics.add.existing(bullet1);
+    bullet1.body.setVelocity(speed * Math.cos(angle1), speed * Math.sin(angle1));
+    bullets.push(bullet1);
+
+    const bullet2 = this.add.circle(centerX, centerY, 5, 0xff0000);
+    this.physics.add.existing(bullet2);
+    bullet2.body.setVelocity(speed * Math.cos(angle2), speed * Math.sin(angle2));
+    bullets.push(bullet2);
+
+    // Rotate the angle by 1 degree for the next pair
+    currentAngle = (currentAngle + 5) % 360;
   }
   
