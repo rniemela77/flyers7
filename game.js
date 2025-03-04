@@ -3,8 +3,8 @@
 // Game configuration
 const config = {
     type: Phaser.AUTO,
-    width: 800,
-    height: 600,
+    width: window.innerWidth,
+    height: window.innerHeight,
     physics: {
         default: 'arcade',
         arcade: {
@@ -19,9 +19,11 @@ const config = {
 };
 
 // Grid configuration
-const GRID_SIZE = 40; // Size of each grid cell
-const GRID_COLS = 20; // Number of columns in the grid
-const GRID_ROWS = 15; // Number of rows in the grid
+const GRID_COLS = 10; // Reduced number of columns
+const GRID_ROWS = 8;  // Reduced number of rows
+
+// Calculate grid size based on screen width
+const GRID_SIZE = config.width / GRID_COLS; // Each cell is larger and fits the screen width
 
 // Game variables
 let game = new Phaser.Game(config);
@@ -61,12 +63,12 @@ const TOWER_TYPES = {
 
 // Path definition (using grid coordinates)
 const pathCoordinates = [
-    {x: 0, y: 3},  // Start point
-    {x: 5, y: 3},  // First corner
-    {x: 5, y: 10}, // Second corner
-    {x: 15, y: 10}, // Third corner
-    {x: 15, y: 3}, // Fourth corner
-    {x: 20, y: 3}  // End point
+    {x: 0, y: 1},  // Start point
+    {x: 2, y: 1},  // First corner
+    {x: 2, y: 6},  // Second corner
+    {x: 7, y: 6},  // Third corner
+    {x: 7, y: 1},  // Fourth corner
+    {x: 10, y: 1}  // End point
 ];
 
 // Preload game assets
