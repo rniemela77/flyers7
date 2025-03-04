@@ -1,725 +1,195 @@
-// Tower Defense Game using Phaser 3
+// Phaser 3 Game Code – Orbit Dash
 
-// Game configuration
 const config = {
     type: Phaser.AUTO,
-    width: window.innerWidth,
-    height: window.innerHeight,
+    width: 360,
+    height: 640,
+    backgroundColor: '#111',
     physics: {
-        default: 'arcade',
-        arcade: {
-            debug: false
-        }
+      default: 'arcade',
+      arcade: { debug: true }
     },
     scene: {
-        preload: preload,
-        create: create,
-        update: update
+      preload: preload,
+      create: create,
+      update: update
     }
-};
-
-// Grid configuration
-const GRID_COLS = 10; // Reduced number of columns
-const GRID_ROWS = 8;  // Reduced number of rows
-
-// Calculate grid size based on screen width
-const GRID_SIZE = config.width / GRID_COLS; // Each cell is larger and fits the screen width
-
-// Game variables
-let game = new Phaser.Game(config);
-let path;
-let enemies;
-let towers;
-let bullets;
-let nextEnemy = 0;
-let score = 0;
-let lives = 10;
-let scoreText;
-let livesText;
-let gameOver = false;
-let gold = 100;
-let goldText;
-let healthBars; // Group for health bars
-let currentScene; // Global scene reference
-let grid = []; // 2D array to represent the grid
-let gridGraphics; // Graphics object for the grid
-let cellHighlight; // Highlight for the current grid cell under the mouse
-let selectedTower = null; // Currently selected tower
-let hudBackground; // Background for the HUD
-let hudText; // Text for the HUD
-
-// Tower types and stats
-const TOWER_TYPES = {
-    BASIC: {
-        name: 'Basic Tower',
-        damage: 1,
-        range: 200,
-        fireRate: 1000, // ms between shots
-        cost: 50,
-        color: 0xffffff,
-        description: 'Standard defensive tower with balanced stats.'
-    }
-};
-
-// Path definition (using grid coordinates)
-const pathCoordinates = [
-    {x: 0, y: 1},  // Start point
-    {x: 2, y: 1},  // First corner
-    {x: 2, y: 6},  // Second corner
-    {x: 7, y: 6},  // Third corner
-    {x: 7, y: 1},  // Fourth corner
-    {x: 10, y: 1}  // End point
-];
-
-// Preload game assets
-function preload() {
-    // Removing the space background
-    // this.load.image('background', 'https://raw.githubusercontent.com/photonstorm/phaser3-examples/master/public/assets/skies/space3.png');
-    this.load.image('enemy', 'https://raw.githubusercontent.com/photonstorm/phaser3-examples/master/public/assets/sprites/asteroid.png');
-    this.load.image('tower', 'https://raw.githubusercontent.com/photonstorm/phaser3-examples/master/public/assets/sprites/bullet.png');
-    this.load.image('bullet', 'https://raw.githubusercontent.com/photonstorm/phaser3-examples/master/public/assets/sprites/bullets/bullet7.png');
-}
-
-// Create game objects
-function create() {
-    // Store global scene reference
-    currentScene = this;
+  };
+  
+  const game = new Phaser.Game(config);
+  
+  let centerX, centerY;
+  let player;
+  let playerAngle = 0; // in radians
+  let angularVelocity = 0.005; // base angular velocity
+  const orbitRadius = 150;
+  let obstacles = [];
+  let obstacleTimer;
+  let score = 0;
+  let scoreText;
+  let gameOver = false;
+  let powerUps = [];
+  let powerUpTimer;
+  let powerUpActive = false;
+  let powerUpDuration = 5000; // 5 seconds
+  
+  function preload() {
+    // (Optional) Load images/sounds here.
+  }
+  
+  function create() {
+    centerX = config.width / 2;
+    centerY = config.height / 2;
     
-    // Replace background image with a solid color
-    this.cameras.main.setBackgroundColor('#333333');
+    // Create a central planet
+    this.add.circle(centerX, centerY, 30, 0x8888ff);
     
-    // Initialize the grid
-    initializeGrid();
+    // Create the player as a small circle positioned on the orbit
+    player = this.add.circle(0, 0, 10, 0xffcc00);
+    this.physics.add.existing(player);
+    player.body.setCircle(10);
+    updatePlayerPosition();
     
-    // Draw the grid
-    drawGrid();
-    
-    // Create path for enemies based on grid coordinates
-    createPath();
-    
-    // Create groups
-    enemies = this.physics.add.group();
-    towers = this.physics.add.group();
-    bullets = this.physics.add.group();
-    healthBars = this.add.group();
-    
-    // Setup UI
-    scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '24px', fill: '#fff' });
-    livesText = this.add.text(16, 50, 'Lives: 10', { fontSize: '24px', fill: '#fff' });
-    goldText = this.add.text(16, 84, 'Gold: 100', { fontSize: '24px', fill: '#fff' });
-    
-    // Create HUD at the bottom of the screen
-    createHUD();
-    
-    // Create cell highlight that follows the mouse
-    cellHighlight = this.add.rectangle(0, 0, GRID_SIZE, GRID_SIZE, 0xffffff, 0.3);
-    cellHighlight.setStrokeStyle(2, 0xffffff, 0.8);
-    cellHighlight.setVisible(false);
-    
-    // Track mouse movement to update cell highlight
-    this.input.on('pointermove', (pointer) => {
-        const gridX = Math.floor(pointer.x / GRID_SIZE);
-        const gridY = Math.floor(pointer.y / GRID_SIZE);
-        
-        // Only show highlight if within grid bounds
-        if (gridX >= 0 && gridX < GRID_COLS && gridY >= 0 && gridY < GRID_ROWS) {
-            cellHighlight.setPosition(gridX * GRID_SIZE + GRID_SIZE / 2, gridY * GRID_SIZE + GRID_SIZE / 2);
-            cellHighlight.setVisible(true);
-            
-            // Change highlight color based on cell type
-            if (grid[gridY][gridX] === 1) { // Path
-                cellHighlight.setFillStyle(0xff0000, 0.3); // Red for path
-                cellHighlight.setStrokeStyle(2, 0xff0000, 0.8);
-            } else if (grid[gridY][gridX] === 2) { // Tower
-                cellHighlight.setFillStyle(0x0000ff, 0.3); // Blue for tower
-                cellHighlight.setStrokeStyle(2, 0x0000ff, 0.8);
-            } else { // Empty
-                cellHighlight.setFillStyle(0x00ff00, 0.3); // Green for empty
-                cellHighlight.setStrokeStyle(2, 0x00ff00, 0.8);
-            }
-        } else {
-            cellHighlight.setVisible(false);
-        }
-    });
-    
-    // Hide highlight when mouse leaves game canvas
-    this.input.on('pointerout', () => {
-        cellHighlight.setVisible(false);
-    });
-    
-    // Tower placement and selection on click
+    // Set up touch input: tap left/right to adjust rotation
     this.input.on('pointerdown', (pointer) => {
-        if (gameOver) return;
-        
-        // Convert mouse position to grid coordinates
-        const gridX = Math.floor(pointer.x / GRID_SIZE);
-        const gridY = Math.floor(pointer.y / GRID_SIZE);
-        
-        // Check if click is within grid bounds
-        if (gridX >= 0 && gridX < GRID_COLS && gridY >= 0 && gridY < GRID_ROWS) {
-            // If clicking on a tower cell, select the tower
-            if (grid[gridY][gridX] === 2) {
-                // Find the tower at this position
-                const towerX = gridX * GRID_SIZE + GRID_SIZE / 2;
-                const towerY = gridY * GRID_SIZE + GRID_SIZE / 2;
-                
-                towers.getChildren().forEach(tower => {
-                    if (Math.abs(tower.x - towerX) < 5 && Math.abs(tower.y - towerY) < 5) {
-                        selectTower(tower);
-                    }
-                });
-            } 
-            // If clicking on an empty cell and have enough gold, place a tower
-            else if (grid[gridY][gridX] === 0 && gold >= TOWER_TYPES.BASIC.cost) {
-                // Place tower at the center of the grid cell
-                const towerX = gridX * GRID_SIZE + GRID_SIZE / 2;
-                const towerY = gridY * GRID_SIZE + GRID_SIZE / 2;
-                
-                const tower = placeTower(this, towerX, towerY);
-                selectTower(tower);
-                
-                // Mark the grid cell as occupied
-                grid[gridY][gridX] = 2; // 2 represents a tower
-                
-                // Update cell highlight color
-                cellHighlight.setFillStyle(0x0000ff, 0.3);
-                cellHighlight.setStrokeStyle(2, 0x0000ff, 0.8);
-                
-                gold -= TOWER_TYPES.BASIC.cost;
-                goldText.setText('Gold: ' + gold);
-            }
-            // If clicking elsewhere, deselect tower
-            else {
-                deselectTower();
-            }
-        } else {
-            // Clicking outside the grid, deselect tower
-            deselectTower();
-        }
+      if (gameOver) return;
+      if (pointer.x < config.width / 2) {
+        // Tapping left: nudge counterclockwise (decrease angle)
+        angularVelocity -= 0.002;
+      } else {
+        // Tapping right: nudge clockwise (increase angle)
+        angularVelocity += 0.002;
+      }
     });
     
-    // Use overlap instead of collider to prevent physics pushing
-    this.physics.add.overlap(bullets, enemies, damageEnemy, null, this);
-}
-
-// Create the HUD at the bottom of the screen
-function createHUD() {
-    // Create a background for the HUD
-    hudBackground = currentScene.add.rectangle(
-        config.width / 2,
-        config.height - 5 * window.innerHeight / 100, // 5vh from the bottom
-        config.width,
-        10 * window.innerHeight / 100, // 10vh height
-        0x222222
-    );
-    hudBackground.setOrigin(0.5, 0.5);
-    hudBackground.setStrokeStyle(2, 0x444444);
-    
-    // Create text for the HUD
-    hudText = currentScene.add.text(
-        2 * window.innerWidth / 100, // 2vw from the left
-        config.height - 8 * window.innerHeight / 100, // 8vh from the bottom
-        'Select a tower to view its stats',
-        { fontSize: '3vw', fill: '#ffffff' } // Font size in vw
-    );
-    
-    // Initially hide the HUD
-    updateHUD();
-}
-
-// Select a tower and show its stats
-function selectTower(tower) {
-    // Deselect previous tower if any
-    if (selectedTower && selectedTower !== tower) {
-        // Remove highlight from previous tower
-        if (selectedTower.selectionCircle) {
-            selectedTower.selectionCircle.setVisible(false);
-        }
-    }
-    
-    // Select new tower
-    selectedTower = tower;
-    
-    // Create or show selection circle
-    if (!tower.selectionCircle) {
-        tower.selectionCircle = currentScene.add.circle(
-            tower.x, tower.y, 
-            GRID_SIZE / 2 + 5, 
-            0x00ffff, 0
-        );
-        tower.selectionCircle.setStrokeStyle(3, 0x00ffff);
-    }
-    tower.selectionCircle.setVisible(true);
-    
-    // Show tower range
-    if (tower.rangeCircle) {
-        tower.rangeCircle.setVisible(true);
-        tower.rangeCircle.setAlpha(0.2);
-    }
-    
-    // Update HUD with tower stats
-    updateHUD();
-}
-
-// Deselect the current tower
-function deselectTower() {
-    if (selectedTower) {
-        // Hide selection circle
-        if (selectedTower.selectionCircle) {
-            selectedTower.selectionCircle.setVisible(false);
-        }
-        
-        // Hide range circle
-        if (selectedTower.rangeCircle) {
-            selectedTower.rangeCircle.setAlpha(0.1);
-        }
-        
-        selectedTower = null;
-        
-        // Update HUD
-        updateHUD();
-    }
-}
-
-// Update the HUD with tower stats or default message
-function updateHUD() {
-    // Show HUD background
-    hudBackground.setVisible(true);
-    
-    if (selectedTower) {
-        // Calculate stats based on tower properties
-        const type = TOWER_TYPES.BASIC; // Currently only one type
-        const kills = selectedTower.kills || 0;
-        const damageDealt = selectedTower.damageDealt || 0;
-        
-        // Format time since placement
-        const timeSincePlacement = currentScene.time.now - (selectedTower.placementTime || 0);
-        const seconds = Math.floor(timeSincePlacement / 1000);
-        const minutes = Math.floor(seconds / 60);
-        const timeString = `${minutes}m ${seconds % 60}s`;
-        
-        // Update HUD text with tower stats
-        hudText.setText(
-            `${type.name} | Damage: ${type.damage} | Range: ${type.range} | Fire Rate: ${type.fireRate}ms\n` +
-            `Kills: ${kills} | Damage Dealt: ${damageDealt} | Placed: ${timeString} ago`
-        );
-    } else {
-        // Default message when no tower is selected
-        hudText.setText('Select a tower to view its stats');
-    }
-}
-
-// Initialize the grid with empty cells
-function initializeGrid() {
-    grid = [];
-    for (let y = 0; y < GRID_ROWS; y++) {
-        const row = [];
-        for (let x = 0; x < GRID_COLS; x++) {
-            row.push(0); // 0 represents an empty cell
-        }
-        grid.push(row);
-    }
-    
-    // Mark path cells as occupied
-    for (let i = 0; i < pathCoordinates.length - 1; i++) {
-        const start = pathCoordinates[i];
-        const end = pathCoordinates[i + 1];
-        
-        // Mark horizontal path
-        if (start.y === end.y) {
-            const y = start.y;
-            const startX = Math.min(start.x, end.x);
-            const endX = Math.max(start.x, end.x);
-            
-            for (let x = startX; x <= endX; x++) {
-                if (y >= 0 && y < GRID_ROWS && x >= 0 && x < GRID_COLS) {
-                    grid[y][x] = 1; // 1 represents a path
-                }
-            }
-        }
-        // Mark vertical path
-        else if (start.x === end.x) {
-            const x = start.x;
-            const startY = Math.min(start.y, end.y);
-            const endY = Math.max(start.y, end.y);
-            
-            for (let y = startY; y <= endY; y++) {
-                if (y >= 0 && y < GRID_ROWS && x >= 0 && x < GRID_COLS) {
-                    grid[y][x] = 1; // 1 represents a path
-                }
-            }
-        }
-    }
-}
-
-// Draw the grid and path
-function drawGrid() {
-    // Clear any existing graphics
-    if (gridGraphics) {
-        gridGraphics.clear();
-    } else {
-        gridGraphics = currentScene.add.graphics();
-    }
-    
-    // Draw grid cells
-    for (let y = 0; y < GRID_ROWS; y++) {
-        for (let x = 0; x < GRID_COLS; x++) {
-            // Draw cell background based on type
-            if (grid[y][x] === 1) { // Path cell
-                gridGraphics.fillStyle(0x666666, 1); // Darker gray for path
-            } else {
-                gridGraphics.fillStyle(0x444444, 1); // Dark gray for empty cells
-            }
-            
-            // Fill the cell
-            gridGraphics.fillRect(x * GRID_SIZE, y * GRID_SIZE, GRID_SIZE, GRID_SIZE);
-            
-            // Draw cell border
-            gridGraphics.lineStyle(1, 0x222222, 1);
-            gridGraphics.strokeRect(x * GRID_SIZE, y * GRID_SIZE, GRID_SIZE, GRID_SIZE);
-        }
-    }
-    
-    // Draw path outline
-    gridGraphics.lineStyle(3, 0xffffff, 1);
-    gridGraphics.beginPath();
-    
-    // Start at the first path coordinate - center of the cell
-    const startPoint = pathCoordinates[0];
-    gridGraphics.moveTo(
-        startPoint.x * GRID_SIZE + GRID_SIZE / 2, 
-        startPoint.y * GRID_SIZE + GRID_SIZE / 2
-    );
-    
-    // Draw lines to each path coordinate - center of each cell
-    for (let i = 1; i < pathCoordinates.length; i++) {
-        const point = pathCoordinates[i];
-        gridGraphics.lineTo(
-            point.x * GRID_SIZE + GRID_SIZE / 2, 
-            point.y * GRID_SIZE + GRID_SIZE / 2
-        );
-    }
-    
-    gridGraphics.strokePath();
-}
-
-// Create the path for enemies to follow
-function createPath() {
-    path = currentScene.add.path();
-    
-    // Start at the first path coordinate - center of the cell
-    const startPoint = pathCoordinates[0];
-    path.add(new Phaser.Curves.Line(
-        new Phaser.Math.Vector2(
-            startPoint.x * GRID_SIZE + GRID_SIZE / 2, 
-            startPoint.y * GRID_SIZE + GRID_SIZE / 2
-        ),
-        new Phaser.Math.Vector2(
-            startPoint.x * GRID_SIZE + GRID_SIZE / 2, 
-            startPoint.y * GRID_SIZE + GRID_SIZE / 2
-        )
-    ));
-    
-    // Add line segments for each path coordinate - center of each cell
-    for (let i = 1; i < pathCoordinates.length; i++) {
-        const point = pathCoordinates[i];
-        path.add(new Phaser.Curves.Line(
-            path.getEndPoint(),
-            new Phaser.Math.Vector2(
-                point.x * GRID_SIZE + GRID_SIZE / 2, 
-                point.y * GRID_SIZE + GRID_SIZE / 2
-            )
-        ));
-    }
-}
-
-// Game loop
-function update(time) {
-    if (gameOver) {
-        return;
-    }
-    
-    // Spawn enemies
-    if (time > nextEnemy) {
-        const startPoint = pathCoordinates[0];
-        const enemy = enemies.create(
-            startPoint.x * GRID_SIZE + GRID_SIZE / 2, 
-            startPoint.y * GRID_SIZE + GRID_SIZE / 2, 
-            'enemy'
-        );
-        enemy.setScale(0.5);
-        enemy.health = 3;
-        enemy.maxHealth = 3;
-        
-        // Disable physics body from affecting movement since we're using tweens
-        enemy.body.setImmovable(true);
-        enemy.body.allowGravity = false;
-        
-        // Create health bar for this enemy
-        const healthBarWidth = 30;
-        const healthBarHeight = 4;
-        const healthBarBackground = this.add.rectangle(
-            enemy.x, 
-            enemy.y - 20, 
-            healthBarWidth, 
-            healthBarHeight, 
-            0x000000
-        );
-        const healthBar = this.add.rectangle(
-            enemy.x - healthBarWidth/2, 
-            enemy.y - 20, 
-            healthBarWidth, 
-            healthBarHeight, 
-            0x00ff00
-        );
-        healthBar.setOrigin(0, 0.5);
-        
-        // Store references to health bars
-        enemy.healthBarBackground = healthBarBackground;
-        enemy.healthBar = healthBar;
-        
-        // Add health bars to group
-        healthBars.add(healthBarBackground);
-        healthBars.add(healthBar);
-        
-        // Create a timeline for the enemy to follow the path
-        const timeline = this.tweens.createTimeline();
-        
-        // Add tweens for each segment of the path
-        for (let i = 1; i < pathCoordinates.length; i++) {
-            const point = pathCoordinates[i];
-            const prevPoint = pathCoordinates[i-1];
-            
-            // Calculate distance for proportional duration
-            const dx = point.x - prevPoint.x;
-            const dy = point.y - prevPoint.y;
-            const distance = Math.sqrt(dx * dx + dy * dy) * GRID_SIZE;
-            const duration = distance * 20; // 20ms per pixel
-            
-            timeline.add({
-                targets: enemy,
-                x: point.x * GRID_SIZE + GRID_SIZE / 2,
-                y: point.y * GRID_SIZE + GRID_SIZE / 2,
-                duration: duration,
-                ease: 'Linear'
-            });
-        }
-        
-        // Handle enemy reaching the end
-        timeline.add({
-            targets: {},
-            duration: 0,
-            onComplete: () => {
-                // Destroy health bars when enemy reaches the end
-                if (enemy.healthBarBackground) {
-                    enemy.healthBarBackground.destroy();
-                }
-                if (enemy.healthBar) {
-                    enemy.healthBar.destroy();
-                }
-                
-                enemy.destroy();
-                lives--;
-                livesText.setText('Lives: ' + lives);
-                
-                if (lives <= 0) {
-                    gameOver = true;
-                    this.add.text(400, 300, 'GAME OVER', { 
-                        fontSize: '64px', 
-                        fill: '#ff0000',
-                        fontStyle: 'bold'
-                    }).setOrigin(0.5);
-                }
-            }
-        });
-        
-        // Start the timeline
-        timeline.play();
-        
-        // Update the update function to handle health bar updates
-        enemy.update = function() {
-            // Update health bar position to follow enemy
-            this.healthBarBackground.x = this.x;
-            this.healthBarBackground.y = this.y - 20;
-            
-            this.healthBar.x = this.x - healthBarWidth/2;
-            this.healthBar.y = this.y - 20;
-            
-            // Update health bar width based on current health
-            const healthPercentage = this.health / this.maxHealth;
-            this.healthBar.width = healthBarWidth * healthPercentage;
-            
-            // Update health bar color based on health percentage
-            if (healthPercentage > 0.6) {
-                this.healthBar.fillColor = 0x00ff00; // Green
-            } else if (healthPercentage > 0.3) {
-                this.healthBar.fillColor = 0xffff00; // Yellow
-            } else {
-                this.healthBar.fillColor = 0xff0000; // Red
-            }
-        };
-        
-        nextEnemy = time + 2000; // Spawn enemy every 2 seconds
-    }
-    
-    // Update all enemies (for health bars)
-    enemies.getChildren().forEach(enemy => {
-        if (enemy.update) {
-            enemy.update();
-        }
+    // Spawn obstacles periodically
+    obstacleTimer = this.time.addEvent({
+      delay: 1000, // every second (adjust for difficulty)
+      callback: spawnObstacle,
+      callbackScope: this,
+      loop: true
     });
     
-    // Tower shooting logic
-    towers.getChildren().forEach(tower => {
-        if (time > tower.nextFire && enemies.getChildren().length > 0) {
-            // Find closest enemy
-            let closestEnemy = null;
-            let minDistance = TOWER_TYPES.BASIC.range; // Tower range
-            
-            enemies.getChildren().forEach(enemy => {
-                const distance = Phaser.Math.Distance.Between(tower.x, tower.y, enemy.x, enemy.y);
-                if (distance < minDistance) {
-                    closestEnemy = enemy;
-                    minDistance = distance;
-                }
-            });
-            
-            if (closestEnemy) {
-                // Create bullet
-                const bullet = bullets.create(tower.x, tower.y, 'bullet');
-                bullet.setScale(0.5);
-                bullet.tower = tower; // Reference to the tower that fired this bullet
-                
-                // Configure bullet physics to not push enemies
-                bullet.body.setImmovable(false);
-                bullet.body.mass = 0.001; // Very low mass
-                
-                // Move bullet towards enemy
-                this.physics.moveToObject(bullet, closestEnemy, 300);
-                
-                // Destroy bullet after 2 seconds
-                this.time.delayedCall(2000, () => {
-                    bullet.destroy();
-                });
-                
-                tower.nextFire = time + TOWER_TYPES.BASIC.fireRate; // Fire based on tower type
-            }
-        }
+    // Spawn power-ups periodically
+    powerUpTimer = this.time.addEvent({
+      delay: 10000, // every 10 seconds
+      callback: spawnPowerUp,
+      callbackScope: this,
+      loop: true
     });
     
-    // Update bullets rotation
-    bullets.getChildren().forEach(bullet => {
-        bullet.rotation = Phaser.Math.Angle.Between(
-            bullet.x, bullet.y,
-            bullet.body.velocity.x + bullet.x, bullet.body.velocity.y + bullet.y
-        );
-    });
-}
-
-// Place tower at position
-function placeTower(scene, x, y) {
-    const tower = towers.create(x, y, 'tower');
-    tower.setScale(1.5);
-    tower.nextFire = 0;
-    tower.kills = 0;
-    tower.damageDealt = 0;
-    tower.placementTime = scene.time.now;
-    tower.type = 'BASIC';
+    // Score display
+    scoreText = this.add.text(10, 10, 'Score: 0', { fontSize: '20px', fill: '#fff' });
+  }
+  
+  function update(time, delta) {
+    if (gameOver) return;
     
-    // Visualize tower range
-    const rangeCircle = scene.add.circle(x, y, TOWER_TYPES.BASIC.range, 0xffffff, 0.1);
-    tower.rangeCircle = rangeCircle;
+    // Update the player's angle and position
+    playerAngle += angularVelocity * delta;
+    playerAngle = Phaser.Math.Angle.Wrap(playerAngle);
+    updatePlayerPosition();
     
-    return tower;
-}
-
-// Handle enemy damage
-function damageEnemy(bullet, enemy) {
-    // Get a reference to the scene - try multiple ways to get a valid scene
-    const scene = this || bullet.scene || enemy.scene || currentScene;
-    
-    // Only proceed if we have a valid scene
-    if (!scene || !scene.add) {
-        console.warn('No valid scene found in damageEnemy');
-        bullet.destroy();
-        return;
-    }
-    
-    // Create a hit effect
-    try {
-        const hitEffect = scene.add.circle(bullet.x, bullet.y, 5, 0xffffff, 0.7);
-        scene.tweens.add({
-            targets: hitEffect,
-            alpha: 0,
-            scale: 2,
-            duration: 300,
-            onComplete: () => {
-                hitEffect.destroy();
-            }
-        });
-    } catch (e) {
-        console.warn('Error creating hit effect:', e);
-    }
-    
-    // Update tower stats if this bullet has a reference to its tower
-    if (bullet.tower) {
-        bullet.tower.damageDealt = (bullet.tower.damageDealt || 0) + TOWER_TYPES.BASIC.damage;
-        
-        // Update HUD if this is the selected tower
-        if (selectedTower === bullet.tower) {
-            updateHUD();
+    // Update each obstacle
+    obstacles.forEach((obs, index) => {
+      // Move the obstacle outward (r increases over time)
+      obs.r += obs.speed * delta / 1000; // speed is in pixels/second
+      obs.sprite.x = centerX + obs.r * Math.cos(obs.angle);
+      obs.sprite.y = centerY + obs.r * Math.sin(obs.angle);
+      
+      // When the obstacle is near the orbit, check for collision.
+      if (!obs.hit && obs.r >= orbitRadius - 10 && obs.r <= orbitRadius + 10) {
+        let diff = Phaser.Math.Angle.Wrap(playerAngle - obs.angle);
+        // Use a 15° threshold (converted to radians) for a collision zone.
+        if (Math.abs(diff) < Phaser.Math.DegToRad(15)) {
+          gameOver = true;
+          scoreText.setText('Game Over! Score: ' + score);
+          obstacleTimer.remove(false);
         }
-    }
-    
-    // Destroy the bullet
-    bullet.destroy();
-    
-    enemy.health -= TOWER_TYPES.BASIC.damage;
-    
-    // Update health bar immediately after damage
-    if (enemy.update) {
-        enemy.update();
-    }
-    
-    if (enemy.health <= 0) {
-        // Update tower kill count if this bullet has a reference to its tower
-        if (bullet.tower) {
-            bullet.tower.kills = (bullet.tower.kills || 0) + 1;
-            
-            // Update HUD if this is the selected tower
-            if (selectedTower === bullet.tower) {
-                updateHUD();
-            }
-        }
-        
-        // Destroy health bars when enemy is destroyed
-        if (enemy.healthBarBackground) {
-            enemy.healthBarBackground.destroy();
-        }
-        if (enemy.healthBar) {
-            enemy.healthBar.destroy();
-        }
-        
-        // Create a death effect
-        try {
-            const deathEffect = scene.add.circle(enemy.x, enemy.y, 20, 0xff0000, 0.7);
-            scene.tweens.add({
-                targets: deathEffect,
-                alpha: 0,
-                scale: 3,
-                duration: 500,
-                onComplete: () => {
-                    deathEffect.destroy();
-                }
-            });
-        } catch (e) {
-            console.warn('Error creating death effect:', e);
-        }
-        
-        enemy.destroy();
-        score += 10;
-        gold += 25;
+      }
+      
+      // Remove obstacles that have moved beyond the screen and count them as dodged.
+      if (obs.r > Math.max(config.width, config.height)) {
+        obs.sprite.destroy();
+        obstacles.splice(index, 1);
+        score += 1;
         scoreText.setText('Score: ' + score);
-        goldText.setText('Gold: ' + gold);
-    }
-}
+      }
+    });
+    
+    // Update each power-up
+    powerUps.forEach((powerUp, index) => {
+      // Move the power-up outward
+      powerUp.r += powerUp.speed * delta / 1000;
+      powerUp.sprite.x = centerX + powerUp.r * Math.cos(powerUp.angle);
+      powerUp.sprite.y = centerY + powerUp.r * Math.sin(powerUp.angle);
+
+      // Check for collision with player using physics
+      this.physics.add.overlap(player, powerUp.sprite, () => {
+        console.log('Collision detected with power-up!'); // Debugging output
+        powerUpActive = true;
+        powerUp.sprite.destroy();
+        powerUps.splice(index, 1);
+
+        // Double the player's score
+        score *= 2;
+        scoreText.setText('Score: ' + score);
+
+        // Set a timer to deactivate the power-up effect
+        this.time.delayedCall(powerUpDuration, () => {
+          powerUpActive = false;
+        }, [], this);
+      });
+
+      // Remove power-ups that have moved beyond the screen
+      if (powerUp.r > Math.max(config.width, config.height)) {
+        powerUp.sprite.destroy();
+        powerUps.splice(index, 1);
+      }
+    });
+    
+    // Optionally, you can increase difficulty by ramping up obstacle speed gradually.
+    obstacles.forEach(obs => {
+      obs.speed += 0.01 * delta / 1000; // slight acceleration over time
+    });
+  }
+  
+  function updatePlayerPosition() {
+    player.x = centerX + orbitRadius * Math.cos(playerAngle);
+    player.y = centerY + orbitRadius * Math.sin(playerAngle);
+  }
+  
+  function spawnObstacle() {
+    if (gameOver) return;
+    // Choose a random angle for the obstacle
+    let angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+    // Set an initial speed (pixels/second)
+    let speed = Phaser.Math.FloatBetween(50, 100);
+    let obstacle = {
+      angle: angle,
+      r: 0, // start at the center
+      speed: speed,
+      hit: false,
+      sprite: null
+    };
+    // Create a red circle to represent the obstacle
+    obstacle.sprite = game.scene.scenes[0].add.circle(centerX, centerY, 8, 0xff0000);
+    obstacles.push(obstacle);
+  }
+  
+  function spawnPowerUp() {
+    if (gameOver || powerUpActive) return;
+    // Choose a random angle for the power-up
+    let angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+    let speed = Phaser.Math.FloatBetween(30, 60); // Set a speed for the power-up
+    let powerUp = {
+      angle: angle,
+      r: 0, // start at the center
+      speed: speed,
+      sprite: this.add.circle(centerX, centerY, 10, 0x00ff00)
+    };
+    this.physics.add.existing(powerUp.sprite);
+    powerUp.sprite.body.setCircle(10);
+    powerUps.push(powerUp);
+  }
+  
