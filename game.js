@@ -207,9 +207,9 @@ function createHUD() {
     // Create a background for the HUD
     hudBackground = currentScene.add.rectangle(
         config.width / 2,
-        config.height - 40,
+        config.height - 5 * window.innerHeight / 100, // 5vh from the bottom
         config.width,
-        80,
+        10 * window.innerHeight / 100, // 10vh height
         0x222222
     );
     hudBackground.setOrigin(0.5, 0.5);
@@ -217,10 +217,10 @@ function createHUD() {
     
     // Create text for the HUD
     hudText = currentScene.add.text(
-        20,
-        config.height - 65,
+        2 * window.innerWidth / 100, // 2vw from the left
+        config.height - 8 * window.innerHeight / 100, // 8vh from the bottom
         'Select a tower to view its stats',
-        { fontSize: '18px', fill: '#ffffff' }
+        { fontSize: '3vw', fill: '#ffffff' } // Font size in vw
     );
     
     // Initially hide the HUD
