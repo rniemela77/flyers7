@@ -1,14 +1,48 @@
-// Phaser 3 Game Code – Orbit Dash
+<<<<<<< Updated upstream
+=======
+/*
+RTS Game
+-
+enemy
+    - portrait (square for now) located at 30% from the top, centered
+    - health bar (rectangle) below the portrait, aligned left, 100% width, 10px height
+    - name (text) below the health bar, aligned left, 100% width
+    - health percentage (text) below the name, aligned left, 100% width
 
+Combat
+    - ActionLine:1 line segment going from the enemy to the bottom center of the screen
+    - HitZone: a circle (grey) (25px) on that line segment, at about 75% of the way from the enemy to the bottom center of the screen
+    - ActionCircle: a circle (10px) spawns on the line, at the enemy, and moves downward via the line
+    - when the circle reaches the bottom center of the screen, it disappears
+    - an ActionCircle spawns every 0.5s
+
+HitZone:
+    - on "pointerup", check if any ActionCircle is in the HitZone
+    - if so, destroy the ActionCircle
+    - if not, do nothing
+
+ActionCircle types:
+    - Green: destroyed by tap (pointerup anywhere on screen while the circle is in the HitZone)
+    - Blue: destroyed by swipe (pointerdown and pointerup anywhere with a distance > 20px, while the circle is in the HitZone)
+
+*/
+
+// Import Phaser
+
+
+// Game configuration
+>>>>>>> Stashed changes
 const config = {
     type: Phaser.AUTO,
-    width: 360,
-    height: 640,
-    backgroundColor: '#111',
+    width: 800,
+    height: 600,
+<<<<<<< Updated upstream
     physics: {
       default: 'arcade',
       arcade: { debug: true }
     },
+=======
+>>>>>>> Stashed changes
     scene: {
       preload: preload,
       create: create,
@@ -142,144 +176,125 @@ const config = {
       obs.speed += 0.01 * delta / 1000; // slight acceleration over time
     });
 
-    // Update each bullet
-    bullets.forEach(updateBullet.bind(this));
+<<<<<<< Updated upstream
+const game = new Phaser.Game(config);
 
-    // Check for collision between player and bullets
-    bullets.forEach(checkBulletCollision.bind(this));
-  }
-  
-  function updateObstacle(delta, obs, index) {
-    // Move the obstacle outward (r increases over time)
-    obs.r += obs.speed * delta / 1000; // speed is in pixels/second
-    obs.sprite.x = centerX + obs.r * Math.cos(obs.angle);
-    obs.sprite.y = centerY + obs.r * Math.sin(obs.angle);
+function preload() {
+    // Load assets here (e.g., images, sprites)
+    this.load.image('sky', 'path/to/your/sky.png');
+=======
+// Initialize the game
+const game = new Phaser.Game(config);
+
+// Define constants for game elements
+const actionCircleColorBlue = 0x547FFF;
+const actionCircleColorGreen = 0x4BC87F;
+const actionCircleSize = 10;
+const actionCircleSpeed = 2;
+const hitZoneSize = 25;
+const hitZoneColor = 0x808080;
+
+// Preload assets
+function preload() {
+    // Load assets here if needed
+>>>>>>> Stashed changes
+}
+
+function create() {
+<<<<<<< Updated upstream
+    // Add your game elements here
+    this.add.image(400, 300, 'sky');
+}
+
+function update() {
+    // Game loop logic (e.g., movement)
+=======
+    // Enemy portrait
+    this.enemyPortrait = this.add.rectangle(400, 180, 100, 100, 0x6666ff);
     
-    // When the obstacle is near the orbit, check for collision.
-    if (!obs.hit && obs.r >= ORBIT_RADIUS - 10 && obs.r <= ORBIT_RADIUS + 10) {
-      let diff = Phaser.Math.Angle.Wrap(playerAngle - obs.angle);
-      // Use a 15° threshold (converted to radians) for a collision zone.
-      if (Math.abs(diff) < Phaser.Math.DegToRad(15)) {
-        gameOver = true;
-        scoreText.setText('Game Over! Score: ' + score);
-        obstacleTimer.remove(false);
-      }
-    }
+    // Health bar
+    this.healthBar = this.add.rectangle(0, 230, 800, 10, 0xff0000).setOrigin(0, 0);
     
-    // Remove obstacles that have moved beyond the screen and count them as dodged.
-    if (obs.r > Math.max(GAME_WIDTH, GAME_HEIGHT)) {
-      obs.sprite.destroy();
-      obstacles.splice(index, 1);
-      score += 1;
-      scoreText.setText('Score: ' + score);
+    // Enemy name
+    this.enemyName = this.add.text(0, 250, 'Enemy Name', { fontSize: '16px', fill: '#fff' }).setOrigin(0, 0);
+    
+    // Health percentage
+    this.healthPercentage = this.add.text(0, 270, '100%', { fontSize: '16px', fill: '#fff' }).setOrigin(0, 0);
+
+    // Action line
+    this.actionLine = new Phaser.Geom.Line(400, 180, 400, 600);
+    this.graphics = this.add.graphics({ lineStyle: { width: 2, color: 0xffffff } });
+    this.graphics.strokeLineShape(this.actionLine);
+
+    // Hit zone
+    this.hitZone = this.add.circle(400, 480, hitZoneSize, hitZoneColor);
+
+    // Action circles
+    this.actionCircles = this.add.group();
+    this.time.addEvent({ delay: 500, callback: spawnActionCircle, callbackScope: this, loop: true });
+
+    // Drag line
+    this.dragLine = this.add.graphics({ lineStyle: { width: 2, color: 0x00ff00 } });
+
+    // Input handling
+    this.input.on('pointerdown', handlePointerDown, this);
+    this.input.on('pointerup', handlePointerUp, this);
+    this.input.on('pointermove', handlePointerMove, this);
+}
+
+// Variables to track pointer movement
+let startX, startY;
+
+// Handle pointer down event
+function handlePointerDown(pointer) {
+    startX = pointer.x;
+    startY = pointer.y;
+}
+
+// Handle pointer move event
+function handlePointerMove(pointer) {
+    if (pointer.isDown) {
+        this.dragLine.clear();
+        this.dragLine.lineStyle(2, 0x00ff00);
+        this.dragLine.beginPath();
+        this.dragLine.moveTo(startX, startY);
+        this.dragLine.lineTo(pointer.x, pointer.y);
+        this.dragLine.strokePath();
     }
-  }
-  
-  function updatePowerUp(delta, powerUp, index) {
-    // Move the power-up outward
-    powerUp.r += powerUp.speed * delta / 1000;
-    powerUp.sprite.x = centerX + powerUp.r * Math.cos(powerUp.angle);
-    powerUp.sprite.y = centerY + powerUp.r * Math.sin(powerUp.angle);
+}
 
-    // Check for collision with player using physics
-    this.physics.add.overlap(player, powerUp.sprite, () => {
-      console.log('Collision detected with power-up!'); // Debugging output
-      powerUpActive = true;
-      powerUp.sprite.destroy();
-      powerUps.splice(index, 1);
+// Handle pointer up event
+function handlePointerUp(pointer) {
+    const endX = pointer.x;
+    const endY = pointer.y;
+    const distance = Phaser.Math.Distance.Between(startX, startY, endX, endY);
+    const isSwipe = distance > 20;
 
-      // Double the player's score
-      score *= 2;
-      scoreText.setText('Score: ' + score);
+    this.actionCircles.children.iterate(function (circle) {
+        if (circle && Phaser.Geom.Intersects.CircleToCircle(circle, this.hitZone)) {
+            const shouldDestroy = (isSwipe && circle.fillColor === actionCircleColorBlue) || (!isSwipe && circle.fillColor === actionCircleColorGreen);
+            if (shouldDestroy) {
+                circle.destroy();
+            }
+        }
+    }, this);
+    this.dragLine.clear();
+}
 
-      // Set a timer to deactivate the power-up effect
-      this.time.delayedCall(POWER_UP_DURATION, () => {
-        powerUpActive = false;
-      }, [], this);
+// Spawn an action circle
+function spawnActionCircle() {
+    const color = Math.random() > 0.5 ? actionCircleColorBlue : actionCircleColorGreen;
+    const circle = this.add.circle(400, 180, actionCircleSize, color);
+    this.actionCircles.add(circle);
+}
+
+// Update game state
+function update() {
+    Phaser.Actions.IncY(this.actionCircles.getChildren(), actionCircleSpeed);
+    this.actionCircles.children.iterate(function (circle) {
+        if (circle && circle.y >= 600) {
+            circle.destroy();
+        }
     });
-
-    // Remove power-ups that have moved beyond the screen
-    if (powerUp.r > Math.max(GAME_WIDTH, GAME_HEIGHT)) {
-      powerUp.sprite.destroy();
-      powerUps.splice(index, 1);
-    }
-  }
-  
-  function updateBullet(bullet, index) {
-    // Remove bullets that have moved beyond the screen
-    if (bullet.x < 0 || bullet.x > GAME_WIDTH || bullet.y < 0 || bullet.y > GAME_HEIGHT) {
-      bullet.destroy();
-      bullets.splice(index, 1);
-    }
-  }
-  
-  function checkBulletCollision(bullet) {
-    this.physics.add.overlap(player, bullet, () => {
-      gameOver = true;
-      scoreText.setText('Game Over! Score: ' + score);
-      obstacleTimer.remove(false);
-      powerUpTimer.remove(false);
-      bulletTimer.remove(false);
-    });
-  }
-  
-  function updatePlayerPosition() {
-    player.x = centerX + ORBIT_RADIUS * Math.cos(playerAngle);
-    player.y = centerY + ORBIT_RADIUS * Math.sin(playerAngle);
-  }
-  
-  function spawnObstacle() {
-    if (gameOver) return;
-    // Choose a random angle for the obstacle
-    let angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
-    // Set an initial speed (pixels/second)
-    let speed = Phaser.Math.FloatBetween(OBSTACLE_SPEED_MIN, OBSTACLE_SPEED_MAX);
-    let obstacle = {
-      angle: angle,
-      r: 0, // start at the center
-      speed: speed,
-      hit: false,
-      sprite: null
-    };
-    // Create a red circle to represent the obstacle
-    obstacle.sprite = game.scene.scenes[0].add.circle(centerX, centerY, OBSTACLE_RADIUS, 0xff0000);
-    obstacles.push(obstacle);
-  }
-  
-  function spawnPowerUp() {
-    if (gameOver || powerUpActive) return;
-    // Choose a random angle for the power-up
-    let angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
-    let speed = Phaser.Math.FloatBetween(POWER_UP_SPEED_MIN, POWER_UP_SPEED_MAX); // Set a speed for the power-up
-    let powerUp = {
-      angle: angle,
-      r: 0, // start at the center
-      speed: speed,
-      sprite: this.add.circle(centerX, centerY, POWER_UP_RADIUS, 0x00ff00)
-    };
-    this.physics.add.existing(powerUp.sprite);
-    powerUp.sprite.body.setCircle(POWER_UP_RADIUS);
-    powerUps.push(powerUp);
-  }
-  
-  function spawnBullets() {
-    const angle1 = Phaser.Math.DegToRad(currentAngle);
-    const angle2 = Phaser.Math.DegToRad(currentAngle + 180); // Opposite direction
-
-    const bullet1 = createBullet.call(this, angle1);
-    bullets.push(bullet1);
-
-    const bullet2 = createBullet.call(this, angle2);
-    bullets.push(bullet2);
-
-    // Rotate the angle by 1 degree for the next pair
-    currentAngle = (currentAngle + 5) % 360;
-  }
-  
-  function createBullet(angle) {
-    const bullet = this.add.circle(centerX, centerY, BULLET_RADIUS, 0xff0000);
-    this.physics.add.existing(bullet);
-    bullet.body.setVelocity(BULLET_SPEED * Math.cos(angle), BULLET_SPEED * Math.sin(angle));
-    return bullet;
-  }
-  
+>>>>>>> Stashed changes
+}
