@@ -48,6 +48,9 @@ const actionCircleSpeed = 2;
 const hitZoneSize = 25;
 const hitZoneColor = 0x404040;
 
+// Variables to track the number of action circles spawned
+let actionCircleCount = 0;
+
 // Preload assets
 function preload() {
     // Load assets here if needed
@@ -80,7 +83,7 @@ function create() {
 
     // Action circles
     this.actionCircles = this.add.group();
-    this.time.addEvent({ delay: 500, callback: spawnActionCircle, callbackScope: this, loop: true });
+    this.spawnEvent = this.time.addEvent({ delay: 500, callback: spawnActionCircle, callbackScope: this, loop: true });
 
     // Drag line
     this.dragLine = this.add.graphics({ lineStyle: { width: 2, color: 0x00ff00 } });
@@ -181,11 +184,27 @@ function createSlashEffect() {
     });
 }
 
-// Spawn an action circle
+// Modify the spawnActionCircle function
 function spawnActionCircle() {
-    const color = Math.random() > 0.5 ? actionCircleColorBlue : actionCircleColorGreen;
-    const circle = this.add.circle(400, 180, actionCircleSize, color);
-    this.actionCircles.add(circle);
+    if (actionCircleCount < 4) {
+        const color = Math.random() > 0.5 ? actionCircleColorBlue : actionCircleColorGreen;
+        const circle = this.add.circle(400, 180, actionCircleSize, color);
+        this.actionCircles.add(circle);
+        actionCircleCount++;
+    } else {
+        // Stop the spawning event
+        this.spawnEvent.remove();
+        // Pause spawning for 2 seconds
+        this.time.addEvent({
+            delay: 2000,
+            callback: () => {
+                actionCircleCount = 0; // Reset the counter
+                // Restart the spawning event
+                this.spawnEvent = this.time.addEvent({ delay: 500, callback: spawnActionCircle, callbackScope: this, loop: true });
+            },
+            callbackScope: this
+        });
+    }
 }
 
 // Update game state
