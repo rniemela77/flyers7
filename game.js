@@ -47,6 +47,7 @@ const actionCircleSize = 10;
 const actionCircleSpeed = 2;
 const hitZoneSize = 25;
 const hitZoneColor = 0x404040;
+const perfectHitZoneSize = 10;
 
 // Variables to track the number of action circles spawned
 let actionCircleCount = 0;
@@ -87,6 +88,10 @@ function create() {
 
     // Drag line
     this.dragLine = this.add.graphics({ lineStyle: { width: 2, color: 0x00ff00 } });
+
+    // Perfect Hit Zone
+    this.perfectHitZone = this.add.circle(400, 480, perfectHitZoneSize, 0xFFD700); // Gold color for distinction
+    this.perfectHitZone.setAlpha(0.5); // Make it semi-transparent
 
     // Input handling
     this.input.on('pointerdown', handlePointerDown, this);
@@ -138,18 +143,22 @@ function handlePointerUp(pointer) {
 
     this.actionCircles.children.iterate(function (circle) {
         if (circle && Phaser.Geom.Intersects.CircleToCircle(circle, this.hitZone)) {
+            const isPerfectHit = Phaser.Geom.Intersects.CircleToCircle(circle, this.perfectHitZone);
             const shouldDestroy = (isSwipe && circle.fillColor === actionCircleColorBlue && circle.dotPosition === swipeDirection) || (!isSwipe && circle.fillColor === actionCircleColorGreen);
             if (shouldDestroy) {
                 createHitEffect.call(this, circle.x, circle.y);
                 circle.destroy();
                 if (circle.dot) circle.dot.destroy(); // Destroy the dot
                 // Reduce enemy health
-                this.enemyHealth -= 10;
+                this.enemyHealth -= isPerfectHit ? 20 : 10; // Double damage for perfect hit
                 // Update health bar and percentage
                 this.healthBar.width = (this.enemyHealth / 100) * 100;
                 this.healthPercentage.setText(this.enemyHealth + '%');
                 // Create slash effect
                 createSlashEffect.call(this);
+                if (isPerfectHit) {
+                    createPerfectHitEffect.call(this, circle.x, circle.y);
+                }
             }
         }
     }, this);
@@ -182,6 +191,21 @@ function createSlashEffect() {
         duration: 100,
         onComplete: function () {
             slash.destroy();
+        }
+    });
+}
+
+// Create a perfect hit effect
+function createPerfectHitEffect(x, y) {
+    const perfectHitEffect = this.add.circle(x, y, actionCircleSize, 0xFFD700); // Gold color
+    perfectHitEffect.setAlpha(0.8);
+    this.tweens.add({
+        targets: perfectHitEffect,
+        scale: 5,
+        alpha: 0,
+        duration: 100,
+        onComplete: function () {
+            perfectHitEffect.destroy();
         }
     });
 }
