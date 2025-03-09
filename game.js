@@ -109,6 +109,19 @@ function handlePointerMove(pointer) {
         this.dragLine.moveTo(startX, startY);
         this.dragLine.lineTo(pointer.x, pointer.y);
         this.dragLine.strokePath();
+
+        // Calculate the direction and distance of the drag
+        const dragDistanceX = pointer.x - startX;
+        const dragDistanceY = pointer.y - startY;
+
+        // Draw a parallel line from the hit zone
+        const hitZoneX = this.hitZone.x;
+        const hitZoneY = this.hitZone.y;
+        this.dragLine.lineStyle(2, 0xff0000); // Different color for distinction
+        this.dragLine.beginPath();
+        this.dragLine.moveTo(hitZoneX, hitZoneY);
+        this.dragLine.lineTo(hitZoneX + dragDistanceX, hitZoneY + dragDistanceY);
+        this.dragLine.strokePath();
     }
 }
 
