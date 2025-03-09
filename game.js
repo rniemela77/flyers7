@@ -41,12 +41,12 @@ const config = {
 const game = new Phaser.Game(config);
 
 // Define constants for game elements
-const actionCircleColorBlue = 0x547FFF;
-const actionCircleColorGreen = 0x4BC87F;
+const actionCircleColorBlue = 0x1793D6;
+const actionCircleColorGreen = 0x19CB63;
 const actionCircleSize = 10;
 const actionCircleSpeed = 2;
 const hitZoneSize = 25;
-const hitZoneColor = 0x808080;
+const hitZoneColor = 0x404040;
 
 // Preload assets
 function preload() {
@@ -72,7 +72,7 @@ function create() {
 
     // Action line
     this.actionLine = new Phaser.Geom.Line(400, 180, 400, 600);
-    this.graphics = this.add.graphics({ lineStyle: { width: 2, color: 0xffffff } });
+    this.graphics = this.add.graphics({ lineStyle: { width: 1, color: 0x919191 } });
     this.graphics.strokeLineShape(this.actionLine);
 
     // Hit zone
@@ -104,7 +104,7 @@ function handlePointerDown(pointer) {
 function handlePointerMove(pointer) {
     if (pointer.isDown) {
         this.dragLine.clear();
-        this.dragLine.lineStyle(2, 0x00ff00);
+        this.dragLine.lineStyle(2, 0xA3A3A3);
         this.dragLine.beginPath();
         this.dragLine.moveTo(startX, startY);
         this.dragLine.lineTo(pointer.x, pointer.y);
@@ -117,7 +117,7 @@ function handlePointerMove(pointer) {
         // Draw a parallel line from the hit zone
         const hitZoneX = this.hitZone.x;
         const hitZoneY = this.hitZone.y;
-        this.dragLine.lineStyle(2, 0xff0000); // Different color for distinction
+        this.dragLine.lineStyle(2, 0x4C4A9C); // Different color for distinction
         this.dragLine.beginPath();
         this.dragLine.moveTo(hitZoneX, hitZoneY);
         this.dragLine.lineTo(hitZoneX + dragDistanceX, hitZoneY + dragDistanceY);
