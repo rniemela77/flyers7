@@ -25,9 +25,6 @@ ActionCircle types:
 
 */
 
-// Import Phaser
-
-
 // Game configuration
 const config = {
     type: Phaser.AUTO,
@@ -123,11 +120,27 @@ function handlePointerUp(pointer) {
         if (circle && Phaser.Geom.Intersects.CircleToCircle(circle, this.hitZone)) {
             const shouldDestroy = (isSwipe && circle.fillColor === actionCircleColorBlue) || (!isSwipe && circle.fillColor === actionCircleColorGreen);
             if (shouldDestroy) {
+                createHitEffect.call(this, circle.x, circle.y);
                 circle.destroy();
             }
         }
     }, this);
     this.dragLine.clear();
+}
+
+// Create a hit effect
+function createHitEffect(x, y) {
+    const hitEffect = this.add.circle(x, y, actionCircleSize, 0xffffff);
+    hitEffect.setAlpha(0.8);
+    this.tweens.add({
+        targets: hitEffect,
+        scale: 5,
+        alpha: 0,
+        duration: 100,
+        onComplete: function () {
+            hitEffect.destroy();
+        }
+    });
 }
 
 // Spawn an action circle
