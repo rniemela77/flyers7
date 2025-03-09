@@ -62,13 +62,13 @@ function create() {
     this.enemyPortrait = this.add.rectangle(400, 180, 100, 100, 0x6666ff);
     
     // Health bar
-    this.healthBar = this.add.rectangle(0, 230, 800, 10, 0xff0000).setOrigin(0, 0);
+    this.healthBar = this.add.rectangle(350, 230, 100, 10, 0xff0000).setOrigin(0, 0);
     
     // Enemy name
-    this.enemyName = this.add.text(0, 250, 'Enemy Name', { fontSize: '16px', fill: '#fff' }).setOrigin(0, 0);
+    this.enemyName = this.add.text(350, 250, 'Enemy Name', { fontSize: '16px', fill: '#fff' }).setOrigin(0, 0);
     
     // Health percentage
-    this.healthPercentage = this.add.text(0, 270, '100%', { fontSize: '16px', fill: '#fff' }).setOrigin(0, 0);
+    this.healthPercentage = this.add.text(350, 270, '100%', { fontSize: '16px', fill: '#fff' }).setOrigin(0, 0);
 
     // Action line
     this.actionLine = new Phaser.Geom.Line(400, 180, 400, 600);
@@ -128,7 +128,7 @@ function handlePointerUp(pointer) {
                 // Reduce enemy health
                 this.enemyHealth -= 10;
                 // Update health bar and percentage
-                this.healthBar.width = (this.enemyHealth / 100) * 800;
+                this.healthBar.width = (this.enemyHealth / 100) * 100;
                 this.healthPercentage.setText(this.enemyHealth + '%');
                 // Create slash effect
                 createSlashEffect.call(this);
