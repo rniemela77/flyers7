@@ -55,6 +55,9 @@ function preload() {
 
 // Create game objects
 function create() {
+    // Initialize enemy health
+    this.enemyHealth = 100;
+
     // Enemy portrait
     this.enemyPortrait = this.add.rectangle(400, 180, 100, 100, 0x6666ff);
     
@@ -122,6 +125,13 @@ function handlePointerUp(pointer) {
             if (shouldDestroy) {
                 createHitEffect.call(this, circle.x, circle.y);
                 circle.destroy();
+                // Reduce enemy health
+                this.enemyHealth -= 10;
+                // Update health bar and percentage
+                this.healthBar.width = (this.enemyHealth / 100) * 800;
+                this.healthPercentage.setText(this.enemyHealth + '%');
+                // Create slash effect
+                createSlashEffect.call(this);
             }
         }
     }, this);
@@ -139,6 +149,21 @@ function createHitEffect(x, y) {
         duration: 100,
         onComplete: function () {
             hitEffect.destroy();
+        }
+    });
+}
+
+// Create a slash effect
+function createSlashEffect() {
+    const slash = this.add.rectangle(400, 180, 120, 10, 0xffffff);
+    slash.setRotation(Phaser.Math.DegToRad(45));
+    slash.setAlpha(0.8);
+    this.tweens.add({
+        targets: slash,
+        alpha: 0,
+        duration: 100,
+        onComplete: function () {
+            slash.destroy();
         }
     });
 }
