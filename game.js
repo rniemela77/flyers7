@@ -1,5 +1,3 @@
-<<<<<<< Updated upstream
-=======
 /*
 RTS Game
 -
@@ -31,158 +29,17 @@ ActionCircle types:
 
 
 // Game configuration
->>>>>>> Stashed changes
 const config = {
     type: Phaser.AUTO,
     width: 800,
     height: 600,
-<<<<<<< Updated upstream
-    physics: {
-      default: 'arcade',
-      arcade: { debug: true }
-    },
-=======
->>>>>>> Stashed changes
     scene: {
-      preload: preload,
-      create: create,
-      update: update
+        preload: preload,
+        create: create,
+        update: update
     }
-  };
-  
-  const game = new Phaser.Game(config);
-  
-  let centerX, centerY;
-  let player;
-  let playerAngle = 0; // in radians
-  let angularVelocity = 0.005; // base angular velocity
-  let obstacles = [];
-  let obstacleTimer;
-  let score = 0;
-  let scoreText;
-  let gameOver = false;
-  let powerUps = [];
-  let powerUpTimer;
-  let powerUpActive = false;
-  let powerUpDuration = 5000; // 5 seconds
-  let bullets = [];
-  let bulletTimer;
-  let currentAngle = 0; // Initial angle in degrees
-  
-  // Constants for game configuration
-  const GAME_WIDTH = 360;
-  const GAME_HEIGHT = 640;
-  const BACKGROUND_COLOR = '#111';
-  const ORBIT_RADIUS = 150;
-  const PLAYER_RADIUS = 10;
-  const OBSTACLE_RADIUS = 8;
-  const POWER_UP_RADIUS = 10;
-  const BULLET_RADIUS = 5;
-  const BASE_ANGULAR_VELOCITY = 0.005;
-  const POWER_UP_DURATION = 5000; // 5 seconds
-  const OBSTACLE_SPAWN_DELAY = 1000; // 1 second
-  const POWER_UP_SPAWN_DELAY = 10000; // 10 seconds
-  const BULLET_SPAWN_DELAY = 500; // 0.5 seconds
-  const BULLET_SPEED = 50;
-  const OBSTACLE_SPEED_MIN = 50;
-  const OBSTACLE_SPEED_MAX = 100;
-  const POWER_UP_SPEED_MIN = 30;
-  const POWER_UP_SPEED_MAX = 60;
-  
-  function preload() {
-    // (Optional) Load images/sounds here.
-  }
-  
-  function create() {
-    centerX = GAME_WIDTH / 2;
-    centerY = GAME_HEIGHT / 2;
-    playerAngle = 0;
-    angularVelocity = BASE_ANGULAR_VELOCITY;
-    score = 0;
-    gameOver = false;
-    powerUpActive = false;
-    currentAngle = 0;
-    bullets = [];
-    obstacles = [];
-    powerUps = [];
-    
-    // Create a central planet
-    this.add.circle(centerX, centerY, 30, 0x8888ff);
-    
-    // Create the player as a small circle positioned on the orbit
-    player = this.add.circle(0, 0, PLAYER_RADIUS, 0xffcc00);
-    this.physics.add.existing(player);
-    player.body.setCircle(PLAYER_RADIUS);
-    updatePlayerPosition();
-    
-    // Set up touch input: tap left/right to adjust rotation
-    this.input.on('pointerdown', handlePointerDown);
-    
-    // Spawn obstacles periodically
-    obstacleTimer = this.time.addEvent({
-      delay: OBSTACLE_SPAWN_DELAY,
-      callback: spawnObstacle,
-      callbackScope: this,
-      loop: true
-    });
-    
-    // Spawn power-ups periodically
-    powerUpTimer = this.time.addEvent({
-      delay: POWER_UP_SPAWN_DELAY,
-      callback: spawnPowerUp,
-      callbackScope: this,
-      loop: true
-    });
-    
-    // Spawn bullets in a 2-winged spiral pattern periodically
-    bulletTimer = this.time.addEvent({
-      delay: BULLET_SPAWN_DELAY,
-      callback: spawnBullets,
-      callbackScope: this,
-      loop: true
-    });
-    
-    // Score display
-    scoreText = this.add.text(10, 10, 'Score: 0', { fontSize: '20px', fill: '#fff' });
-  }
-  
-  function handlePointerDown(pointer) {
-    if (gameOver) return;
-    if (pointer.x < GAME_WIDTH / 2) {
-      // Tapping left: nudge counterclockwise (decrease angle)
-      angularVelocity -= 0.002;
-    } else {
-      // Tapping right: nudge clockwise (increase angle)
-      angularVelocity += 0.002;
-    }
-  }
-  
-  function update(time, delta) {
-    if (gameOver) return;
-    
-    // Update the player's angle and position
-    playerAngle += angularVelocity * delta;
-    playerAngle = Phaser.Math.Angle.Wrap(playerAngle);
-    updatePlayerPosition();
-    
-    // Update each obstacle
-    obstacles.forEach(updateObstacle.bind(this, delta));
-    
-    // Update each power-up
-    powerUps.forEach(updatePowerUp.bind(this, delta));
-    
-    // Optionally, you can increase difficulty by ramping up obstacle speed gradually.
-    obstacles.forEach(obs => {
-      obs.speed += 0.01 * delta / 1000; // slight acceleration over time
-    });
+};
 
-<<<<<<< Updated upstream
-const game = new Phaser.Game(config);
-
-function preload() {
-    // Load assets here (e.g., images, sprites)
-    this.load.image('sky', 'path/to/your/sky.png');
-=======
 // Initialize the game
 const game = new Phaser.Game(config);
 
@@ -197,18 +54,10 @@ const hitZoneColor = 0x808080;
 // Preload assets
 function preload() {
     // Load assets here if needed
->>>>>>> Stashed changes
 }
 
+// Create game objects
 function create() {
-<<<<<<< Updated upstream
-    // Add your game elements here
-    this.add.image(400, 300, 'sky');
-}
-
-function update() {
-    // Game loop logic (e.g., movement)
-=======
     // Enemy portrait
     this.enemyPortrait = this.add.rectangle(400, 180, 100, 100, 0x6666ff);
     
@@ -296,5 +145,4 @@ function update() {
             circle.destroy();
         }
     });
->>>>>>> Stashed changes
 }
