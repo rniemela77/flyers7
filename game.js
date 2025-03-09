@@ -134,13 +134,15 @@ function handlePointerUp(pointer) {
     const endY = pointer.y;
     const distance = Phaser.Math.Distance.Between(startX, startY, endX, endY);
     const isSwipe = distance > 20;
+    const swipeDirection = endX > startX ? 1 : -1; // 1 for right, -1 for left
 
     this.actionCircles.children.iterate(function (circle) {
         if (circle && Phaser.Geom.Intersects.CircleToCircle(circle, this.hitZone)) {
-            const shouldDestroy = (isSwipe && circle.fillColor === actionCircleColorBlue) || (!isSwipe && circle.fillColor === actionCircleColorGreen);
+            const shouldDestroy = (isSwipe && circle.fillColor === actionCircleColorBlue && circle.dotPosition === swipeDirection) || (!isSwipe && circle.fillColor === actionCircleColorGreen);
             if (shouldDestroy) {
                 createHitEffect.call(this, circle.x, circle.y);
                 circle.destroy();
+                if (circle.dot) circle.dot.destroy(); // Destroy the dot
                 // Reduce enemy health
                 this.enemyHealth -= 10;
                 // Update health bar and percentage
@@ -187,10 +189,19 @@ function createSlashEffect() {
 // Modify the spawnActionCircle function
 function spawnActionCircle() {
     if (actionCircleCount < 4) {
-        const color = Math.random() > 0.5 ? actionCircleColorBlue : actionCircleColorGreen;
+        const isBlue = Math.random() > 0.5;
+        const color = isBlue ? actionCircleColorBlue : actionCircleColorGreen;
         const circle = this.add.circle(400, 180, actionCircleSize, color);
         this.actionCircles.add(circle);
         actionCircleCount++;
+
+        if (isBlue) {
+            // Add a white dot to the blue circle
+            const dotPosition = Math.random() > 0.5 ? -1 : 1; // -1 for left, 1 for right
+            const dot = this.add.circle(circle.x + dotPosition * (actionCircleSize + 2), circle.y, 3, 0xffffff);
+            circle.dotPosition = dotPosition; // Store the dot position in the circle
+            circle.dot = dot; // Store the dot reference for later use
+        }
     } else {
         // Stop the spawning event
         this.spawnEvent.remove();
@@ -213,6 +224,10 @@ function update() {
     this.actionCircles.children.iterate(function (circle) {
         if (circle && circle.y >= 600) {
             circle.destroy();
+            if (circle.dot) circle.dot.destroy(); // Destroy the dot if the circle is destroyed
+        } else if (circle && circle.dot) {
+            // Update the dot position to stay on top of the circle
+            circle.dot.y = circle.y;
         }
     });
 }
