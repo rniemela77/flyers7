@@ -52,6 +52,9 @@ const perfectHitZoneSize = 10;
 // Variables to track the number of action circles spawned
 let actionCircleCount = 0;
 
+// Add a flag to track if a blue note is active
+let blueNoteActive = false;
+
 // Preload assets
 function preload() {
     // Load assets here if needed
@@ -133,6 +136,21 @@ function handlePointerMove(pointer) {
     }
 }
 
+// Function to update opacity based on the first blue note
+function updateOpacity() {
+    let foundFirstBlueNote = false;
+    this.actionCircles.children.iterate(function (circle) {
+        if (!foundFirstBlueNote) {
+            circle.setAlpha(1); // Full opacity for notes before and including the first blue note
+            if (circle.fillColor === actionCircleColorBlue) {
+                foundFirstBlueNote = true;
+            }
+        } else {
+            circle.setAlpha(0.3); // 0.1 opacity for notes after the first blue note
+        }
+    });
+}
+
 // Handle pointer up event
 function handlePointerUp(pointer) {
     const endX = pointer.x;
@@ -159,6 +177,8 @@ function handlePointerUp(pointer) {
                 if (isPerfectHit) {
                     createPerfectHitEffect.call(this, circle.x, circle.y);
                 }
+                // Update opacity of all notes
+                updateOpacity.call(this);
             }
         }
     }, this);
@@ -212,21 +232,29 @@ function createPerfectHitEffect(x, y) {
 
 // Modify the spawnActionCircle function
 function spawnActionCircle() {
-    if (actionCircleCount < 4) {
-        const isBlue = Math.random() > 0.5;
+    if (actionCircleCount < 4) { // Allow spawning regardless of blue note activity
+        const isBlue = Math.random() > 0.75;
         const color = isBlue ? actionCircleColorBlue : actionCircleColorGreen;
         const circle = this.add.circle(400, 180, actionCircleSize, color);
         this.actionCircles.add(circle);
         actionCircleCount++;
 
         if (isBlue) {
+            blueNoteActive = true; // Set the flag when a blue note is spawned
             // Add a white dot to the blue circle
             const dotPosition = Math.random() > 0.5 ? -1 : 1; // -1 for left, 1 for right
             const dot = this.add.circle(circle.x + dotPosition * (actionCircleSize + 2), circle.y, 3, 0xffffff);
             circle.dotPosition = dotPosition; // Store the dot position in the circle
             circle.dot = dot; // Store the dot reference for later use
         }
-    } else {
+
+        // Set opacity based on whether a blue note is active and this is not a blue note
+        if (blueNoteActive && !isBlue) {
+            circle.setAlpha(0.5);
+        } else {
+            circle.setAlpha(1);
+        }
+    } else if (actionCircleCount >= 4) {
         // Stop the spawning event
         this.spawnEvent.remove();
         // Pause spawning for 2 seconds
@@ -249,9 +277,16 @@ function update() {
         if (circle && circle.y >= 600) {
             circle.destroy();
             if (circle.dot) circle.dot.destroy(); // Destroy the dot if the circle is destroyed
-        } else if (circle && circle.dot) {
+            if (circle.fillColor === actionCircleColorBlue) {
+                blueNoteActive = false; // Reset the flag when a blue note passes the hit zone
+            }
+        } else if (circle) {
             // Update the dot position to stay on top of the circle
-            circle.dot.y = circle.y;
+            if (circle.dot) {
+                circle.dot.y = circle.y;
+            }
         }
     });
+    // Continuously update opacity of all notes
+    updateOpacity.call(this);
 }
