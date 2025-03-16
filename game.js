@@ -187,56 +187,26 @@ function spawnActionCircle() {
     }
 }
 
-// Update the handlePointerUp function to use the new opacity function
-function handlePointerUp(pointer) {
-    const endX = pointer.x;
-    const endY = pointer.y;
-    const distance = Phaser.Math.Distance.Between(startX, startY, endX, endY);
-    const isSwipe = distance > 20;
-    const swipeDirection = endX > startX ? 1 : -1; // 1 for right, -1 for left
-
-    this.actionCircles.children.iterate(function (circle) {
-        if (circle && Phaser.Geom.Intersects.CircleToCircle(circle, this.hitZone)) {
-            const isPerfectHit = Phaser.Geom.Intersects.CircleToCircle(circle, this.perfectHitZone);
-            const shouldDestroy = (isSwipe && circle.fillColor === actionCircleColorBlue && circle.dotPosition === swipeDirection) || (!isSwipe && circle.fillColor === actionCircleColorGreen);
-            if (shouldDestroy) {
-                createHitEffect.call(this, circle.x, circle.y);
-                circle.destroy();
-                if (circle.dot) circle.dot.destroy(); // Destroy the dot
-                // Reduce enemy health
-                this.enemyHealth -= isPerfectHit ? 20 : 10; // Double damage for perfect hit
-                // Update health bar and percentage
-                this.healthBar.width = (this.enemyHealth / 100) * 100;
-                this.healthPercentage.setText(this.enemyHealth + '%');
-                // Create slash effect
-                createSlashEffect.call(this);
-                if (isPerfectHit) {
-                    createPerfectHitEffect.call(this, circle.x, circle.y);
-                }
-                // Update opacity of all notes
-                updateAllCirclesOpacity.call(this);
-            }
-        }
-    }, this);
-    this.dragLine.clear();
-}
-
-// Create a hit effect
-function createHitEffect(x, y) {
-    const hitEffect = this.add.circle(x, y, actionCircleSize, 0xffffff);
-    hitEffect.setAlpha(0.8);
+// Consolidate effect creation into a single function
+function createEffect(x, y, color, scale, duration) {
+    const effect = this.add.circle(x, y, actionCircleSize, color);
+    effect.setAlpha(0.8);
     this.tweens.add({
-        targets: hitEffect,
-        scale: 5,
+        targets: effect,
+        scale: scale,
         alpha: 0,
-        duration: 100,
+        duration: duration,
         onComplete: function () {
-            hitEffect.destroy();
+            effect.destroy();
         }
     });
 }
 
-// Create a slash effect
+// Use the new createEffect function
+function createHitEffect(x, y) {
+    createEffect.call(this, x, y, 0xffffff, 5, 100);
+}
+
 function createSlashEffect() {
     const slash = this.add.rectangle(400, 180, 120, 10, 0xffffff);
     slash.setRotation(Phaser.Math.DegToRad(45));
@@ -251,19 +221,38 @@ function createSlashEffect() {
     });
 }
 
-// Create a perfect hit effect
 function createPerfectHitEffect(x, y) {
-    const perfectHitEffect = this.add.circle(x, y, actionCircleSize, 0xFFD700); // Gold color
-    perfectHitEffect.setAlpha(0.8);
-    this.tweens.add({
-        targets: perfectHitEffect,
-        scale: 5,
-        alpha: 0,
-        duration: 100,
-        onComplete: function () {
-            perfectHitEffect.destroy();
+    createEffect.call(this, x, y, 0xFFD700, 5, 100);
+}
+
+// Simplify pointer event handling
+function handlePointerUp(pointer) {
+    const endX = pointer.x;
+    const endY = pointer.y;
+    const distance = Phaser.Math.Distance.Between(startX, startY, endX, endY);
+    const isSwipe = distance > 20;
+    const swipeDirection = endX > startX ? 1 : -1;
+
+    this.actionCircles.children.iterate(function (circle) {
+        if (circle && Phaser.Geom.Intersects.CircleToCircle(circle, this.hitZone)) {
+            const isPerfectHit = Phaser.Geom.Intersects.CircleToCircle(circle, this.perfectHitZone);
+            const shouldDestroy = (isSwipe && circle.fillColor === actionCircleColorBlue && circle.dotPosition === swipeDirection) || (!isSwipe && circle.fillColor === actionCircleColorGreen);
+            if (shouldDestroy) {
+                createHitEffect.call(this, circle.x, circle.y);
+                circle.destroy();
+                if (circle.dot) circle.dot.destroy();
+                this.enemyHealth -= isPerfectHit ? 20 : 10;
+                this.healthBar.width = (this.enemyHealth / 100) * 100;
+                this.healthPercentage.setText(this.enemyHealth + '%');
+                createSlashEffect.call(this);
+                if (isPerfectHit) {
+                    createPerfectHitEffect.call(this, circle.x, circle.y);
+                }
+                updateAllCirclesOpacity.call(this);
+            }
         }
-    });
+    }, this);
+    this.dragLine.clear();
 }
 
 // Update the update function to use the new opacity function
