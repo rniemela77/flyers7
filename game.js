@@ -151,9 +151,15 @@ function updateAllCirclesOpacity() {
     });
 }
 
-// Modify the spawnActionCircle function to use the new opacity function
+// Helper function to destroy a circle and its dot
+function destroyCircleAndDot(circle) {
+    circle.destroy();
+    if (circle.dot) circle.dot.destroy();
+}
+
+// Modify the spawnActionCircle function to use the new helper function
 function spawnActionCircle() {
-    if (actionCircleCount < 4) { // Allow spawning regardless of blue note activity
+    if (actionCircleCount < 4) {
         const isBlue = Math.random() > 0.75;
         const color = isBlue ? actionCircleColorBlue : actionCircleColorGreen;
         const circle = this.add.circle(400, 180, actionCircleSize, color);
@@ -161,25 +167,20 @@ function spawnActionCircle() {
         actionCircleCount++;
 
         if (isBlue) {
-            blueNoteActive = true; // Set the flag when a blue note is spawned
-            // Add a white dot to the blue circle
-            const dotPosition = Math.random() > 0.5 ? -1 : 1; // -1 for left, 1 for right
+            blueNoteActive = true;
+            const dotPosition = Math.random() > 0.5 ? -1 : 1;
             const dot = this.add.circle(circle.x + dotPosition * (actionCircleSize + 2), circle.y, 3, 0xffffff);
-            circle.dotPosition = dotPosition; // Store the dot position in the circle
-            circle.dot = dot; // Store the dot reference for later use
+            circle.dotPosition = dotPosition;
+            circle.dot = dot;
         }
 
-        // Update opacity of all notes
         updateAllCirclesOpacity.call(this);
     } else if (actionCircleCount >= 4) {
-        // Stop the spawning event
         this.spawnEvent.remove();
-        // Pause spawning for 2 seconds
         this.time.addEvent({
             delay: 2000,
             callback: () => {
-                actionCircleCount = 0; // Reset the counter
-                // Restart the spawning event
+                actionCircleCount = 0;
                 this.spawnEvent = this.time.addEvent({ delay: 500, callback: spawnActionCircle, callbackScope: this, loop: true });
             },
             callbackScope: this
@@ -225,7 +226,7 @@ function createPerfectHitEffect(x, y) {
     createEffect.call(this, x, y, 0xFFD700, 5, 100);
 }
 
-// Simplify pointer event handling
+// Update the handlePointerUp function to use the new helper function
 function handlePointerUp(pointer) {
     const endX = pointer.x;
     const endY = pointer.y;
@@ -239,8 +240,7 @@ function handlePointerUp(pointer) {
             const shouldDestroy = (isSwipe && circle.fillColor === actionCircleColorBlue && circle.dotPosition === swipeDirection) || (!isSwipe && circle.fillColor === actionCircleColorGreen);
             if (shouldDestroy) {
                 createHitEffect.call(this, circle.x, circle.y);
-                circle.destroy();
-                if (circle.dot) circle.dot.destroy();
+                destroyCircleAndDot(circle);
                 this.enemyHealth -= isPerfectHit ? 20 : 10;
                 this.healthBar.width = (this.enemyHealth / 100) * 100;
                 this.healthPercentage.setText(this.enemyHealth + '%');
@@ -255,23 +255,20 @@ function handlePointerUp(pointer) {
     this.dragLine.clear();
 }
 
-// Update the update function to use the new opacity function
+// Update the update function to use the new helper function
 function update() {
     Phaser.Actions.IncY(this.actionCircles.getChildren(), actionCircleSpeed);
     this.actionCircles.children.iterate(function (circle) {
         if (circle && circle.y >= 600) {
-            circle.destroy();
-            if (circle.dot) circle.dot.destroy(); // Destroy the dot if the circle is destroyed
+            destroyCircleAndDot(circle);
             if (circle.fillColor === actionCircleColorBlue) {
-                blueNoteActive = false; // Reset the flag when a blue note passes the hit zone
+                blueNoteActive = false;
             }
         } else if (circle) {
-            // Update the dot position to stay on top of the circle
             if (circle.dot) {
                 circle.dot.y = circle.y;
             }
         }
     });
-    // Continuously update opacity of all notes
     updateAllCirclesOpacity.call(this);
 }
