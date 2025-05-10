@@ -1,41 +1,34 @@
-# Simple Tower Defense Game
+# Ball Swipe Game
 
-A basic tower defense game built with Phaser 3.
-
-## How to Run
-
-1. Clone or download this repository
-2. Open the `index.html` file in a web browser
-   - For the best experience, use a local web server (like Live Server in VS Code)
+A simple and addictive game where balls fall from the top of the screen, and you need to swipe them when they reach the hit zone.
 
 ## How to Play
 
-- **Objective**: Defend your path from enemies by strategically placing towers
-- **Controls**: Click on empty spaces to place towers (costs 50 gold)
-- **Towers**: Automatically shoot at nearby enemies
-- **Enemies**: Follow the white path and take 3 hits to destroy
-- **Lives**: You lose a life when an enemy reaches the end of the path
-- **Gold**: Earn 25 gold for each enemy destroyed
-- **Game Over**: The game ends when you lose all 10 lives
+1. Open `index.html` in a web browser
+2. Balls will start falling from the top of the screen
+3. Swipe across the screen when balls reach the highlighted hit zone
+4. Try to hit the balls as close to the center line as possible for "Perfect" hits
+5. Build combos by hitting multiple balls in succession without missing
 
 ## Game Features
 
-- Path-following enemies
-- Tower placement and shooting mechanics
-- Simple economy system with gold
-- Score tracking
-- Game over condition
+- Colorful balls with smooth animations
+- Combo system to multiply your score
+- "Perfect" hit bonuses for precise timing
+- Works on both desktop (using mouse) and touch devices
 
-## Technologies Used
+## Technical Details
 
-- Phaser 3 - HTML5 Game Framework
-- JavaScript
-- HTML/CSS
+The game is built using:
+- HTML5 Canvas for rendering
+- Vanilla JavaScript for game logic
+- CSS for styling and animations
 
-## Future Improvements
+## Tips
 
-- Different tower types
-- Enemy waves with increasing difficulty
-- Upgrade system for towers
-- Sound effects and music
-- Visual improvements
+- The dashed line in the middle of the hit zone is the "perfect" hit area
+- Try to time your swipes when balls cross this line for maximum points
+- Chain hits together without missing to build your combo multiplier
+- The combo will reset if you miss a ball or wait too long between hits
+
+Enjoy playing! 
