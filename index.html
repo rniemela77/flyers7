@@ -7,16 +7,15 @@
     <link rel="stylesheet" href="style.css">
     <!-- Include Phaser library -->
     <script src="node_modules/phaser/dist/phaser.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+    </style>
 </head>
 <body>
-    <div class="game-container">
-        <div id="gameCanvas"></div>
-        <div class="score-container">
-            <div class="score">Score: <span id="scoreValue">0</span></div>
-            <div class="combo">Combo: <span id="comboValue">0</span>x</div>
-        </div>
-    </div>
-    <!-- Use our new Phaser version of the game -->
     <script src="game-phaser.js"></script>
 </body>
 </html>

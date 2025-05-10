@@ -1,260 +1,405 @@
-// Phaser 3 game implementation
+// game-phaser.js
+// Pure JS file—no HTML wrapper
 
-const configScene = {
-    hitZonePosition: 0.15,
-    hitZoneHeight: 0.4,
-    ballRadius: 20,
-    ballSpeed: 1,
-    spawnInterval: 2000,
-    comboDecayTime: 1000,
-    hitEffectDuration: 300,
-    ballHealth: 100,
-    swipeDamage: 50,
-    swipeLineDuration: 300,
-    swipeLineWidth: 5,
-    shieldChance: 0.3,
-    maxShields: 3
-};
-
-class MainScene extends Phaser.Scene {
-    constructor() {
-        super('MainScene');
-    }
-
-    create() {
-        this.score = 0;
-        this.combo = 0;
-        this.lastComboTime = 0;
-        this.ball = null;
-        this.projectiles = [];
-        this.barrierActive = false;
-
-        this.hitZoneY = this.scale.height * configScene.hitZonePosition;
-        this.hitZoneH = this.scale.height * configScene.hitZoneHeight;
-        this.hitZoneGraphics = this.add.graphics();
-        this.hitZoneGraphics.fillStyle(0xffffff, 0.15);
-        this.hitZoneGraphics.fillRect(0, this.hitZoneY, this.scale.width, this.hitZoneH);
-        this.hitZoneGraphics.lineStyle(2, 0xffffff, 0.5);
-        this.hitZoneGraphics.strokeRect(0, this.hitZoneY, this.scale.width, this.hitZoneH);
-
-        this.barrierY = this.scale.height * 0.75;
-        this.barrierGraphics = this.add.graphics();
-        this.barrierGraphics.fillStyle(0xffffff, 0.5);
-        this.barrierGraphics.fillRect(0, this.barrierY, this.scale.width, 10);
-        this.barrierGraphics.setVisible(false);
-
-        this.input.on('pointerdown', this.handlePointerDown, this);
-        this.input.on('pointerup', this.handlePointerUp, this);
-
-        this.time.addEvent({
-            delay: configScene.spawnInterval,
-            callback: this.trySpawnBall,
-            callbackScope: this,
-            loop: true
-        });
-    }
-
-    trySpawnBall() {
-        if (!this.ball) this.createBall();
-    }
-
-    createBall() {
-        const x = this.scale.width / 2;
-        const graphics = this.add.graphics();
-        const ball = {
-            x,
-            y: 0,
-            speed: configScene.ballSpeed,
-            radius: configScene.ballRadius,
-            shielded: Math.random() < configScene.shieldChance,
-            shields: 0,
-            health: configScene.ballHealth,
-            maxHealth: configScene.ballHealth,
-            damaged: false,
-            damageTimer: 0,
-            swingStarted: false,
-            swingProgress: 0,
-            swingEvent: null,
-            graphics
-        };
-        if (ball.shielded) {
-            ball.shields = 1 + Phaser.Math.Between(0, configScene.maxShields - 1);
-        }
-        this.ball = ball;
-    }
-
-    update(time, delta) {
-        const dt = delta / 16;
-
-        if (this.ball) {
-            const b = this.ball;
-            if (!b.swingStarted) {
-                if (b.y < this.hitZoneY + this.hitZoneH / 2) b.speed += 0.05;
-                else {
-                    b.speed = 0;
-                    this.startSwingTimer(b);
-                }
-                b.y += b.speed * dt;
-            }
-
-            if (b.damaged) {
-                b.damageTimer -= delta;
-                if (b.damageTimer <= 0) b.damaged = false;
-            }
-
-            if (b.y > this.hitZoneY + this.hitZoneH) this.handleMiss();
-            this.renderBall(b);
-        }
-
-        for (let i = this.projectiles.length - 1; i >= 0; i--) {
-            const p = this.projectiles[i];
-            p.y += p.speed * dt;
-            p.graphics.clear();
-            p.graphics.fillStyle(0xff0000, 1);
-            p.graphics.fillRect(p.x - 2, p.y, 4, 10);
-            if ((this.barrierActive && p.y >= this.barrierY) || p.y > this.scale.height) {
-                p.graphics.destroy();
-                this.projectiles.splice(i, 1);
-            }
-        }
-
-        this.barrierGraphics.setVisible(this.barrierActive);
-
-        if (time - this.lastComboTime > configScene.comboDecayTime) this.combo = 0;
-    }
-
-    renderBall(b) {
-        const g = b.graphics;
-        g.clear();
-        if (b.damaged) g.fillStyle(0xffffff, 1);
-        else if (b.shielded) g.fillStyle(0x98CAFF, 1);
-        else g.fillStyle(0xff9500, 1);
-        g.fillCircle(b.x, b.y, b.radius);
-
-        const w = b.radius * 2;
-        const h = 5;
-        const pct = b.health / b.maxHealth;
-        g.fillStyle(0x646464, 0.5);
-        g.fillRect(b.x - b.radius, b.y + b.radius + 10, w, h);
-        g.fillStyle(0xff3030, 1);
-        g.fillRect(b.x - b.radius, b.y + b.radius + 10, w * pct, h);
-
-        if (b.shields > 0) {
-            g.fillStyle(0x00FF40, 1);
-            g.fillCircle(b.x, b.y - 25, 12);
-            g.lineStyle(2, 0xffffff, 1);
-            g.strokeCircle(b.x, b.y - 25, 12);
-            if (b.shields > 1) {
-                const text = this.add.text(b.x, b.y - 25, b.shields, { font: '14px Arial', color: '#ffffff' });
-                text.setOrigin(0.5);
-                this.time.delayedCall(100, () => text.destroy());
-            }
-        }
-
-        if (b.swingStarted) {
-            const bx = b.x - b.radius;
-            const by = b.y + b.radius + 20;
-            g.fillStyle(0x646464, 0.5);
-            g.fillRect(bx, by, w, h);
-            g.fillStyle(0xffffff, 1);
-            g.fillRect(bx, by, w * (b.swingProgress / 100), h);
-        }
-    }
-
-    startSwingTimer(b) {
-        b.swingStarted = true;
-        b.swingProgress = 0;
-        b.swingEvent = this.time.addEvent({
-            delay: 50,
-            repeat: 100,
-            callback: () => {
-                b.swingProgress++;
-                if (b.swingProgress >= 100) {
-                    b.swingEvent.remove();
-                    this.shootProjectile(b.x, b.y);
-                }
-            }
-        });
-    }
-
-    shootProjectile(x, y) {
-        const graphics = this.add.graphics();
-        this.projectiles.push({ x, y, speed: 5, graphics });
-    }
-
-    handlePointerDown(pointer) {
-        this.pointerStart = { x: pointer.x, y: pointer.y, time: this.time.now };
-        this.barrierActive = true;
-    }
-
-    handlePointerUp(pointer) {
-        const d = this.time.now - this.pointerStart.time;
-        const dist = Phaser.Math.Distance.Between(pointer.x, pointer.y, this.pointerStart.x, this.pointerStart.y);
-        if (d < 200 && dist < 10) this.removeShield();
-        else this.createSwipeLine(this.pointerStart.x, this.pointerStart.y, pointer.x, pointer.y);
-        this.barrierActive = false;
-    }
-
-    removeShield() {
-        const b = this.ball;
-        if (!b || !b.shielded || b.shields === 0) return;
-        b.shields--;
-        if (b.shields === 0) b.shielded = false;
-    }
-
-    createSwipeLine(x1, y1, x2, y2) {
-        const b = this.ball;
-        if (!b || b.shielded) return;
-        const dx = x2 - x1;
-        const dy = y2 - y1;
-        const length = Math.sqrt(dx * dx + dy * dy);
-        const angle = Math.atan2(dy, dx);
-        const halfLen = length / 2;
-        const hx = Math.cos(angle) * halfLen;
-        const hy = Math.sin(angle) * halfLen;
-        const startX = b.x - hx;
-        const startY = b.y - hy;
-        const endX = b.x + hx;
-        const endY = b.y + hy;
-        const line = this.add.graphics();
-        line.lineStyle(configScene.swipeLineWidth, 0xffffff, 1);
-        line.beginPath();
-        line.moveTo(startX, startY);
-        line.lineTo(endX, endY);
-        line.strokePath();
-        this.time.delayedCall(configScene.swipeLineDuration, () => line.destroy());
-        this.damageBall();
-    }
-
-    damageBall() {
-        const b = this.ball;
-        b.health -= configScene.swipeDamage;
-        b.damaged = true;
-        b.damageTimer = configScene.hitEffectDuration;
-        if (b.health <= 0) {
-            b.graphics.destroy();
-            this.ball = null;
-            this.combo++;
-            this.lastComboTime = this.time.now;
-        }
-    }
-
-    handleMiss() {
-        const b = this.ball;
-        if (b) b.graphics.destroy();
-        this.ball = null;
-        this.combo = 0;
-    }
-}
-
-const phaserConfig = {
+// Phaser config
+const config = {
     type: Phaser.AUTO,
     width: window.innerWidth,
     height: window.innerHeight,
-    backgroundColor: '#000000',
-    scene: MainScene
-};
-
-window.addEventListener('load', () => {
-    new Phaser.Game(phaserConfig);
-});
+    backgroundColor: 0x374639,
+    physics: {
+      default: 'arcade',
+      arcade: { debug: false, gravity: { x: 0, y: 0 } }
+    },
+    scene: { preload, create, update }
+  };
+  const game = new Phaser.Game(config);
+  
+  // Health bar config
+  const barWidth = 22;
+  const barHeight = 4;
+  const segmentSize = 25;
+  
+  let units = [];
+  const unitTypes = [
+    { hp: 150, range: 80,  dmg: 10,  speed: 50 },   // Tank
+    { hp: 75,  range: 200, dmg: 8,   speed: 60 },   // Archer
+    { hp: 75,  range: 80,  dmg: 30,  speed: 40 },   // Assassin
+    { hp: 100, range: 400, heal: 20, speed: 50 }    // Healer
+  ];
+  const weaponKeys = ['tank', 'archer', 'assassin', 'healer'];
+  
+  function preload() {
+    this.load.image('tank', 'tank.png');
+    this.load.image('archer', 'archer.png');
+    this.load.image('assassin', 'assassin.png');
+    this.load.image('healer', 'healer.png');
+  }
+  
+  function create() {
+    // start with a fresh units array every time the scene is created
+    units = [];
+  
+    const { width, height } = this.scale;
+  
+    // split into two physics groups to prevent cross-team bounce
+    this.topGroup    = this.physics.add.group();
+    this.bottomGroup = this.physics.add.group();
+  
+    const teams = [
+      { side: 'top',    color: 0xFF8B8B, group: this.topGroup },
+      { side: 'bottom', color: 0x7575FF, group: this.bottomGroup }
+    ];
+  
+    teams.forEach(team => {
+      for (let i = 0; i < 10; i++) {
+        const idx   = Phaser.Math.Between(0, unitTypes.length - 1);
+        const stats = unitTypes[idx];
+        const key   = weaponKeys[idx];
+        const x     = Phaser.Math.Between(50, width - 50);
+        const y     = team.side === 'top'
+          ? Phaser.Math.Between(50, 150)
+          : Phaser.Math.Between(height - 150, height - 50);
+  
+        const sprite = this.add.sprite(x, y, key)
+          .setOrigin(0.5, 0.5)
+          .setTint(team.color)
+          .setDisplaySize(40, 40);
+        this.physics.add.existing(sprite);
+        sprite.body.setCircle(13);
+        sprite.body.setCollideWorldBounds(true);
+        sprite.body.setBounce(1);
+  
+        // red damage bar behind
+        const damageBar = this.add.rectangle(
+          x - barWidth/2,
+          y - 16,
+          barWidth,
+          barHeight,
+          0xff0000
+        ).setOrigin(0, 0.5);
+        // green current-health bar on top
+        const healthBar = this.add.rectangle(
+          x - barWidth/2,
+          y - 16,
+          barWidth,
+          barHeight,
+          0x00ff00
+        ).setOrigin(0, 0.5);
+  
+        const segmentCount = Math.ceil(stats.hp / segmentSize);
+        const notches = [];
+        const offsets = [];
+        for (let s = 1; s < segmentCount; s++) {
+          const offsetX = -barWidth/2 + (s * barWidth / segmentCount);
+          const notch = this.add.line(
+            x + offsetX,
+            y - 16,
+            0, -barHeight/2,
+            0,  barHeight/2,
+            0x000000
+          ).setOrigin(0.5);
+          notches.push(notch);
+          offsets.push(offsetX);
+        }
+  
+        // Add swing timer bar during unit creation
+        const swingTimerBar = this.add.rectangle(
+          x - barWidth/2,
+          y - 10,
+          barWidth,
+          2,
+          0xffffff
+        ).setOrigin(0, 0.5);
+  
+        // Add a range circle for each unit
+        const rangeCircle = this.add.circle(x, y, stats.range, 0x00ff00, 0.2);
+        rangeCircle.setVisible(false);
+  
+        units.push({
+          type: idx,
+          gameObject: sprite,
+          body: sprite.body,
+          team: team.side,
+          hp: stats.hp,
+          maxHp: stats.hp,
+          range: stats.range,
+          dmg: stats.dmg || 0,
+          heal: stats.heal || 0,
+          speed: stats.speed,
+          attackCooldown: 1000,
+          lastAttackTime: 0,
+          healCooldown: 1500,
+          lastHealTime: 0,
+          color: team.color,
+          damageBar,
+          healthBar,
+          notches,
+          offsets,
+          swingTimer: 0,
+          swingTimerBar,
+          rangeCircle
+        });
+  
+        // add to the appropriate physics group
+        team.group.add(sprite);
+  
+        // Add input events for showing/hiding the range circle
+        sprite.setInteractive();
+        sprite.on('pointerover', () => rangeCircle.setVisible(true));
+        sprite.on('pointerout',  () => rangeCircle.setVisible(false));
+      }
+    });
+  
+    // only intra-team collisions (no cross-team bounce)
+    this.physics.add.collider(this.topGroup,    this.topGroup);
+    this.physics.add.collider(this.bottomGroup, this.bottomGroup);
+  }
+  
+  function update(time, delta) {
+    // DEBUG: warn if any unit.team ever changes
+    units.forEach(u => {
+      if (!u._initialTeam) {
+        u._initialTeam = u.team;
+      } else if (u.team !== u._initialTeam) {
+        console.warn(`Unit switched from ${u._initialTeam} to ${u.team}`, u);
+      }
+    });
+  
+    // Remove dead units
+    units = units.filter(u => {
+      if (u.hp <= 0) {
+        u.gameObject.destroy();
+        u.healthBar.destroy();
+        u.damageBar.destroy();
+        u.swingTimerBar.destroy();
+        u.notches.forEach(n => n.destroy());
+        return false;
+      }
+      return true;
+    });
+  
+    // Compute friendly cluster centers
+    const centers = {};
+    units.forEach(u => {
+      if (!centers[u.team]) centers[u.team] = { xSum: 0, ySum: 0, count: 0 };
+      centers[u.team].xSum += u.gameObject.x;
+      centers[u.team].ySum += u.gameObject.y;
+      centers[u.team].count++;
+    });
+  
+    units.forEach(u => {
+      const {
+        type, gameObject, body, dmg, heal,
+        damageBar, healthBar, notches, offsets,
+        swingTimerBar, attackCooldown, healCooldown,
+        rangeCircle
+      } = u;
+  
+      swingTimerBar.setVisible(false);
+  
+      if (type === 3) {
+        // Healer behavior
+        const allies = units.filter(a => a.team === u.team && a.hp < a.maxHp && a !== u);
+        let acted = false;
+        if (allies.length && time - u.lastHealTime > healCooldown) {
+          const target = allies.reduce(
+            (min, a) => (a.hp/a.maxHp < min.hp/min.maxHp ? a : min),
+            allies[0]
+          );
+          const dist = Phaser.Math.Distance.Between(
+            gameObject.x, gameObject.y,
+            target.gameObject.x, target.gameObject.y
+          );
+          if (dist <= u.range) {
+            body.setVelocity(0);
+            target.hp = Phaser.Math.Clamp(target.hp + heal, 0, target.maxHp);
+            u.lastHealTime = time;
+            acted = true;
+  
+            // Healing beam
+            const beam = this.add.line(
+              gameObject.x, gameObject.y,
+              0, 0,
+              target.gameObject.x - gameObject.x,
+              target.gameObject.y - gameObject.y,
+              0x00ff00
+            ).setOrigin(0, 0.5).setLineWidth(8).setAlpha(0.3);
+            this.tweens.add({
+              targets: beam,
+              alpha: 0,
+              duration: 200,
+              onComplete: () => beam.destroy()
+            });
+          } else {
+            // Move toward injured ally
+            const dx = target.gameObject.x - gameObject.x;
+            const dy = target.gameObject.y - gameObject.y;
+            const len = Math.hypot(dx, dy) || 1;
+            body.setVelocity((dx/len)*u.speed, (dy/len)*u.speed);
+            gameObject.setFlipX(dx < 0);
+            acted = true;
+          }
+        }
+        if (!acted) {
+          // Return to cluster center
+          const center = centers[u.team];
+          const cx = center.xSum / center.count;
+          const cy = center.ySum / center.count;
+          const distC = Phaser.Math.Distance.Between(gameObject.x, gameObject.y, cx, cy);
+          const radius = 100;
+          if (distC > radius) {
+            const dx = cx - gameObject.x;
+            const dy = cy - gameObject.y;
+            const len = Math.hypot(dx, dy) || 1;
+            body.setVelocity((dx/len)*u.speed, (dy/len)*u.speed);
+            gameObject.setFlipX(dx < 0);
+          } else {
+            body.setVelocity(0);
+          }
+        }
+  
+      } else {
+        // Combat behavior
+        const enemies = units.filter(e => e.team !== u.team);
+        if (!enemies.length) {
+          body.setVelocity(0);
+        } else {
+          let nearest = enemies[0];
+          let bestDist = Phaser.Math.Distance.Between(
+            gameObject.x, gameObject.y,
+            nearest.gameObject.x, nearest.gameObject.y
+          );
+          enemies.forEach(e => {
+            const d = Phaser.Math.Distance.Between(
+              gameObject.x, gameObject.y,
+              e.gameObject.x, e.gameObject.y
+            );
+            if (d < bestDist) {
+              bestDist = d;
+              nearest = e;
+            }
+          });
+  
+          if (bestDist > u.range) {
+            // Move toward enemy
+            const dx = nearest.gameObject.x - gameObject.x;
+            const dy = nearest.gameObject.y - gameObject.y;
+            const len = Math.hypot(dx, dy) || 1;
+            body.setVelocity((dx/len)*u.speed, (dy/len)*u.speed);
+            gameObject.setFlipX(dx < 0);
+            u.swingTimer = 0; // Reset swing
+          } else {
+            // Attack
+            body.setVelocity(0);
+            swingTimerBar.setVisible(true);
+            u.swingTimer += delta;
+            const swingRatio = Phaser.Math.Clamp(u.swingTimer / attackCooldown, 0, 1);
+            swingTimerBar.width = barWidth * swingRatio;
+            swingTimerBar.setPosition(gameObject.x - barWidth/2, gameObject.y - 10);
+  
+            if (swingRatio >= 1) {
+              u.swingTimer = 0;
+              u.lastAttackTime = time;
+  
+              if (type === 1) {
+                // Archer projectile
+                const proj = this.add.rectangle(
+                  gameObject.x, gameObject.y, 20, 1, 0xffffff
+                ).setOrigin(0.5);
+                const angle = Phaser.Math.Angle.Between(
+                  gameObject.x, gameObject.y,
+                  nearest.gameObject.x, nearest.gameObject.y
+                );
+                proj.rotation = angle;
+                gameObject.setFlipX(Math.cos(angle) < 0);
+                this.tweens.add({
+                  targets: proj,
+                  x: nearest.gameObject.x,
+                  y: nearest.gameObject.y,
+                  duration: 200,
+                  onComplete: () => {
+                    proj.destroy();
+                    nearest.hp -= dmg;
+  
+                    // Flash on impact, then restore target's own tint
+                    const original = nearest.color;
+                    nearest.gameObject.setTint(0xffffff);
+                    this.time.delayedCall(200, () => {
+                      nearest.gameObject.setTint(original);
+                    });
+  
+                    // Damage number
+                    const dmgText = this.add.text(
+                      nearest.gameObject.x,
+                      nearest.gameObject.y - 30,
+                      `-${dmg}`,
+                      { font: '16px Arial', fill: '#ff0000', stroke: '#000', strokeThickness: 2 }
+                    ).setOrigin(0.5);
+                    this.tweens.add({
+                      targets: dmgText,
+                      y: nearest.gameObject.y - 50,
+                      alpha: 0,
+                      duration: 800,
+                      onComplete: () => dmgText.destroy()
+                    });
+                  }
+                });
+              } else {
+                // Melee slash (Tank or Assassin)
+                nearest.hp -= dmg;
+                const randomAngle = Phaser.Math.FloatBetween(-0.2, 0.2);
+                const slashLength = 40;
+                const direction = Phaser.Math.Between(0, 1) === 0 ? 1 : -1;
+                const sx = nearest.gameObject.x - Math.cos(randomAngle)*slashLength/2*direction;
+                const sy = nearest.gameObject.y - Math.sin(randomAngle)*slashLength/2*direction;
+                const ex = nearest.gameObject.x + Math.cos(randomAngle)*slashLength/2*direction;
+                const ey = nearest.gameObject.y + Math.sin(randomAngle)*slashLength/2*direction;
+                const slash = this.add.line(sx, sy, 0, 0, slashLength, 0, 0xffffff)
+                                  .setOrigin(0.5).setLineWidth(2).setRotation(randomAngle);
+                this.tweens.add({
+                  targets: slash,
+                  x: ex,
+                  y: ey,
+                  alpha: 0,
+                  duration: 100,
+                  onComplete: () => slash.destroy()
+                });
+  
+                // Flash and damage number for melee
+                const original = nearest.color;
+                nearest.gameObject.setTint(0xffffff);
+                this.time.delayedCall(200, () => {
+                  nearest.gameObject.setTint(original);
+                });
+                const dmgText = this.add.text(
+                  nearest.gameObject.x,
+                  nearest.gameObject.y - 30,
+                  `-${dmg}`,
+                  { font: '16px Arial', fill: '#ff0000', stroke: '#000', strokeThickness: 2 }
+                ).setOrigin(0.5);
+                this.tweens.add({
+                  targets: dmgText,
+                  y: nearest.gameObject.y - 50,
+                  alpha: 0,
+                  duration: 800,
+                  onComplete: () => dmgText.destroy()
+                });
+              }
+            }
+          }
+        }
+      }
+  
+      // Update bars & circle
+      const bx = gameObject.x;
+      const by = gameObject.y - 16;
+      damageBar.setPosition(bx - barWidth/2, by);
+      healthBar.setPosition(bx - barWidth/2, by);
+      const hpRatio = Phaser.Math.Clamp(u.hp / u.maxHp, 0, 1);
+      healthBar.width = barWidth * hpRatio;
+      notches.forEach((n, i) => n.setPosition(bx + offsets[i], by));
+      rangeCircle.setPosition(gameObject.x, gameObject.y);
+    });
+  }
+  
