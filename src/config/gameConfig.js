@@ -2,7 +2,7 @@ const gameConfig = {
   type: Phaser.AUTO,
   width: window.innerWidth,
   height: window.innerHeight,
-  backgroundColor: 0x374639,
+  backgroundColor: 0x48554E,
   physics: {
     default: 'arcade',
     arcade: { debug: false, gravity: { x: 0, y: 0 } }

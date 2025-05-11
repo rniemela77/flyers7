@@ -270,12 +270,14 @@ class Unit {
               });
             } else {
               // Melee slash (Tank or Assassin)
-              nearest.hp -= dmg;
+              const originalX = sprite.x;
+              const originalY = sprite.y;
+              const angleToTarget = Phaser.Math.Angle.Between(sprite.x, sprite.y, nearest.sprite.x, nearest.sprite.y);
+
+              // Create slash effect
               const randomAngle = Phaser.Math.FloatBetween(-0.2, 0.2);
               const slashLength = 40;
               const direction = Phaser.Math.Between(0, 1) === 0 ? 1 : -1;
-              // Calculate the angle between the attacker and the target
-              const angleToTarget = Phaser.Math.Angle.Between(sprite.x, sprite.y, nearest.sprite.x, nearest.sprite.y);
               // Calculate the perpendicular angle with random direction
               const randomDirection = Phaser.Math.Between(0, 1) === 0 ? 1 : -1;
               const perpendicularAngle = angleToTarget + randomDirection * Math.PI / 2;
@@ -290,7 +292,7 @@ class Unit {
               const ex = midX + Math.cos(perpendicularAngle) * slashLength / 2;
               const ey = midY + Math.sin(perpendicularAngle) * slashLength / 2;
               const slash = this.scene.add.line(sx, sy, 0, 0, slashLength, 0, 0xffffff)
-                                    .setOrigin(0.5).setLineWidth(2).setRotation(perpendicularAngle);
+                            .setOrigin(0.5).setLineWidth(2).setRotation(perpendicularAngle);
               this.scene.tweens.add({
                 targets: slash,
                 x: ex,
@@ -300,24 +302,36 @@ class Unit {
                 onComplete: () => slash.destroy()
               });
 
-              // Flash and damage number for melee
-              const original = nearest.color;
-              nearest.sprite.setTint(0xffffff);
-              this.scene.time.delayedCall(200, () => {
-                nearest.sprite.setTint(original);
-              });
-              const dmgText = this.scene.add.text(
-                nearest.sprite.x,
-                nearest.sprite.y - 35,
-                `-${dmg}`,
-                { font: '16px Arial', fill: '#ff0000', stroke: '#000', strokeThickness: 2 }
-              ).setOrigin(0.5);
+              // Move toward the target
               this.scene.tweens.add({
-                targets: dmgText,
-                y: nearest.sprite.y - 50,
-                alpha: 0,
-                duration: 800,
-                onComplete: () => dmgText.destroy()
+                targets: sprite,
+                x: nearest.sprite.x - Math.cos(angleToTarget) * 50, // Move 10 pixels toward the target
+                y: nearest.sprite.y - Math.sin(angleToTarget) * 50,
+                duration: 50,
+                yoyo: true, // Move back to original position
+                onComplete: () => {
+                  // Execute the attack logic after the movement
+                  nearest.hp -= dmg;
+                  // Flash and damage number for melee
+                  const original = nearest.color;
+                  nearest.sprite.setTint(0xffffff);
+                  this.scene.time.delayedCall(200, () => {
+                    nearest.sprite.setTint(original);
+                  });
+                  const dmgText = this.scene.add.text(
+                    nearest.sprite.x,
+                    nearest.sprite.y - 35,
+                    `-${dmg}`,
+                    { font: '16px Arial', fill: '#ff0000', stroke: '#000', strokeThickness: 2 }
+                  ).setOrigin(0.5);
+                  this.scene.tweens.add({
+                    targets: dmgText,
+                    y: nearest.sprite.y - 50,
+                    alpha: 0,
+                    duration: 800,
+                    onComplete: () => dmgText.destroy()
+                  });
+                }
               });
             }
           }
