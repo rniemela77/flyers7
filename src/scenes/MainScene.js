@@ -1,160 +1,51 @@
-// game-phaser.js
-// Pure JS file—no HTML wrapper
+// import Phaser from 'phaser';
+import Tank from '../entities/Tank.js';
+import Archer from '../entities/Archer.js';
+import Assassin from '../entities/Assassin.js';
+import Healer from '../entities/Healer.js';
+import { createBars, addInputEvents, barWidth } from '../utils/helpers.js';
 
-// Phaser config
-const config = {
-    type: Phaser.AUTO,
-    width: window.innerWidth,
-    height: window.innerHeight,
-    backgroundColor: 0x374639,
-    physics: {
-      default: 'arcade',
-      arcade: { debug: false, gravity: { x: 0, y: 0 } }
-    },
-    scene: { preload, create, update }
-  };
-  const game = new Phaser.Game(config);
-  
-  // Health bar config
-  const barWidth = 22;
-  const barHeight = 3;
-  const segmentSize = 25;
-  
-  let units = [];
-  const unitTypes = [
-    { hp: 150, range: 60,  dmg: 10,  speed: 50 },   // Tank
-    { hp: 75,  range: 200, dmg: 8,   speed: 60 },   // Archer
-    { hp: 75,  range: 60,  dmg: 30,  speed: 40 },   // Assassin
-    { hp: 100, range: 400, heal: 20, speed: 50 }    // Healer
-  ];
-  const weaponKeys = ['tank', 'archer', 'assassin', 'healer'];
-  
-  function preload() {
-    this.load.image('tank', 'tank.png');
-    this.load.image('archer', 'archer.png');
-    this.load.image('assassin', 'assassin.png');
-    this.load.image('healer', 'healer.png');
+class MainScene extends Phaser.Scene {
+  constructor() {
+    super({ key: 'MainScene' });
+    this.units = []; // Initialize the units array
   }
-  
-  function create() {
-    units = [];
+
+  preload() {
+    this.load.image('tank', 'assets/images/tank.png');
+    this.load.image('archer', 'assets/images/archer.png');
+    this.load.image('assassin', 'assets/images/assassin.png');
+    this.load.image('healer', 'assets/images/healer.png');
+  }
+
+  create() {
     const { width, height } = this.scale;
     this.topGroup = this.physics.add.group();
     this.bottomGroup = this.physics.add.group();
 
-    const teams = initializeTeams(this);
-    teams.forEach(team => createUnits(this, team, width, height));
-    setupPhysics(this);
+    const teams = this.initializeTeams();
+    teams.forEach(team => this.createUnits(team, width, height));
+    this.setupPhysics();
   }
-  
-  function initializeTeams(scene) {
+
+  initializeTeams() {
     return [
       {
         side: 'top',
         color: 0xFF8B8B,
-        group: scene.topGroup,
+        group: this.topGroup,
         units: { tank: 1, archer: 1, assassin: 1, healer: 1 }
       },
       {
         side: 'bottom',
         color: 0x7575FF,
-        group: scene.bottomGroup,
+        group: this.bottomGroup,
         units: { tank: 1, archer: 1, assassin: 1, healer: 1 }
       }
     ];
   }
-  
-  function createUnit(scene, team, unitType, x, y) {
-    const idx = weaponKeys.indexOf(unitType);
-    const stats = unitTypes[idx];
-    const key = weaponKeys[idx];
-    const sprite = scene.add.sprite(x, y, key)
-      .setOrigin(0.5, 0.5)
-      .setTint(team.color)
-      .setDisplaySize(40, 40);
-    scene.physics.add.existing(sprite);
-    sprite.body.setCircle(13);
-    sprite.body.setCollideWorldBounds(true);
-    sprite.body.setBounce(1);
 
-    const { damageBar, healthBar, notches, offsets } = createBars(scene, x, y, stats.hp);
-    const swingTimerBar = scene.add.rectangle(
-      x - barWidth/2,
-      y - 10,
-      barWidth,
-      2,
-      0xffffff
-    ).setOrigin(0, 0.5);
-
-    const rangeCircle = scene.add.circle(x, y, stats.range, 0x00ff00, 0.2);
-    rangeCircle.setVisible(false);
-
-    const unit = {
-      type: idx,
-      gameObject: sprite,
-      body: sprite.body,
-      team: team.side,
-      hp: stats.hp,
-      maxHp: stats.hp,
-      range: stats.range,
-      dmg: stats.dmg || 0,
-      heal: stats.heal || 0,
-      speed: stats.speed,
-      attackCooldown: 1000,
-      lastAttackTime: 0,
-      healCooldown: 1500,
-      lastHealTime: 0,
-      color: team.color,
-      damageBar,
-      healthBar,
-      notches,
-      offsets,
-      swingTimer: 0,
-      swingTimerBar,
-      rangeCircle
-    };
-
-    team.group.add(sprite);
-    addInputEvents(sprite, rangeCircle);
-    return unit;
-  }
-  
-  function createBars(scene, x, y, hp) {
-    const damageBar = scene.add.rectangle(
-      x - barWidth/2,
-      y - 16,
-      barWidth,
-      barHeight,
-      0xff0000
-    ).setOrigin(0, 0.5);
-    const healthBar = scene.add.rectangle(
-      x - barWidth/2,
-      y - 16,
-      barWidth,
-      barHeight,
-      0x00ff00
-    ).setOrigin(0, 0.5);
-
-    const segmentCount = Math.ceil(hp / segmentSize);
-    const notches = [];
-    const offsets = [];
-    for (let s = 1; s < segmentCount; s++) {
-      const offsetX = -barWidth/2 + (s * barWidth / segmentCount);
-      const notch = scene.add.line(
-        x + offsetX,
-        y - 16,
-        0, -barHeight/2,
-        0,  barHeight/2,
-        0x000000
-      ).setOrigin(0.5);
-      notches.push(notch);
-      offsets.push(offsetX);
-    }
-
-    return { damageBar, healthBar, notches, offsets };
-  }
-  
-  function createUnits(scene, team, width, height) {
+  createUnits(team, width, height) {
     Object.entries(team.units).forEach(([unitType, count]) => {
       for (let i = 0; i < count; i++) {
         const x = Phaser.Math.Between(50, width - 50);
@@ -162,37 +53,45 @@ const config = {
           ? Phaser.Math.Between(50, 150)
           : Phaser.Math.Between(height - 150, height - 50);
 
-        const unit = createUnit(scene, team, unitType, x, y);
-        units.push(unit);
+        let unit;
+        switch (unitType) {
+          case 'tank':
+            unit = new Tank(this, team, x, y);
+            break;
+          case 'archer':
+            unit = new Archer(this, team, x, y);
+            break;
+          case 'assassin':
+            unit = new Assassin(this, team, x, y);
+            break;
+          case 'healer':
+            unit = new Healer(this, team, x, y);
+            break;
+        }
+        this.units.push(unit);
       }
     });
   }
-  
-  function setupPhysics(scene) {
-    scene.physics.add.collider(scene.topGroup, scene.topGroup);
-    scene.physics.add.collider(scene.bottomGroup, scene.bottomGroup);
+
+  setupPhysics() {
+    this.physics.add.collider(this.topGroup, this.topGroup);
+    this.physics.add.collider(this.bottomGroup, this.bottomGroup);
   }
-  
-  function addInputEvents(sprite, rangeCircle) {
-    sprite.setInteractive();
-    sprite.on('pointerover', () => rangeCircle.setVisible(true));
-    sprite.on('pointerout', () => rangeCircle.setVisible(false));
-  }
-  
-  function update(time, delta) {
+
+  update(time, delta) {
     // DEBUG: warn if any unit.team ever changes
-    units.forEach(u => {
+    this.units.forEach(u => {
       if (!u._initialTeam) {
         u._initialTeam = u.team;
       } else if (u.team !== u._initialTeam) {
         console.warn(`Unit switched from ${u._initialTeam} to ${u.team}`, u);
       }
     });
-  
+
     // Remove dead units
-    units = units.filter(u => {
+    this.units = this.units.filter(u => {
       if (u.hp <= 0) {
-        u.gameObject.destroy();
+        u.sprite.destroy();
         u.healthBar.destroy();
         u.damageBar.destroy();
         u.swingTimerBar.destroy();
@@ -201,29 +100,29 @@ const config = {
       }
       return true;
     });
-  
+
     // Compute friendly cluster centers
     const centers = {};
-    units.forEach(u => {
+    this.units.forEach(u => {
       if (!centers[u.team]) centers[u.team] = { xSum: 0, ySum: 0, count: 0 };
-      centers[u.team].xSum += u.gameObject.x;
-      centers[u.team].ySum += u.gameObject.y;
+      centers[u.team].xSum += u.sprite.x;
+      centers[u.team].ySum += u.sprite.y;
       centers[u.team].count++;
     });
-  
-    units.forEach(u => {
+
+    this.units.forEach(u => {
       const {
-        type, gameObject, body, dmg, heal,
+        type, sprite, body, dmg, heal,
         damageBar, healthBar, notches, offsets,
         swingTimerBar, attackCooldown, healCooldown,
         rangeCircle
       } = u;
-  
+
       swingTimerBar.setVisible(false);
-  
+
       if (type === 3) {
         // Healer behavior
-        const allies = units.filter(a => a.team === u.team && a.hp < a.maxHp && a !== u);
+        const allies = this.units.filter(a => a.team === u.team && a.hp < a.maxHp && a !== u);
         let acted = false;
         if (allies.length) {
           const target = allies.reduce(
@@ -231,8 +130,8 @@ const config = {
             allies[0]
           );
           const dist = Phaser.Math.Distance.Between(
-            gameObject.x, gameObject.y,
-            target.gameObject.x, target.gameObject.y
+            sprite.x, sprite.y,
+            target.sprite.x, target.sprite.y
           );
           if (dist <= u.range) {
             body.setVelocity(0);
@@ -240,21 +139,21 @@ const config = {
             u.swingTimer += delta;
             const swingRatio = Phaser.Math.Clamp(u.swingTimer / healCooldown, 0, 1);
             swingTimerBar.width = barWidth * swingRatio;
-            swingTimerBar.setPosition(gameObject.x - barWidth/2, gameObject.y - 10);
-  
+            swingTimerBar.setPosition(sprite.x - barWidth/2, sprite.y - 10);
+
             if (swingRatio >= 1) {
               u.swingTimer = 0; // Reset immediately
               u.lastHealTime = time;
               target.hp = Phaser.Math.Clamp(target.hp + heal, 0, target.maxHp);
-  
+
               // Healing beam
               const healerPosition = {
-                x: gameObject.x,
-                y: gameObject.y
+                x: sprite.x,
+                y: sprite.y
               };
               const targetPosition = {    
-                x: target.gameObject.x,
-                y: target.gameObject.y
+                x: target.sprite.x,
+                y: target.sprite.y
               };
               const beam = this.add.line(
                 healerPosition.x, healerPosition.y,
@@ -271,17 +170,17 @@ const config = {
                 duration: 200,
                 onComplete: () => beam.destroy()
               });
-  
+
               // After healing occurs, add healing text effect
               const healText = this.add.text(
-                target.gameObject.x,
-                target.gameObject.y - 30,
+                target.sprite.x,
+                target.sprite.y - 30,
                 `+${heal}`,
                 { font: '16px Arial', fill: '#00ff00', stroke: '#000', strokeThickness: 2 }
               ).setOrigin(0.5);
               this.tweens.add({
                 targets: healText,
-                y: target.gameObject.y - 50,
+                y: target.sprite.y - 50,
                 alpha: 0,
                 duration: 800,
                 onComplete: () => healText.destroy()
@@ -289,11 +188,11 @@ const config = {
             }
           } else {
             // Move toward injured ally
-            const dx = target.gameObject.x - gameObject.x;
-            const dy = target.gameObject.y - gameObject.y;
+            const dx = target.sprite.x - sprite.x;
+            const dy = target.sprite.y - sprite.y;
             const len = Math.hypot(dx, dy) || 1;
             body.setVelocity((dx/len)*u.speed, (dy/len)*u.speed);
-            gameObject.setFlipX(dx < 0);
+            sprite.setFlipX(dx < 0);
           }
         }
         if (!acted) {
@@ -301,47 +200,47 @@ const config = {
           const center = centers[u.team];
           const cx = center.xSum / center.count;
           const cy = center.ySum / center.count;
-          const distC = Phaser.Math.Distance.Between(gameObject.x, gameObject.y, cx, cy);
+          const distC = Phaser.Math.Distance.Between(sprite.x, sprite.y, cx, cy);
           const radius = 100;
           if (distC > radius) {
-            const dx = cx - gameObject.x;
-            const dy = cy - gameObject.y;
+            const dx = cx - sprite.x;
+            const dy = cy - sprite.y;
             const len = Math.hypot(dx, dy) || 1;
             body.setVelocity((dx/len)*u.speed, (dy/len)*u.speed);
-            gameObject.setFlipX(dx < 0);
+            sprite.setFlipX(dx < 0);
           } else {
             body.setVelocity(0);
           }
         }
       } else {
         // Combat behavior
-        const enemies = units.filter(e => e.team !== u.team);
+        const enemies = this.units.filter(e => e.team !== u.team);
         if (!enemies.length) {
           body.setVelocity(0);
         } else {
           let nearest = enemies[0];
           let bestDist = Phaser.Math.Distance.Between(
-            gameObject.x, gameObject.y,
-            nearest.gameObject.x, nearest.gameObject.y
+            sprite.x, sprite.y,
+            nearest.sprite.x, nearest.sprite.y
           );
           enemies.forEach(e => {
             const d = Phaser.Math.Distance.Between(
-              gameObject.x, gameObject.y,
-              e.gameObject.x, e.gameObject.y
+              sprite.x, sprite.y,
+              e.sprite.x, e.sprite.y
             );
             if (d < bestDist) {
               bestDist = d;
               nearest = e;
             }
           });
-  
+
           if (bestDist > u.range) {
             // Move toward enemy
-            const dx = nearest.gameObject.x - gameObject.x;
-            const dy = nearest.gameObject.y - gameObject.y;
+            const dx = nearest.sprite.x - sprite.x;
+            const dy = nearest.sprite.y - sprite.y;
             const len = Math.hypot(dx, dy) || 1;
             body.setVelocity((dx/len)*u.speed, (dy/len)*u.speed);
-            gameObject.setFlipX(dx < 0);
+            sprite.setFlipX(dx < 0);
             u.swingTimer = 0; // Reset swing
           } else {
             // Attack
@@ -350,49 +249,49 @@ const config = {
             u.swingTimer += delta;
             const swingRatio = Phaser.Math.Clamp(u.swingTimer / attackCooldown, 0, 1);
             swingTimerBar.width = barWidth * swingRatio;
-            swingTimerBar.setPosition(gameObject.x - barWidth/2, gameObject.y - 10);
-  
+            swingTimerBar.setPosition(sprite.x - barWidth/2, sprite.y - 10);
+
             if (swingRatio >= 1) {
               u.swingTimer = 0;
               u.lastAttackTime = time;
-  
+
               if (type === 1) {
                 // Archer projectile
                 const proj = this.add.rectangle(
-                  gameObject.x, gameObject.y, 20, 1, 0xffffff
+                  sprite.x, sprite.y, 20, 1, 0xffffff
                 ).setOrigin(0.5);
                 const angle = Phaser.Math.Angle.Between(
-                  gameObject.x, gameObject.y,
-                  nearest.gameObject.x, nearest.gameObject.y
+                  sprite.x, sprite.y,
+                  nearest.sprite.x, nearest.sprite.y
                 );
                 proj.rotation = angle;
-                gameObject.setFlipX(Math.cos(angle) < 0);
+                sprite.setFlipX(Math.cos(angle) < 0);
                 this.tweens.add({
                   targets: proj,
-                  x: nearest.gameObject.x,
-                  y: nearest.gameObject.y,
+                  x: nearest.sprite.x,
+                  y: nearest.sprite.y,
                   duration: 200,
                   onComplete: () => {
                     proj.destroy();
                     nearest.hp -= dmg;
-  
+
                     // Flash on impact, then restore target's own tint
                     const original = nearest.color;
-                    nearest.gameObject.setTint(0xffffff);
+                    nearest.sprite.setTint(0xffffff);
                     this.time.delayedCall(200, () => {
-                      nearest.gameObject.setTint(original);
+                      nearest.sprite.setTint(original);
                     });
-  
+
                     // Damage number
                     const dmgText = this.add.text(
-                      nearest.gameObject.x,
-                      nearest.gameObject.y - 30,
+                      nearest.sprite.x,
+                      nearest.sprite.y - 30,
                       `-${dmg}`,
                       { font: '16px Arial', fill: '#ff0000', stroke: '#000', strokeThickness: 2 }
                     ).setOrigin(0.5);
                     this.tweens.add({
                       targets: dmgText,
-                      y: nearest.gameObject.y - 50,
+                      y: nearest.sprite.y - 50,
                       alpha: 0,
                       duration: 800,
                       onComplete: () => dmgText.destroy()
@@ -406,16 +305,16 @@ const config = {
                 const slashLength = 40;
                 const direction = Phaser.Math.Between(0, 1) === 0 ? 1 : -1;
                 // Calculate the angle between the attacker and the target
-                const angleToTarget = Phaser.Math.Angle.Between(gameObject.x, gameObject.y, nearest.gameObject.x, nearest.gameObject.y);
+                const angleToTarget = Phaser.Math.Angle.Between(sprite.x, sprite.y, nearest.sprite.x, nearest.sprite.y);
                 // Calculate the perpendicular angle with random direction
                 const randomDirection = Phaser.Math.Between(0, 1) === 0 ? 1 : -1;
                 const perpendicularAngle = angleToTarget + randomDirection * Math.PI / 2;
-  
+
                 // Calculate a weighted midpoint closer to the target
                 const weight = 0.75; // Adjust this value to move the slash closer to unit B
-                const midX = Phaser.Math.Interpolation.Linear([gameObject.x, nearest.gameObject.x], weight);
-                const midY = Phaser.Math.Interpolation.Linear([gameObject.y, nearest.gameObject.y], weight);
-  
+                const midX = Phaser.Math.Interpolation.Linear([sprite.x, nearest.sprite.x], weight);
+                const midY = Phaser.Math.Interpolation.Linear([sprite.y, nearest.sprite.y], weight);
+
                 const sx = midX - Math.cos(perpendicularAngle) * slashLength / 2;
                 const sy = midY - Math.sin(perpendicularAngle) * slashLength / 2;
                 const ex = midX + Math.cos(perpendicularAngle) * slashLength / 2;
@@ -430,22 +329,22 @@ const config = {
                   duration: 100,
                   onComplete: () => slash.destroy()
                 });
-  
+
                 // Flash and damage number for melee
                 const original = nearest.color;
-                nearest.gameObject.setTint(0xffffff);
+                nearest.sprite.setTint(0xffffff);
                 this.time.delayedCall(200, () => {
-                  nearest.gameObject.setTint(original);
+                  nearest.sprite.setTint(original);
                 });
                 const dmgText = this.add.text(
-                  nearest.gameObject.x,
-                  nearest.gameObject.y - 30,
+                  nearest.sprite.x,
+                  nearest.sprite.y - 30,
                   `-${dmg}`,
                   { font: '16px Arial', fill: '#ff0000', stroke: '#000', strokeThickness: 2 }
                 ).setOrigin(0.5);
                 this.tweens.add({
                   targets: dmgText,
-                  y: nearest.gameObject.y - 50,
+                  y: nearest.sprite.y - 50,
                   alpha: 0,
                   duration: 800,
                   onComplete: () => dmgText.destroy()
@@ -455,16 +354,18 @@ const config = {
           }
         }
       }
-  
+
       // Update bars & circle
-      const bx = gameObject.x;
-      const by = gameObject.y - 16;
+      const bx = sprite.x;
+      const by = sprite.y - 16;
       damageBar.setPosition(bx - barWidth/2, by);
       healthBar.setPosition(bx - barWidth/2, by);
       const hpRatio = Phaser.Math.Clamp(u.hp / u.maxHp, 0, 1);
       healthBar.width = barWidth * hpRatio;
       notches.forEach((n, i) => n.setPosition(bx + offsets[i], by));
-      rangeCircle.setPosition(gameObject.x, gameObject.y);
+      rangeCircle.setPosition(sprite.x, sprite.y);
     });
   }
-  
+}
+
+export default MainScene; 
