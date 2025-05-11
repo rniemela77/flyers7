@@ -5,7 +5,7 @@ const gameConfig = {
   backgroundColor: 0x48554E,
   physics: {
     default: 'arcade',
-    arcade: { debug: false, gravity: { x: 0, y: 0 } }
+    arcade: { debug: true, gravity: { x: 0, y: 0 } }
   },
   scene: null // This will be set when initializing the game
 };
