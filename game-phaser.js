@@ -230,13 +230,23 @@ const config = {
             acted = true;
   
             // Healing beam
+            const healerPosition = {
+              x: gameObject.x,
+              y: gameObject.y
+            };
+            const targetPosition = {    
+              x: target.gameObject.x,
+              y: target.gameObject.y
+            };
             const beam = this.add.line(
-              gameObject.x, gameObject.y,
+              healerPosition.x, healerPosition.y,
               0, 0,
-              target.gameObject.x - gameObject.x,
-              target.gameObject.y - gameObject.y,
+              targetPosition.x - healerPosition.x,
+              targetPosition.y - healerPosition.y,
               0x00ff00
-            ).setOrigin(0, 0.5).setLineWidth(8).setAlpha(0.3);
+            )
+            .setOrigin(0, 0)
+            .setLineWidth(8).setAlpha(0.3);
             this.tweens.add({
               targets: beam,
               alpha: 0,
