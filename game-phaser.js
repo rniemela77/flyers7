@@ -214,7 +214,7 @@ const config = {
         // Healer behavior
         const allies = units.filter(a => a.team === u.team && a.hp < a.maxHp && a !== u);
         let acted = false;
-        if (allies.length && time - u.lastHealTime > healCooldown) {
+        if (allies.length) {
           const target = allies.reduce(
             (min, a) => (a.hp/a.maxHp < min.hp/min.maxHp ? a : min),
             allies[0]
@@ -225,49 +225,57 @@ const config = {
           );
           if (dist <= u.range) {
             body.setVelocity(0);
-            target.hp = Phaser.Math.Clamp(target.hp + heal, 0, target.maxHp);
-            u.lastHealTime = time;
-            acted = true;
+            swingTimerBar.setVisible(true);
+            u.swingTimer += delta;
+            const swingRatio = Phaser.Math.Clamp(u.swingTimer / healCooldown, 0, 1);
+            swingTimerBar.width = barWidth * swingRatio;
+            swingTimerBar.setPosition(gameObject.x - barWidth/2, gameObject.y - 10);
   
-            // Healing beam
-            const healerPosition = {
-              x: gameObject.x,
-              y: gameObject.y
-            };
-            const targetPosition = {    
-              x: target.gameObject.x,
-              y: target.gameObject.y
-            };
-            const beam = this.add.line(
-              healerPosition.x, healerPosition.y,
-              0, 0,
-              targetPosition.x - healerPosition.x,
-              targetPosition.y - healerPosition.y,
-              0x00ff00
-            )
-            .setOrigin(0, 0)
-            .setLineWidth(8).setAlpha(0.3);
-            this.tweens.add({
-              targets: beam,
-              alpha: 0,
-              duration: 200,
-              onComplete: () => beam.destroy()
-            });
+            if (swingRatio >= 1) {
+              u.swingTimer = 0; // Reset immediately
+              u.lastHealTime = time;
+              target.hp = Phaser.Math.Clamp(target.hp + heal, 0, target.maxHp);
   
-            // After healing occurs, add healing text effect
-            const healText = this.add.text(
-              target.gameObject.x,
-              target.gameObject.y - 30,
-              `+${heal}`,
-              { font: '16px Arial', fill: '#00ff00', stroke: '#000', strokeThickness: 2 }
-            ).setOrigin(0.5);
-            this.tweens.add({
-              targets: healText,
-              y: target.gameObject.y - 50,
-              alpha: 0,
-              duration: 800,
-              onComplete: () => healText.destroy()
-            });
+              // Healing beam
+              const healerPosition = {
+                x: gameObject.x,
+                y: gameObject.y
+              };
+              const targetPosition = {    
+                x: target.gameObject.x,
+                y: target.gameObject.y
+              };
+              const beam = this.add.line(
+                healerPosition.x, healerPosition.y,
+                0, 0,
+                targetPosition.x - healerPosition.x,
+                targetPosition.y - healerPosition.y,
+                0x00ff00
+              )
+              .setOrigin(0, 0)
+              .setLineWidth(8).setAlpha(0.3);
+              this.tweens.add({
+                targets: beam,
+                alpha: 0,
+                duration: 200,
+                onComplete: () => beam.destroy()
+              });
+  
+              // After healing occurs, add healing text effect
+              const healText = this.add.text(
+                target.gameObject.x,
+                target.gameObject.y - 30,
+                `+${heal}`,
+                { font: '16px Arial', fill: '#00ff00', stroke: '#000', strokeThickness: 2 }
+              ).setOrigin(0.5);
+              this.tweens.add({
+                targets: healText,
+                y: target.gameObject.y - 50,
+                alpha: 0,
+                duration: 800,
+                onComplete: () => healText.destroy()
+              });
+            }
           } else {
             // Move toward injured ally
             const dx = target.gameObject.x - gameObject.x;
@@ -275,7 +283,6 @@ const config = {
             const len = Math.hypot(dx, dy) || 1;
             body.setVelocity((dx/len)*u.speed, (dy/len)*u.speed);
             gameObject.setFlipX(dx < 0);
-            acted = true;
           }
         }
         if (!acted) {
@@ -295,7 +302,6 @@ const config = {
             body.setVelocity(0);
           }
         }
-  
       } else {
         // Combat behavior
         const enemies = units.filter(e => e.team !== u.team);
