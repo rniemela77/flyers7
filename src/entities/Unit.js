@@ -62,7 +62,7 @@ class Unit {
 
   updateBars() {
     const bx = this.sprite.x;
-    const by = this.sprite.y - 16;
+    const by = this.sprite.y - 20;
     this.damageBar.setPosition(bx - barWidth/2, by);
     this.healthBar.setPosition(bx - barWidth/2, by);
     const hpRatio = Phaser.Math.Clamp(this.hp / this.maxHp, 0, 1);
@@ -108,7 +108,7 @@ class Unit {
           this.swingTimer += delta;
           const swingRatio = Phaser.Math.Clamp(this.swingTimer / healCooldown, 0, 1);
           swingTimerBar.width = barWidth * swingRatio;
-          swingTimerBar.setPosition(sprite.x - barWidth/2, sprite.y - 10);
+          swingTimerBar.setPosition(sprite.x - barWidth/2, sprite.y - 14);
 
           if (swingRatio >= 1) {
             this.swingTimer = 0; // Reset immediately
@@ -143,7 +143,7 @@ class Unit {
             // After healing occurs, add healing text effect
             const healText = this.scene.add.text(
               target.sprite.x,
-              target.sprite.y - 30,
+              target.sprite.y - 35,
               `+${heal}`,
               { font: '16px Arial', fill: '#00ff00', stroke: '#000', strokeThickness: 2 }
             ).setOrigin(0.5);
@@ -218,7 +218,7 @@ class Unit {
           this.swingTimer += delta;
           const swingRatio = Phaser.Math.Clamp(this.swingTimer / attackCooldown, 0, 1);
           swingTimerBar.width = barWidth * swingRatio;
-          swingTimerBar.setPosition(sprite.x - barWidth/2, sprite.y - 10);
+          swingTimerBar.setPosition(sprite.x - barWidth/2, sprite.y - 14);
 
           if (swingRatio >= 1) {
             this.swingTimer = 0;
@@ -254,7 +254,7 @@ class Unit {
                   // Damage number
                   const dmgText = this.scene.add.text(
                     nearest.sprite.x,
-                    nearest.sprite.y - 30,
+                    nearest.sprite.y - 35,
                     `-${dmg}`,
                     { font: '16px Arial', fill: '#ff0000', stroke: '#000', strokeThickness: 2 }
                   ).setOrigin(0.5);
@@ -307,7 +307,7 @@ class Unit {
               });
               const dmgText = this.scene.add.text(
                 nearest.sprite.x,
-                nearest.sprite.y - 30,
+                nearest.sprite.y - 35,
                 `-${dmg}`,
                 { font: '16px Arial', fill: '#ff0000', stroke: '#000', strokeThickness: 2 }
               ).setOrigin(0.5);
@@ -326,7 +326,7 @@ class Unit {
 
     // Update bars & circle
     const bx = sprite.x;
-    const by = sprite.y - 16;
+    const by = sprite.y - 25;
     damageBar.setPosition(bx - barWidth/2, by);
     healthBar.setPosition(bx - barWidth/2, by);
     const hpRatio = Phaser.Math.Clamp(this.hp / this.maxHp, 0, 1);
