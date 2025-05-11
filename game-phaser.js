@@ -17,14 +17,14 @@ const config = {
   
   // Health bar config
   const barWidth = 22;
-  const barHeight = 4;
+  const barHeight = 3;
   const segmentSize = 25;
   
   let units = [];
   const unitTypes = [
-    { hp: 150, range: 80,  dmg: 10,  speed: 50 },   // Tank
+    { hp: 150, range: 60,  dmg: 10,  speed: 50 },   // Tank
     { hp: 75,  range: 200, dmg: 8,   speed: 60 },   // Archer
-    { hp: 75,  range: 80,  dmg: 30,  speed: 40 },   // Assassin
+    { hp: 75,  range: 60,  dmg: 30,  speed: 40 },   // Assassin
     { hp: 100, range: 400, heal: 20, speed: 50 }    // Healer
   ];
   const weaponKeys = ['tank', 'archer', 'assassin', 'healer'];
@@ -394,12 +394,23 @@ const config = {
                 const randomAngle = Phaser.Math.FloatBetween(-0.2, 0.2);
                 const slashLength = 40;
                 const direction = Phaser.Math.Between(0, 1) === 0 ? 1 : -1;
-                const sx = nearest.gameObject.x - Math.cos(randomAngle)*slashLength/2*direction;
-                const sy = nearest.gameObject.y - Math.sin(randomAngle)*slashLength/2*direction;
-                const ex = nearest.gameObject.x + Math.cos(randomAngle)*slashLength/2*direction;
-                const ey = nearest.gameObject.y + Math.sin(randomAngle)*slashLength/2*direction;
+                // Calculate the angle between the attacker and the target
+                const angleToTarget = Phaser.Math.Angle.Between(gameObject.x, gameObject.y, nearest.gameObject.x, nearest.gameObject.y);
+                // Calculate the perpendicular angle with random direction
+                const randomDirection = Phaser.Math.Between(0, 1) === 0 ? 1 : -1;
+                const perpendicularAngle = angleToTarget + randomDirection * Math.PI / 2;
+  
+                // Calculate a weighted midpoint closer to the target
+                const weight = 0.75; // Adjust this value to move the slash closer to unit B
+                const midX = Phaser.Math.Interpolation.Linear([gameObject.x, nearest.gameObject.x], weight);
+                const midY = Phaser.Math.Interpolation.Linear([gameObject.y, nearest.gameObject.y], weight);
+  
+                const sx = midX - Math.cos(perpendicularAngle) * slashLength / 2;
+                const sy = midY - Math.sin(perpendicularAngle) * slashLength / 2;
+                const ex = midX + Math.cos(perpendicularAngle) * slashLength / 2;
+                const ey = midY + Math.sin(perpendicularAngle) * slashLength / 2;
                 const slash = this.add.line(sx, sy, 0, 0, slashLength, 0, 0xffffff)
-                                  .setOrigin(0.5).setLineWidth(2).setRotation(randomAngle);
+                                  .setOrigin(0.5).setLineWidth(2).setRotation(perpendicularAngle);
                 this.tweens.add({
                   targets: slash,
                   x: ex,
