@@ -69,6 +69,7 @@ class Unit {
     this.healthBar.width = barWidth * hpRatio;
     this.notches.forEach((n, i) => n.setPosition(bx + this.offsets[i], by));
     this.rangeCircle.setPosition(this.sprite.x, this.sprite.y);
+    this.swingTimerBar.setPosition(bx - barWidth/2, by + 4);
   }
 
   destroy() {
@@ -108,7 +109,7 @@ class Unit {
           this.swingTimer += delta;
           const swingRatio = Phaser.Math.Clamp(this.swingTimer / healCooldown, 0, 1);
           swingTimerBar.width = barWidth * swingRatio;
-          swingTimerBar.setPosition(sprite.x - barWidth/2, sprite.y - 14);
+          swingTimerBar.setPosition(sprite.x - barWidth/2, sprite.y - 16);
 
           if (swingRatio >= 1) {
             this.swingTimer = 0; // Reset immediately
@@ -218,7 +219,7 @@ class Unit {
           this.swingTimer += delta;
           const swingRatio = Phaser.Math.Clamp(this.swingTimer / attackCooldown, 0, 1);
           swingTimerBar.width = barWidth * swingRatio;
-          swingTimerBar.setPosition(sprite.x - barWidth/2, sprite.y - 14);
+          swingTimerBar.setPosition(sprite.x - barWidth/2, sprite.y - 16);
 
           if (swingRatio >= 1) {
             this.swingTimer = 0;
@@ -333,6 +334,7 @@ class Unit {
     healthBar.width = barWidth * hpRatio;
     notches.forEach((n, i) => n.setPosition(bx + offsets[i], by));
     rangeCircle.setPosition(sprite.x, sprite.y);
+    swingTimerBar.setPosition(bx - barWidth/2, by + 4);
   }
 }
 
