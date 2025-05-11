@@ -37,135 +37,135 @@ const config = {
   }
   
   function create() {
-    // start with a fresh units array every time the scene is created
     units = [];
-  
     const { width, height } = this.scale;
-  
-    // split into two physics groups to prevent cross-team bounce
-    this.topGroup    = this.physics.add.group();
+    this.topGroup = this.physics.add.group();
     this.bottomGroup = this.physics.add.group();
+
+    const teams = initializeTeams(this);
+    teams.forEach(team => createUnits(this, team, width, height));
+    setupPhysics(this);
+  }
   
-    const teams = [
+  function initializeTeams(scene) {
+    return [
       {
         side: 'top',
         color: 0xFF8B8B,
-        group: this.topGroup,
+        group: scene.topGroup,
         units: { tank: 1, archer: 1, assassin: 1, healer: 1 }
       },
       {
         side: 'bottom',
         color: 0x7575FF,
-        group: this.bottomGroup,
+        group: scene.bottomGroup,
         units: { tank: 1, archer: 1, assassin: 1, healer: 1 }
       }
     ];
+  }
   
-    teams.forEach(team => {
-      Object.entries(team.units).forEach(([unitType, count]) => {
-        const idx = weaponKeys.indexOf(unitType);
-        const stats = unitTypes[idx];
-        const key = weaponKeys[idx];
-        for (let i = 0; i < count; i++) {
-          const x = Phaser.Math.Between(50, width - 50);
-          const y = team.side === 'top'
-            ? Phaser.Math.Between(50, 150)
-            : Phaser.Math.Between(height - 150, height - 50);
-  
-          const sprite = this.add.sprite(x, y, key)
-            .setOrigin(0.5, 0.5)
-            .setTint(team.color)
-            .setDisplaySize(40, 40);
-          this.physics.add.existing(sprite);
-          sprite.body.setCircle(13);
-          sprite.body.setCollideWorldBounds(true);
-          sprite.body.setBounce(1);
-  
-          // red damage bar behind
-          const damageBar = this.add.rectangle(
-            x - barWidth/2,
+  function createUnits(scene, team, width, height) {
+    Object.entries(team.units).forEach(([unitType, count]) => {
+      const idx = weaponKeys.indexOf(unitType);
+      const stats = unitTypes[idx];
+      const key = weaponKeys[idx];
+      for (let i = 0; i < count; i++) {
+        const x = Phaser.Math.Between(50, width - 50);
+        const y = team.side === 'top'
+          ? Phaser.Math.Between(50, 150)
+          : Phaser.Math.Between(height - 150, height - 50);
+
+        const sprite = scene.add.sprite(x, y, key)
+          .setOrigin(0.5, 0.5)
+          .setTint(team.color)
+          .setDisplaySize(40, 40);
+        scene.physics.add.existing(sprite);
+        sprite.body.setCircle(13);
+        sprite.body.setCollideWorldBounds(true);
+        sprite.body.setBounce(1);
+
+        const damageBar = scene.add.rectangle(
+          x - barWidth/2,
+          y - 16,
+          barWidth,
+          barHeight,
+          0xff0000
+        ).setOrigin(0, 0.5);
+        const healthBar = scene.add.rectangle(
+          x - barWidth/2,
+          y - 16,
+          barWidth,
+          barHeight,
+          0x00ff00
+        ).setOrigin(0, 0.5);
+
+        const segmentCount = Math.ceil(stats.hp / segmentSize);
+        const notches = [];
+        const offsets = [];
+        for (let s = 1; s < segmentCount; s++) {
+          const offsetX = -barWidth/2 + (s * barWidth / segmentCount);
+          const notch = scene.add.line(
+            x + offsetX,
             y - 16,
-            barWidth,
-            barHeight,
-            0xff0000
-          ).setOrigin(0, 0.5);
-          // green current-health bar on top
-          const healthBar = this.add.rectangle(
-            x - barWidth/2,
-            y - 16,
-            barWidth,
-            barHeight,
-            0x00ff00
-          ).setOrigin(0, 0.5);
-  
-          const segmentCount = Math.ceil(stats.hp / segmentSize);
-          const notches = [];
-          const offsets = [];
-          for (let s = 1; s < segmentCount; s++) {
-            const offsetX = -barWidth/2 + (s * barWidth / segmentCount);
-            const notch = this.add.line(
-              x + offsetX,
-              y - 16,
-              0, -barHeight/2,
-              0,  barHeight/2,
-              0x000000
-            ).setOrigin(0.5);
-            notches.push(notch);
-            offsets.push(offsetX);
-          }
-  
-          // Add swing timer bar during unit creation
-          const swingTimerBar = this.add.rectangle(
-            x - barWidth/2,
-            y - 10,
-            barWidth,
-            2,
-            0xffffff
-          ).setOrigin(0, 0.5);
-  
-          // Add a range circle for each unit
-          const rangeCircle = this.add.circle(x, y, stats.range, 0x00ff00, 0.2);
-          rangeCircle.setVisible(false);
-  
-          units.push({
-            type: idx,
-            gameObject: sprite,
-            body: sprite.body,
-            team: team.side,
-            hp: stats.hp,
-            maxHp: stats.hp,
-            range: stats.range,
-            dmg: stats.dmg || 0,
-            heal: stats.heal || 0,
-            speed: stats.speed,
-            attackCooldown: 1000,
-            lastAttackTime: 0,
-            healCooldown: 1500,
-            lastHealTime: 0,
-            color: team.color,
-            damageBar,
-            healthBar,
-            notches,
-            offsets,
-            swingTimer: 0,
-            swingTimerBar,
-            rangeCircle
-          });
-  
-          // add to the appropriate physics group
-          team.group.add(sprite);
-  
-          // Add input events for showing/hiding the range circle
-          sprite.setInteractive();
-          sprite.on('pointerover', () => rangeCircle.setVisible(true));
-          sprite.on('pointerout',  () => rangeCircle.setVisible(false));
+            0, -barHeight/2,
+            0,  barHeight/2,
+            0x000000
+          ).setOrigin(0.5);
+          notches.push(notch);
+          offsets.push(offsetX);
         }
-      });
+
+        const swingTimerBar = scene.add.rectangle(
+          x - barWidth/2,
+          y - 10,
+          barWidth,
+          2,
+          0xffffff
+        ).setOrigin(0, 0.5);
+
+        const rangeCircle = scene.add.circle(x, y, stats.range, 0x00ff00, 0.2);
+        rangeCircle.setVisible(false);
+
+        units.push({
+          type: idx,
+          gameObject: sprite,
+          body: sprite.body,
+          team: team.side,
+          hp: stats.hp,
+          maxHp: stats.hp,
+          range: stats.range,
+          dmg: stats.dmg || 0,
+          heal: stats.heal || 0,
+          speed: stats.speed,
+          attackCooldown: 1000,
+          lastAttackTime: 0,
+          healCooldown: 1500,
+          lastHealTime: 0,
+          color: team.color,
+          damageBar,
+          healthBar,
+          notches,
+          offsets,
+          swingTimer: 0,
+          swingTimerBar,
+          rangeCircle
+        });
+
+        team.group.add(sprite);
+        addInputEvents(sprite, rangeCircle);
+      }
     });
+  }
   
-    // only intra-team collisions (no cross-team bounce)
-    this.physics.add.collider(this.topGroup,    this.topGroup);
-    this.physics.add.collider(this.bottomGroup, this.bottomGroup);
+  function setupPhysics(scene) {
+    scene.physics.add.collider(scene.topGroup, scene.topGroup);
+    scene.physics.add.collider(scene.bottomGroup, scene.bottomGroup);
+  }
+  
+  function addInputEvents(sprite, rangeCircle) {
+    sprite.setInteractive();
+    sprite.on('pointerover', () => rangeCircle.setVisible(true));
+    sprite.on('pointerout', () => rangeCircle.setVisible(false));
   }
   
   function update(time, delta) {
