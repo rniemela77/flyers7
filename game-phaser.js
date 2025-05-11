@@ -253,6 +253,21 @@ const config = {
               duration: 200,
               onComplete: () => beam.destroy()
             });
+  
+            // After healing occurs, add healing text effect
+            const healText = this.add.text(
+              target.gameObject.x,
+              target.gameObject.y - 30,
+              `+${heal}`,
+              { font: '16px Arial', fill: '#00ff00', stroke: '#000', strokeThickness: 2 }
+            ).setOrigin(0.5);
+            this.tweens.add({
+              targets: healText,
+              y: target.gameObject.y - 50,
+              alpha: 0,
+              duration: 800,
+              onComplete: () => healText.destroy()
+            });
           } else {
             // Move toward injured ally
             const dx = target.gameObject.x - gameObject.x;
