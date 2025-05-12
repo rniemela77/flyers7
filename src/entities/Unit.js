@@ -1,28 +1,25 @@
 import { createBars, barWidth, addInputEvents } from '../utils/helpers.js';
 
-const weaponKeys = ['tank', 'archer', 'assassin', 'healer'];
-
-const unitTypes = [
-  { hp: 200, range: 60, dmg: 10, speed: 50, attackCooldown: 3000 },   // Tank
-  { hp: 75, range: 200, dmg: 8, speed: 60, attackCooldown: 2000 },    // Archer
-  { hp: 75, range: 60, dmg: 20, speed: 40, attackCooldown: 1000 },    // Assassin
-  { hp: 100, range: 400, heal: 15, speed: 50, attackCooldown: 2000 }  // Healer
+const units = [
+  { key: 'tank', hp: 200, range: 60, dmg: 10, speed: 50, attackCooldown: 3000 },
+  { key: 'archer', hp: 75, range: 200, dmg: 8, speed: 60, attackCooldown: 2000 },
+  { key: 'assassin', hp: 75, range: 60, dmg: 20, speed: 40, attackCooldown: 1000 },
+  { key: 'healer', hp: 100, range: 400, heal: 15, speed: 50, attackCooldown: 2000 }
 ];
 
 class Unit {
   constructor(scene, team, unitType, x, y) {
-    const idx = weaponKeys.indexOf(unitType);
-    const stats = unitTypes[idx];
-    const key = weaponKeys[idx];
+    const unit = units.find(u => u.key === unitType);
+    const stats = unit;
+    const key = unit.key;
     this.sprite = scene.add.sprite(x, y, key)
       .setOrigin(0.5, 0.5)
       .setTint(team.color)
-      .setDisplaySize(24, 24);
+      .setDisplaySize(25, 25);
     scene.physics.add.existing(this.sprite);
     this.sprite.body.setCircle(13);
     this.sprite.body.setCollideWorldBounds(true);
     this.sprite.body.setBounce(1);
-
 
     const { damageBar, healthBar, notches, offsets } = createBars(scene, x, y, stats.hp);
     
@@ -33,7 +30,7 @@ class Unit {
     this.rangeCircle = scene.add.circle(x, y, stats.range, 0x00ff00, 0.2);
     this.rangeCircle.setVisible(false);
 
-    this.type = idx;
+    this.type = units.indexOf(unit);
     this.body = this.sprite.body;
     this.team = team.side;
     this.hp = stats.hp;
