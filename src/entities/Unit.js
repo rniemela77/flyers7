@@ -3,10 +3,10 @@ import { createBars, barWidth, addInputEvents } from '../utils/helpers.js';
 const weaponKeys = ['tank', 'archer', 'assassin', 'healer'];
 
 const unitTypes = [
-  { hp: 150, range: 60, dmg: 10, speed: 50, attackCooldown: 1500 },   // Tank
-  { hp: 75, range: 200, dmg: 8, speed: 60, attackCooldown: 1000 },    // Archer
-  { hp: 75, range: 60, dmg: 30, speed: 40, attackCooldown: 500 },    // Assassin
-  { hp: 100, range: 400, heal: 20, speed: 50, attackCooldown: 2000 }  // Healer
+  { hp: 200, range: 60, dmg: 10, speed: 50, attackCooldown: 3000 },   // Tank
+  { hp: 75, range: 200, dmg: 8, speed: 60, attackCooldown: 2000 },    // Archer
+  { hp: 75, range: 60, dmg: 20, speed: 40, attackCooldown: 1000 },    // Assassin
+  { hp: 100, range: 400, heal: 15, speed: 50, attackCooldown: 2000 }  // Healer
 ];
 
 class Unit {
@@ -17,7 +17,7 @@ class Unit {
     this.sprite = scene.add.sprite(x, y, key)
       .setOrigin(0.5, 0.5)
       .setTint(team.color)
-      .setDisplaySize(40, 40);
+      .setDisplaySize(24, 24);
     scene.physics.add.existing(this.sprite);
     this.sprite.body.setCircle(13);
     this.sprite.body.setCollideWorldBounds(true);
@@ -73,7 +73,9 @@ class Unit {
     this.rangeCircle.setPosition(this.sprite.x, this.sprite.y);
 
     // Update cooldown bar
-    const cooldownRatio = Phaser.Math.Clamp((this.scene.time.now - this.lastAttackTime) / this.attackCooldown, 0, 1);
+    const cooldownRatio = this.type === 3 ?
+      Phaser.Math.Clamp((this.scene.time.now - this.lastHealTime) / this.healCooldown, 0, 1) :
+      Phaser.Math.Clamp((this.scene.time.now - this.lastAttackTime) / this.attackCooldown, 0, 1);
     this.cooldownBar.width = barWidth * cooldownRatio;
   }
 
@@ -87,8 +89,7 @@ class Unit {
 
   update(time, delta, units, centers) {
     const {
-      type, sprite, body, dmg, heal,
-      damageBar, healthBar, notches, offsets,
+      type, sprite, healthBar, notches, offsets,
       rangeCircle, cooldownBar
     } = this;
 
@@ -106,7 +107,9 @@ class Unit {
     rangeCircle.setPosition(sprite.x, sprite.y);
 
     // Update cooldown bar position
-    const cooldownRatio = Phaser.Math.Clamp((this.scene.time.now - this.lastAttackTime) / this.attackCooldown, 0, 1);
+    const cooldownRatio = this.type === 3 ?
+      Phaser.Math.Clamp((this.scene.time.now - this.lastHealTime) / this.healCooldown, 0, 1) :
+      Phaser.Math.Clamp((this.scene.time.now - this.lastAttackTime) / this.attackCooldown, 0, 1);
     cooldownBar.width = barWidth * cooldownRatio;
   }
 
@@ -149,7 +152,7 @@ class Unit {
   }
 
   updateHealerBehavior(time, delta, units, centers) {
-    const { sprite, body, heal, healCooldown } = this;
+    const { sprite, body, heal, healCooldown, lastHealTime } = this;
     const allies = units.filter(a => a.team === this.team && a.hp < a.maxHp && a !== this);
     let acted = false;
     if (allies.length) {
@@ -164,8 +167,13 @@ class Unit {
       if (dist <= this.range) {
         body.setVelocity(0);
 
-        if (dist <= this.range) {
-          body.setVelocity(0);
+        // Check if heal cooldown has passed
+        if (time - lastHealTime >= healCooldown) {
+          this.lastHealTime = time; // Update last heal time
+          target.hp = Math.min(target.maxHp, target.hp + heal); // Heal the target
+          this.createHealingBeam(sprite, target.sprite);
+          this.createDamageText(target, `+${heal}`, '#00ff00');
+          acted = true;
         }
       } else {
         this.moveTowardsTarget(target.sprite.x, target.sprite.y);
