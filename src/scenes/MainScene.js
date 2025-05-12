@@ -144,7 +144,8 @@ class MainScene extends Phaser.Scene {
         u.sprite.destroy();
         u.healthBar.destroy();
         u.damageBar.destroy();
-        u.swingTimerBar.destroy();
+        u.cooldownBar.destroy();
+        u.rangeCircle.destroy();
         u.notches.forEach(n => n.destroy());
         return false;
       }
