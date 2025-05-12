@@ -23,6 +23,7 @@ class Unit {
     this.sprite.body.setCollideWorldBounds(true);
     this.sprite.body.setBounce(1);
 
+
     const { damageBar, healthBar, notches, offsets } = createBars(scene, x, y, stats.hp);
     this.swingTimerBar = scene.add.rectangle(
       x - barWidth/2,
@@ -261,81 +262,84 @@ class Unit {
 
       if (this.type === 1) {
         // Archer projectile
-        const proj = this.scene.add.rectangle(
-          sprite.x, sprite.y, 20, 1, 0xffffff
-        ).setOrigin(0.5);
-        const angle = Phaser.Math.Angle.Between(
-          sprite.x, sprite.y,
-          nearest.sprite.x, nearest.sprite.y
-        );
-        proj.rotation = angle;
-        sprite.setFlipX(Math.cos(angle) < 0);
-        this.scene.tweens.add({
-          targets: proj,
-          x: nearest.sprite.x,
-          y: nearest.sprite.y,
-          duration: 200,
-          onComplete: () => {
-            proj.destroy();
-            nearest.hp -= dmg;
-
-            // Flash on impact, then restore target's own tint
-            const original = nearest.color;
-            nearest.sprite.setTint(0xffffff);
-            this.scene.time.delayedCall(200, () => {
-              nearest.sprite.setTint(original);
-            });
-
-            // Damage number
-            this.createDamageText(nearest, `-${dmg}`, '#ff0000');
-          }
-        });
+        this.triggerArcherAttack(sprite, nearest, dmg);
       } else {
         // Melee slash (Tank or Assassin)
-        const originalX = sprite.x;
-        const originalY = sprite.y;
-        const angleToTarget = Phaser.Math.Angle.Between(sprite.x, sprite.y, nearest.sprite.x, nearest.sprite.y);
+        this.triggerMeleeAttack(sprite, nearest, dmg);
+      }
+    }
+  }
 
-        // Create slash effect
-        const randomAngle = Phaser.Math.FloatBetween(-0.2, 0.2);
-        const slashLength = 40;
-        const direction = Phaser.Math.Between(0, 1) === 0 ? 1 : -1;
-        // Calculate the perpendicular angle with random direction
-        const randomDirection = Phaser.Math.Between(0, 1) === 0 ? 1 : -1;
-        const perpendicularAngle = angleToTarget + randomDirection * Math.PI / 2;
+  triggerMeleeAttack(sprite, nearest, dmg) {
+    const angleToTarget = Phaser.Math.Angle.Between(sprite.x, sprite.y, nearest.sprite.x, nearest.sprite.y);
 
-        // Calculate a weighted midpoint closer to the target
-        const weight = 0.75; // Adjust this value to move the slash closer to unit B
-        const midX = Phaser.Math.Interpolation.Linear([sprite.x, nearest.sprite.x], weight);
-        const midY = Phaser.Math.Interpolation.Linear([sprite.y, nearest.sprite.y], weight);
+    // Create slash effect
+    const slashLength = 40;
+    // Calculate the perpendicular angle with random direction
+    const randomDirection = Phaser.Math.Between(0, 1) === 0 ? 1 : -1;
+    const perpendicularAngle = angleToTarget + randomDirection * Math.PI / 2;
 
-        const sx = midX - Math.cos(perpendicularAngle) * slashLength / 2;
-        const sy = midY - Math.sin(perpendicularAngle) * slashLength / 2;
-        const ex = midX + Math.cos(perpendicularAngle) * slashLength / 2;
-        const ey = midY + Math.sin(perpendicularAngle) * slashLength / 2;
-        const slash = this.scene.add.line(sx, sy, 0, 0, slashLength, 0, 0xffffff)
-                      .setOrigin(0.5).setLineWidth(2).setRotation(perpendicularAngle);
-        this.scene.tweens.add({
-          targets: slash,
-          x: ex,
-          y: ey,
-          alpha: 0,
-          duration: 100,
-          onComplete: () => slash.destroy()
-        });
+    // Calculate a weighted midpoint closer to the target
+    const weight = 0.75; // Adjust this value to move the slash closer to unit B
+    const midX = Phaser.Math.Interpolation.Linear([sprite.x, nearest.sprite.x], weight);
+    const midY = Phaser.Math.Interpolation.Linear([sprite.y, nearest.sprite.y], weight);
 
-        // Execute the attack logic after the movement
+    const sx = midX - Math.cos(perpendicularAngle) * slashLength / 2;
+    const sy = midY - Math.sin(perpendicularAngle) * slashLength / 2;
+    const ex = midX + Math.cos(perpendicularAngle) * slashLength / 2;
+    const ey = midY + Math.sin(perpendicularAngle) * slashLength / 2;
+    const slash = this.scene.add.line(sx, sy, 0, 0, slashLength, 0, 0xffffff)
+      .setOrigin(0.5).setLineWidth(2).setRotation(perpendicularAngle);
+    this.scene.tweens.add({
+      targets: slash,
+      x: ex,
+      y: ey,
+      alpha: 0,
+      duration: 100,
+      onComplete: () => slash.destroy()
+    });
+
+    // Execute the attack logic after the movement
+    nearest.hp -= dmg;
+    // Flash and damage number for melee
+    const original = nearest.color;
+    nearest.sprite.setTint(0xffffff);
+    this.scene.time.delayedCall(200, () => {
+      nearest.sprite.setTint(original);
+    });
+    this.createDamageText(nearest, `-${dmg}`, '#ff0000');
+  }
+
+  triggerArcherAttack(sprite, nearest, dmg) {
+    const proj = this.scene.add.rectangle(
+      sprite.x, sprite.y, 20, 1, 0xffffff
+    ).setOrigin(0.5);
+    const angle = Phaser.Math.Angle.Between(
+      sprite.x, sprite.y,
+      nearest.sprite.x, nearest.sprite.y
+    );
+    proj.rotation = angle;
+    sprite.setFlipX(Math.cos(angle) < 0);
+    this.scene.tweens.add({
+      targets: proj,
+      x: nearest.sprite.x,
+      y: nearest.sprite.y,
+      duration: 200,
+      onComplete: () => {
+        proj.destroy();
         nearest.hp -= dmg;
-        // Flash and damage number for melee
+
+        // Flash on impact, then restore target's own tint
         const original = nearest.color;
         nearest.sprite.setTint(0xffffff);
         this.scene.time.delayedCall(200, () => {
           nearest.sprite.setTint(original);
         });
-        this.createDamageText(nearest, `-${dmg}`, '#ff0000');
 
+        // Damage number
+        this.createDamageText(nearest, `-${dmg}`, '#ff0000');
       }
-    }
+    });
   }
 }
 
