@@ -324,25 +324,16 @@ class Unit {
           onComplete: () => slash.destroy()
         });
 
-        // Move toward the target
-        this.scene.tweens.add({
-          targets: sprite,
-          x: nearest.sprite.x - Math.cos(angleToTarget) * 50, // Move 10 pixels toward the target
-          y: nearest.sprite.y - Math.sin(angleToTarget) * 50,
-          duration: 50,
-          yoyo: true, // Move back to original position
-          onComplete: () => {
-            // Execute the attack logic after the movement
-            nearest.hp -= dmg;
-            // Flash and damage number for melee
-            const original = nearest.color;
-            nearest.sprite.setTint(0xffffff);
-            this.scene.time.delayedCall(200, () => {
-              nearest.sprite.setTint(original);
-            });
-            this.createDamageText(nearest, `-${dmg}`, '#ff0000');
-          }
+        // Execute the attack logic after the movement
+        nearest.hp -= dmg;
+        // Flash and damage number for melee
+        const original = nearest.color;
+        nearest.sprite.setTint(0xffffff);
+        this.scene.time.delayedCall(200, () => {
+          nearest.sprite.setTint(original);
         });
+        this.createDamageText(nearest, `-${dmg}`, '#ff0000');
+
       }
     }
   }
