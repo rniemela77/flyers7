@@ -1,10 +1,11 @@
 import { createBars, barWidth, addInputEvents } from '../utils/helpers.js';
 
 const units = [
-  { key: 'tank', hp: 200, range: 60, dmg: 10, speed: 50, attackCooldown: 3000 },
-  { key: 'archer', hp: 75, range: 200, dmg: 8, speed: 60, attackCooldown: 2000 },
-  { key: 'assassin', hp: 75, range: 60, dmg: 20, speed: 40, attackCooldown: 1000 },
-  { key: 'healer', hp: 100, range: 400, heal: 15, speed: 50, attackCooldown: 2000 }
+  { key: 'tank', hp: 200, range: 60, dmg: 10, speed: 50, attackCooldown: 3000, graphic: 'tank' },
+  { key: 'archer', hp: 75, range: 200, dmg: 8, speed: 60, attackCooldown: 2000, graphic: 'archer' },
+  { key: 'assassin', hp: 75, range: 60, dmg: 20, speed: 40, attackCooldown: 1000, graphic: 'assassin' },
+  { key: 'healer', hp: 100, range: 400, heal: 15, speed: 50, attackCooldown: 2000, graphic: 'healer' },
+  { key: 'boss', hp: 1000, range: 80, dmg: 75, speed: 30, attackCooldown: 5000, graphic: 'tank' }
 ];
 
 class Unit {
@@ -12,10 +13,13 @@ class Unit {
     const unit = units.find(u => u.key === unitType);
     const stats = unit;
     const key = unit.key;
-    this.sprite = scene.add.sprite(x, y, key)
-      .setOrigin(0.5, 0.5)
+    const displaySize = unit.key === 'boss' ? 50 : 25;
+    const collisionHeight = unit.key === 'boss' ? 0.3 : 0.7;
+    const texture = unit.graphic;
+    this.sprite = scene.add.sprite(x, y, texture)
+      .setOrigin(0.5, collisionHeight)
       .setTint(team.color)
-      .setDisplaySize(25, 25);
+      .setDisplaySize(displaySize, displaySize);
     scene.physics.add.existing(this.sprite);
     this.sprite.body.setCircle(13);
     this.sprite.body.setCollideWorldBounds(true);
@@ -324,4 +328,5 @@ class Unit {
   }
 }
 
-export default Unit; 
+export default Unit;
+export { units }; 

@@ -4,6 +4,8 @@ import Archer from '../entities/Archer.js';
 import Assassin from '../entities/Assassin.js';
 import Healer from '../entities/Healer.js';
 import { createBars, addInputEvents, barWidth } from '../utils/helpers.js';
+import { units } from '../entities/Unit.js';
+import Unit from '../entities/Unit.js';
 
 class MainScene extends Phaser.Scene {
   constructor() {
@@ -37,7 +39,7 @@ class MainScene extends Phaser.Scene {
         side: 'top',
         color: 0xFF8B8B,
         group: this.topGroup,
-        units: { tank: 1, archer: 1, assassin: 1, healer: 1 }
+        units: { tank: 0, archer: 0, assassin: 0, healer: 0, boss: 1 }
       },
       {
         side: 'bottom',
@@ -124,7 +126,11 @@ class MainScene extends Phaser.Scene {
       case 'healer':
         unit = new Healer(this, team, x, y);
         break;
+      case 'boss':
+        unit = new Unit(this, team, 'boss', x, y); // Use Unit class for boss
+        break;
     }
+    unit._initialTeam = team.side;
     this.units.push(unit);
   }
 
