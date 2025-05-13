@@ -6,6 +6,7 @@ import Healer from '../entities/Healer.js';
 import { createBars, addInputEvents, barWidth } from '../utils/helpers.js';
 import { units } from '../entities/Unit.js';
 import Unit from '../entities/Unit.js';
+import unitTypes from '../entities/unitTypes.js';
 
 class MainScene extends Phaser.Scene {
   constructor() {
@@ -69,17 +70,16 @@ class MainScene extends Phaser.Scene {
   }
 
   createUnitTypeGrid(width, height) {
-    const unitTypes = ['tank', 'archer', 'assassin', 'healer'];
     const teamColors = [0xFF8B8B, 0x7575FF]; // Use the same colors as in initializeTeams
     const gridContainer = this.add.container(0, height - 200);
     const borderSize = 2;
     const imageSize = 100; // Assuming the image size is 100x100 after scaling
 
     teamColors.forEach((color, rowIndex) => {
-      unitTypes.forEach((unitType, colIndex) => {
+      unitTypes.forEach(({ key, graphic }, colIndex) => {
         const x = colIndex * imageSize + 50;
         const y = rowIndex * imageSize + 50;
-        const imageKey = `${unitType}`;
+        const imageKey = graphic;
 
         // Draw border
         const graphics = this.add.graphics();
@@ -102,7 +102,7 @@ class MainScene extends Phaser.Scene {
           const dropX = pointer.worldX;
           const dropY = pointer.worldY;
           const team = { color, side: rowIndex === 0 ? 'top' : 'bottom', group: rowIndex === 0 ? this.topGroup : this.bottomGroup };
-          this.spawnUnit(unitType, team, dropX, dropY);
+          this.spawnUnit(key, team, dropX, dropY);
           unitImage.x = x; // Reset position
           unitImage.y = y;
         });
