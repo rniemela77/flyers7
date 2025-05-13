@@ -24,6 +24,7 @@ class Unit {
     this.sprite.body.setCircle(13);
     this.sprite.body.setCollideWorldBounds(true);
     this.sprite.body.setBounce(1);
+    this.sprite.setDepth(-1);
 
     const barWidth = calculateBarWidth(stats.hp);
     const { damageBar, healthBar, notches, offsets } = createBars(scene, x, y, stats.hp, barWidth);
