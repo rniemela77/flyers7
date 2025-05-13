@@ -1,4 +1,4 @@
-import { createBars, barWidth, addInputEvents, createCooldownBar, updateBarPositions, updateHealthBarWidth, updateCooldownBarWidth, updateNotchesPositions, destroyBarsAndNotches, calculateHpRatio } from '../utils/helpers.js';
+import { createBars, calculateBarWidth, addInputEvents, createCooldownBar, updateBarPositions, updateHealthBarWidth, updateCooldownBarWidth, updateNotchesPositions, destroyBarsAndNotches, calculateHpRatio } from '../utils/helpers.js';
 
 const units = [
   { key: 'tank', hp: 200, range: 60, dmg: 10, speed: 50, attackCooldown: 3000, graphic: 'tank' },
@@ -25,10 +25,11 @@ class Unit {
     this.sprite.body.setCollideWorldBounds(true);
     this.sprite.body.setBounce(1);
 
-    const { damageBar, healthBar, notches, offsets } = createBars(scene, x, y, stats.hp);
+    const barWidth = calculateBarWidth(stats.hp);
+    const { damageBar, healthBar, notches, offsets } = createBars(scene, x, y, stats.hp, barWidth);
     
     // Create cooldown bar
-    this.cooldownBar = createCooldownBar(scene, x, y);
+    this.cooldownBar = createCooldownBar(scene, x, y, barWidth);
 
     this.rangeCircle = scene.add.circle(x, y, stats.range, 0x00ff00, 0.2);
     this.rangeCircle.setVisible(false);
@@ -52,21 +53,22 @@ class Unit {
     this.notches = notches;
     this.offsets = offsets;
     this.scene = scene;
+    this.barWidth = barWidth;
 
     team.group.add(this.sprite);
     addInputEvents(this.sprite, this.rangeCircle);
   }
 
   updateBarPositions() {
-    updateBarPositions(this.sprite, this.damageBar, this.healthBar, this.cooldownBar, barWidth);
+    updateBarPositions(this.sprite, this.damageBar, this.healthBar, this.cooldownBar, this.barWidth);
   }
 
   updateBars() {
     this.updateBarPositions();
-    updateHealthBarWidth(this.healthBar, calculateHpRatio(this.hp, this.maxHp), barWidth);
+    updateHealthBarWidth(this.healthBar, calculateHpRatio(this.hp, this.maxHp), this.barWidth);
     updateNotchesPositions(this.notches, this.offsets, this.sprite);
     this.rangeCircle.setPosition(this.sprite.x, this.sprite.y);
-    updateCooldownBarWidth(this.cooldownBar, this.calculateCooldownRatio(), barWidth);
+    updateCooldownBarWidth(this.cooldownBar, this.calculateCooldownRatio(), this.barWidth);
   }
 
   calculateCooldownRatio() {

@@ -1,8 +1,8 @@
-const segmentSize = 25; // Example value, adjust as needed
+const segmentSize = 50; // Example value, adjust as needed
 export const barWidth = 22; // Example value, adjust as needed
 const barHeight = 3; // Example value, adjust as needed
 
-export function createBars(scene, x, y, hp) {
+export function createBars(scene, x, y, hp, barWidth) {
   const damageBar = scene.add.rectangle(
     x - barWidth/2,
     y - 16,
@@ -78,4 +78,8 @@ export function destroyBarsAndNotches(damageBar, healthBar, notches, cooldownBar
 
 export function calculateHpRatio(hp, maxHp) {
   return Phaser.Math.Clamp(hp / maxHp, 0, 1);
+}
+
+export function calculateBarWidth(maxHp, minWidth = 30, maxWidth = 100, maxHpThreshold = 1000) {
+  return Phaser.Math.Interpolation.Linear([minWidth, maxWidth], Math.min(maxHp / maxHpThreshold, 1));
 } 
