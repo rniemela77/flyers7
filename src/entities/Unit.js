@@ -1,4 +1,4 @@
-import { createBars, barWidth, addInputEvents } from '../utils/helpers.js';
+import { createBars, barWidth, addInputEvents, createCooldownBar, updateBarPositions, updateHealthBarWidth, updateCooldownBarWidth, updateNotchesPositions, destroyBarsAndNotches, calculateHpRatio } from '../utils/helpers.js';
 
 const units = [
   { key: 'tank', hp: 200, range: 60, dmg: 10, speed: 50, attackCooldown: 3000, graphic: 'tank' },
@@ -28,8 +28,7 @@ class Unit {
     const { damageBar, healthBar, notches, offsets } = createBars(scene, x, y, stats.hp);
     
     // Create cooldown bar
-    this.cooldownBar = scene.add.rectangle(x, y + 5, barWidth, 2, 0xffffff);
-    this.cooldownBar.setOrigin(0, 0);
+    this.cooldownBar = createCooldownBar(scene, x, y);
 
     this.rangeCircle = scene.add.circle(x, y, stats.range, 0x00ff00, 0.2);
     this.rangeCircle.setVisible(false);
@@ -59,33 +58,26 @@ class Unit {
   }
 
   updateBarPositions() {
-    const bx = this.sprite.x;
-    const by = this.sprite.y - 28;
-    this.damageBar.setPosition(bx - barWidth/2, by);
-    this.healthBar.setPosition(bx - barWidth/2, by);
-    this.cooldownBar.setPosition(bx - barWidth/2, by + 3);
+    updateBarPositions(this.sprite, this.damageBar, this.healthBar, this.cooldownBar, barWidth);
   }
 
   updateBars() {
     this.updateBarPositions();
-    const hpRatio = Phaser.Math.Clamp(this.hp / this.maxHp, 0, 1);
-    this.healthBar.width = barWidth * hpRatio;
-    this.notches.forEach((n, i) => n.setPosition(this.sprite.x + this.offsets[i], this.sprite.y - 20));
+    updateHealthBarWidth(this.healthBar, calculateHpRatio(this.hp, this.maxHp), barWidth);
+    updateNotchesPositions(this.notches, this.offsets, this.sprite);
     this.rangeCircle.setPosition(this.sprite.x, this.sprite.y);
+    updateCooldownBarWidth(this.cooldownBar, this.calculateCooldownRatio(), barWidth);
+  }
 
-    // Update cooldown bar
-    const cooldownRatio = this.type === 3 ?
+  calculateCooldownRatio() {
+    return this.type === 3 ?
       Phaser.Math.Clamp((this.scene.time.now - this.lastHealTime) / this.healCooldown, 0, 1) :
       Phaser.Math.Clamp((this.scene.time.now - this.lastAttackTime) / this.attackCooldown, 0, 1);
-    this.cooldownBar.width = barWidth * cooldownRatio;
   }
 
   destroy() {
     this.sprite.destroy();
-    this.healthBar.destroy();
-    this.damageBar.destroy();
-    this.notches.forEach(n => n.destroy());
-    this.cooldownBar.destroy();
+    destroyBarsAndNotches(this.damageBar, this.healthBar, this.notches, this.cooldownBar);
   }
 
   update(time, delta, units, centers) {
@@ -101,17 +93,10 @@ class Unit {
     }
 
     // Update bars & circle
-    this.updateBarPositions();
-    const hpRatio = Phaser.Math.Clamp(this.hp / this.maxHp, 0, 1);
-    healthBar.width = barWidth * hpRatio;
-    notches.forEach((n, i) => n.setPosition(sprite.x + offsets[i], sprite.y - 25));
-    rangeCircle.setPosition(sprite.x, sprite.y);
+    this.updateBars();
 
-    // Update cooldown bar position
-    const cooldownRatio = this.type === 3 ?
-      Phaser.Math.Clamp((this.scene.time.now - this.lastHealTime) / this.healCooldown, 0, 1) :
-      Phaser.Math.Clamp((this.scene.time.now - this.lastAttackTime) / this.attackCooldown, 0, 1);
-    cooldownBar.width = barWidth * cooldownRatio;
+    // Call updateBars within the update method
+    this.updateBars();
   }
 
   createHealingBeam(healerPosition, targetPosition) {
