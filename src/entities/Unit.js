@@ -1,5 +1,6 @@
 import { createBars, calculateBarWidth, addInputEvents, createCooldownBar, updateBarPositions, updateHealthBarWidth, updateCooldownBarWidth, updateNotchesPositions, destroyBarsAndNotches, calculateHpRatio } from '../utils/helpers.js';
 import unitTypes from './unitTypes.js';
+import { StatusEffect, freezeConfig } from './StatusEffect.js';
 
 const units = unitTypes;
 
@@ -79,6 +80,10 @@ class Unit {
   }
 
   update(time, delta, units, centers) {
+    if (this.isFrozen) {
+      this.body.setVelocity(0); // Stop movement if frozen
+      return;
+    }
     const {
       type, sprite, healthBar, notches, offsets,
       rangeCircle, cooldownBar
@@ -308,6 +313,29 @@ class Unit {
         this.createDamageText(nearest, `-${dmg}`, '#ff0000');
       }
     });
+  }
+
+  applyStatusEffect(effectType) {
+    if (effectType === 'freeze') {
+      const freezeEffect = new StatusEffect(
+        'freeze',
+        freezeConfig,
+        (unit) => {
+          unit.isFrozen = true;
+          unit.sprite.setTint(0x00ffff);
+          unit.lastAttackTime += freezeConfig.duration; // Freeze cooldown timer
+        },
+        (unit) => {
+          unit.isFrozen = false;
+          unit.sprite.clearTint();
+        }
+      );
+      freezeEffect.apply(this);
+    }
+  }
+
+  freeze() {
+    this.applyStatusEffect('freeze');
   }
 }
 

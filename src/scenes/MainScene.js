@@ -8,6 +8,7 @@ import { units } from '../entities/Unit.js';
 import Unit from '../entities/Unit.js';
 import unitTypes from '../entities/unitTypes.js';
 import { createUnitTypeGrid } from './UnitTypeGrid.js';
+import { freezeConfig } from '../entities/StatusEffect.js';
 
 class MainScene extends Phaser.Scene {
   constructor() {
@@ -30,6 +31,17 @@ class MainScene extends Phaser.Scene {
     const teams = this.initializeTeams();
     teams.forEach(team => this.createUnits(team, width, height));
     this.setupPhysics();
+    this.createSpellUI();
+    this.highlightCircles = new Map(); // Store highlight circles
+    this.input.on('pointerup', (pointer) => {
+      this.castSpell(pointer);
+      this.radiusIndicator.setVisible(false); // Ensure the indicator is hidden
+      this.radiusIndicator.setPosition(-100, -100); // Move it off-screen
+
+      // Remove highlight from all units
+      this.highlightCircles.forEach(circle => circle.destroy());
+      this.highlightCircles.clear();
+    }, this);
 
     // Create a grid at the bottom of the screen
     // createUnitTypeGrid(this, width, height);
@@ -103,6 +115,13 @@ class MainScene extends Phaser.Scene {
       }
     });
 
+    // Update highlight circles to follow units
+    this.highlightCircles.forEach((circle, unit) => {
+      circle.clear();
+      circle.lineStyle(2, 0xffffff, 0.8);
+      circle.strokeCircle(unit.sprite.x, unit.sprite.y + unit.sprite.displayHeight / 4, unit.sprite.displayWidth / 2 + 5);
+    });
+
     // Remove dead units
     this.units = this.units.filter(u => {
       if (u.hp <= 0) {
@@ -129,6 +148,74 @@ class MainScene extends Phaser.Scene {
     this.units.forEach(u => {
       u.update(time, delta, this.units, centers);
     });
+  }
+
+  createSpellUI() {
+    const { width, height } = this.scale;
+    this.spellIcon = this.add.image(width / 2, height - 50, 'freeze').setInteractive();
+    this.spellIcon.on('pointerdown', this.startDrag, this);
+    this.input.setDraggable(this.spellIcon);
+    this.spellCooldown = false;
+    this.spellCooldownTime = 5000; // 5 seconds cooldown
+    this.spellRadius = freezeConfig.radius;
+    this.radiusIndicator = this.add.circle(0, 0, this.spellRadius, freezeConfig.circleColor, 0.2);
+    this.radiusIndicator.setVisible(false);
+  }
+
+  startDrag(pointer, gameObject) {
+    if (this.spellCooldown) return; // Prevent dragging if on cooldown
+    this.input.on('drag', (pointer, gameObject, dragX, dragY) => {
+      this.radiusIndicator.setPosition(dragX, dragY);
+      this.radiusIndicator.setVisible(true);
+
+      // Highlight valid targets
+      this.units.forEach(unit => {
+        const isEnemy = unit.team === 'top';
+        const isAlly = unit.team === 'bottom';
+        const shouldAffect = (freezeConfig.targetType === 'enemies' && isEnemy) ||
+                             (freezeConfig.targetType === 'allies' && isAlly) ||
+                             (freezeConfig.targetType === 'both');
+        const withinRadius = Phaser.Math.Distance.Between(dragX, dragY, unit.sprite.x, unit.sprite.y) <= freezeConfig.radius;
+        if (shouldAffect && withinRadius) {
+          if (!this.highlightCircles.has(unit)) {
+            const circle = this.add.graphics();
+            circle.lineStyle(2, 0xffffff, 0.8);
+            circle.strokeCircle(unit.sprite.x, unit.sprite.y + unit.sprite.displayHeight / 4, unit.sprite.displayWidth / 2 + 5);
+            this.highlightCircles.set(unit, circle);
+          }
+        } else {
+          const circle = this.highlightCircles.get(unit);
+          if (circle) {
+            circle.destroy();
+            this.highlightCircles.delete(unit);
+          }
+        }
+      });
+    });
+  }
+
+  castSpell(pointer) {
+    if (this.spellCooldown) return; // Prevent casting if on cooldown
+    const { x, y } = pointer;
+    this.spellCooldown = true;
+    this.time.delayedCall(this.spellCooldownTime, () => {
+      this.spellCooldown = false;
+    });
+    let spellCast = false;
+    this.units.forEach(unit => {
+      const isEnemy = unit.team === 'top';
+      const isAlly = unit.team === 'bottom';
+      const shouldAffect = (freezeConfig.targetType === 'enemies' && isEnemy) ||
+                           (freezeConfig.targetType === 'allies' && isAlly) ||
+                           (freezeConfig.targetType === 'both');
+      if (shouldAffect && Phaser.Math.Distance.Between(x, y, unit.sprite.x, unit.sprite.y) <= freezeConfig.radius) {
+        unit.freeze();
+        spellCast = true;
+      }
+    });
+    if (!spellCast) {
+      console.log('Spell cast on empty area, no units affected.');
+    }
   }
 }
 
