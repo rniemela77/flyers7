@@ -2,32 +2,33 @@ const segmentSize = 50; // Example value, adjust as needed
 export const barWidth = 22; // Example value, adjust as needed
 const barHeight = 3; // Example value, adjust as needed
 
+// Utility function for positioning
+function calculateBarPosition(sprite, barWidth, yOffset) {
+  const bx = sprite.x;
+  const by = sprite.y - yOffset;
+  return { x: bx - barWidth / 2, y: by };
+}
+
+// Utility function for creating a bar
+function createBar(scene, x, y, width, height, color) {
+  return scene.add.rectangle(x, y, width, height, color).setOrigin(0, 0.5);
+}
+
 export function createBars(scene, x, y, hp, barWidth) {
-  const damageBar = scene.add.rectangle(
-    x - barWidth/2,
-    y - 16,
-    barWidth,
-    barHeight,
-    0xff0000
-  ).setOrigin(0, 0.5);
-  const healthBar = scene.add.rectangle(
-    x - barWidth/2,
-    y - 16,
-    barWidth,
-    barHeight,
-    0x00ff00
-  ).setOrigin(0, 0.5);
+  const { x: barX, y: barY } = calculateBarPosition({ x, y }, barWidth, 16);
+  const damageBar = createBar(scene, barX, barY, barWidth, barHeight, 0xff0000);
+  const healthBar = createBar(scene, barX, barY, barWidth, barHeight, 0x00ff00);
 
   const segmentCount = Math.ceil(hp / segmentSize);
   const notches = [];
   const offsets = [];
   for (let s = 1; s < segmentCount; s++) {
-    const offsetX = -barWidth/2 + (s * barWidth / segmentCount);
+    const offsetX = -barWidth / 2 + (s * barWidth / segmentCount);
     const notch = scene.add.line(
       x + offsetX,
       y - 32,
-      0, -barHeight/2,
-      0,  barHeight/2,
+      0, -barHeight / 2,
+      0, barHeight / 2,
       0x000000
     ).setOrigin(0.5);
     notches.push(notch);
@@ -44,17 +45,15 @@ export function addInputEvents(sprite, rangeCircle) {
 }
 
 export function createCooldownBar(scene, x, y) {
-  const cooldownBar = scene.add.rectangle(x, y + 5, barWidth, 2, 0xffffff);
-  cooldownBar.setOrigin(0, 0);
-  return cooldownBar;
+  const { x: barX, y: barY } = calculateBarPosition({ x, y }, barWidth, -5);
+  return createBar(scene, barX, barY, barWidth, 2, 0xffffff);
 }
 
 export function updateBarPositions(sprite, damageBar, healthBar, cooldownBar, barWidth) {
-  const bx = sprite.x;
-  const by = sprite.y - 28;
-  damageBar.setPosition(bx - barWidth/2, by);
-  healthBar.setPosition(bx - barWidth/2, by);
-  cooldownBar.setPosition(bx - barWidth/2, by + 3);
+  const { x: barX, y: barY } = calculateBarPosition(sprite, barWidth, 28);
+  damageBar.setPosition(barX, barY);
+  healthBar.setPosition(barX, barY);
+  cooldownBar.setPosition(barX, barY + 3);
 }
 
 export function updateHealthBarWidth(healthBar, hpRatio, barWidth) {
