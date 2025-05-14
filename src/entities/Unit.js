@@ -51,6 +51,7 @@ class Unit {
     this.offsets = offsets;
     this.scene = scene;
     this.barWidth = barWidth;
+    this.hasShield = false; // Track shield status
 
     team.group.add(this.sprite);
     addInputEvents(this.sprite, this.rangeCircle);
@@ -273,14 +274,19 @@ class Unit {
     });
 
     // Execute the attack logic after the movement
-    nearest.hp -= dmg;
+    let actualDamage = dmg;
+    if (nearest.hasShield) {
+      actualDamage *= 0.5; // Reduce damage by 50% if shielded
+    }
+    nearest.hp -= actualDamage;
     // Flash and damage number for melee
     const original = nearest.color;
     nearest.sprite.setTint(0xffffff);
     this.scene.time.delayedCall(200, () => {
       nearest.sprite.setTint(original);
     });
-    this.createDamageText(nearest, `-${dmg}`, '#ff0000');
+    this.createDamageText(nearest, `-${actualDamage}`, '#ff0000');
+    nearest.takeDamage(dmg);
   }
 
   triggerArcherAttack(sprite, nearest, dmg) {
@@ -300,7 +306,11 @@ class Unit {
       duration: 200,
       onComplete: () => {
         proj.destroy();
-        nearest.hp -= dmg;
+        let actualDamage = dmg;
+        if (nearest.hasShield) {
+          actualDamage *= 0.5; // Reduce damage by 50% if shielded
+        }
+        nearest.hp -= actualDamage;
 
         // Flash on impact, then restore target's own tint
         const original = nearest.color;
@@ -310,7 +320,8 @@ class Unit {
         });
 
         // Damage number
-        this.createDamageText(nearest, `-${dmg}`, '#ff0000');
+        this.createDamageText(nearest, `-${actualDamage}`, '#ff0000');
+        nearest.takeDamage(dmg);
       }
     });
   }
@@ -336,9 +347,11 @@ class Unit {
         'shield',
         shieldConfig,
         (unit) => {
+          unit.hasShield = true; // Set shield status
           unit.scene.addShieldIcon(unit);
         },
         (unit) => {
+          unit.hasShield = false; // Remove shield status
           unit.scene.removeShieldIcon(unit);
         }
       );
@@ -348,6 +361,15 @@ class Unit {
         shieldEffect.removeEffect(this);
       });
     }
+  }
+
+  takeDamage(amount) {
+    let actualDamage = amount;
+    if (this.hasShield) {
+      actualDamage *= 0.5; // Reduce damage by 50% if shielded
+    }
+    this.hp -= actualDamage;
+    this.createDamageText(this, `-${actualDamage}`, '#ff0000');
   }
 
   freeze() {
