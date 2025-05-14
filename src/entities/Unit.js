@@ -273,6 +273,9 @@ class Unit {
       onComplete: () => slash.destroy()
     });
 
+    // move the sprite toward the target
+    this.nudgeTowardTarget(sprite, nearest);
+
     // Execute the attack logic after the movement
     let actualDamage = dmg;
     if (nearest.hasShield) {
@@ -287,6 +290,24 @@ class Unit {
     });
     this.createDamageText(nearest, `-${actualDamage}`, '#ff0000');
     nearest.takeDamage(dmg);
+  }
+
+  nudgeTowardTarget(sprite, nearest) {
+    const distance = 0.2;
+    const from = { x: 0.5, y: 0.5 };
+    const targetX = sprite.x > nearest.sprite.x ? from.x + distance : from.x - distance;
+    const targetY = sprite.y > nearest.sprite.y ? from.y + distance : from.y - distance;
+    const origin = { x: from.x, y: from.y };
+
+    this.scene.tweens.add({
+      targets: origin,
+      x: targetX,
+      y: targetY,
+      duration: 100,
+      yoyo: true,
+      ease: 'Quad.easeOut',
+      onUpdate: () => sprite.setOrigin(origin.x, origin.y),
+    });
   }
 
   triggerArcherAttack(sprite, nearest, dmg) {

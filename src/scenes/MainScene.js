@@ -65,7 +65,7 @@ class MainScene extends Phaser.Scene {
         side: 'bottom',
         color: 0x7575FF,
         group: this.bottomGroup,
-        units: { tank: 1, archer: 1, assassin: 1, healer: 1 }
+        units: { tank: 1, archer: 1, assassin: 2, healer: 1 }
       }
     ];
   }
