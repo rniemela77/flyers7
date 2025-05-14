@@ -1,6 +1,6 @@
 import { createBars, calculateBarWidth, addInputEvents, createCooldownBar, updateBarPositions, updateHealthBarWidth, updateCooldownBarWidth, updateNotchesPositions, destroyBarsAndNotches, calculateHpRatio } from '../utils/helpers.js';
 import unitTypes from './unitTypes.js';
-import { StatusEffect, freezeConfig } from './StatusEffect.js';
+import { StatusEffect, freezeConfig, shieldConfig } from './StatusEffect.js';
 
 const units = unitTypes;
 
@@ -331,6 +331,22 @@ class Unit {
         }
       );
       freezeEffect.apply(this);
+    } else if (effectType === 'shield') {
+      const shieldEffect = new StatusEffect(
+        'shield',
+        shieldConfig,
+        (unit) => {
+          unit.scene.addShieldIcon(unit);
+        },
+        (unit) => {
+          unit.scene.removeShieldIcon(unit);
+        }
+      );
+      shieldEffect.apply(this);
+      // Set a timer to remove the shield effect after 5 seconds
+      this.scene.time.delayedCall(5000, () => {
+        shieldEffect.removeEffect(this);
+      });
     }
   }
 

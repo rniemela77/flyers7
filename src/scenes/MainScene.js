@@ -9,11 +9,13 @@ import Unit from '../entities/Unit.js';
 import unitTypes from '../entities/unitTypes.js';
 import { createUnitTypeGrid } from './UnitTypeGrid.js';
 import { freezeConfig } from '../entities/StatusEffect.js';
+import { shieldConfig } from '../entities/StatusEffect.js';
 
 class MainScene extends Phaser.Scene {
   constructor() {
     super({ key: 'MainScene' });
     this.units = []; // Initialize the units array
+    this.highlightCircles = new Map();
   }
 
   preload() {
@@ -21,6 +23,8 @@ class MainScene extends Phaser.Scene {
     this.load.image('archer', 'assets/images/archer.png');
     this.load.image('assassin', 'assets/images/assassin.png');
     this.load.image('healer', 'assets/images/healer.png');
+    this.load.image('freeze', 'assets/images/freeze.png');
+    this.load.image('shield', 'assets/images/shield.png');
   }
 
   create() {
@@ -32,11 +36,13 @@ class MainScene extends Phaser.Scene {
     teams.forEach(team => this.createUnits(team, width, height));
     this.setupPhysics();
     this.createSpellUI();
-    this.highlightCircles = new Map(); // Store highlight circles
+
     this.input.on('pointerup', (pointer) => {
-      this.castSpell(pointer);
-      this.radiusIndicator.setVisible(false); // Ensure the indicator is hidden
-      this.radiusIndicator.setPosition(-100, -100); // Move it off-screen
+      const spellType = this.currentSpellType;
+      if (spellType) {
+        this.castSpell(spellType, pointer);
+      }
+      Object.values(this.radiusIndicators).forEach(indicator => indicator.setVisible(false)); // Ensure all indicators are hidden
 
       // Remove highlight from all units
       this.highlightCircles.forEach(circle => circle.destroy());
@@ -148,34 +154,69 @@ class MainScene extends Phaser.Scene {
     this.units.forEach(u => {
       u.update(time, delta, this.units, centers);
     });
+
+    // Update shield icon position
+    this.units.forEach(u => {
+      if (u.shieldIcon) {
+        const buffBarY = u.sprite.y - u.sprite.displayHeight / 2 - 20;
+        u.shieldIcon.setPosition(u.sprite.x - u.sprite.displayWidth / 2, buffBarY);
+      }
+    });
   }
 
   createSpellUI() {
     const { width, height } = this.scale;
-    this.spellIcon = this.add.image(width / 2, height - 50, 'freeze').setInteractive();
-    this.spellIcon.on('pointerdown', this.startDrag, this);
-    this.input.setDraggable(this.spellIcon);
-    this.spellCooldown = false;
-    this.spellCooldownTime = 5000; // 5 seconds cooldown
-    this.spellRadius = freezeConfig.radius;
-    this.radiusIndicator = this.add.circle(0, 0, this.spellRadius, freezeConfig.circleColor, 0.2);
-    this.radiusIndicator.setVisible(false);
+    this.actionBar = new ActionBar(this);
+
+    // Define spells as actions
+    const freezeSpell = new Action(
+      'freeze',
+      this.add.image(width / 2 - 100, height - 50, 'freeze').setInteractive(),
+      this.startDrag.bind(this, 'freeze'),
+      this.castSpell.bind(this, 'freeze')
+    );
+
+    const shieldSpell = new Action(
+      'shield',
+      this.add.image(width / 2 + 100, height - 50, 'shield').setInteractive(),
+      this.startDrag.bind(this, 'shield'),
+      this.castSpell.bind(this, 'shield')
+    );
+
+    // Add spells to the action bar
+    this.actionBar.addAction(freezeSpell);
+    this.actionBar.addAction(shieldSpell);
+    this.actionBar.setupActions();
+
+    this.spellCooldowns = {
+      freeze: false,
+      shield: false
+    };
+    this.spellCooldownTimes = {
+      freeze: 5000,
+      shield: 5000
+    };
+
+    this.radiusIndicators = {
+      freeze: this.add.circle(0, 0, freezeConfig.radius, freezeConfig.circleColor, 0.2).setVisible(false),
+      shield: this.add.circle(0, 0, shieldConfig.radius, shieldConfig.circleColor, 0.2).setVisible(false)
+    };
   }
 
-  startDrag(pointer, gameObject) {
-    if (this.spellCooldown) return; // Prevent dragging if on cooldown
+  startDrag(spellType, pointer, gameObject) {
+    if (this.spellCooldowns[spellType]) return; // Prevent dragging if on cooldown
+    this.currentSpellType = spellType; // Set the current spell type
     this.input.on('drag', (pointer, gameObject, dragX, dragY) => {
-      this.radiusIndicator.setPosition(dragX, dragY);
-      this.radiusIndicator.setVisible(true);
+      const radiusIndicator = this.radiusIndicators[spellType];
+      radiusIndicator.setPosition(dragX, dragY);
+      radiusIndicator.setVisible(true);
 
       // Highlight valid targets
       this.units.forEach(unit => {
         const isEnemy = unit.team === 'top';
         const isAlly = unit.team === 'bottom';
-        const shouldAffect = (freezeConfig.targetType === 'enemies' && isEnemy) ||
-                             (freezeConfig.targetType === 'allies' && isAlly) ||
-                             (freezeConfig.targetType === 'both');
-        const withinRadius = Phaser.Math.Distance.Between(dragX, dragY, unit.sprite.x, unit.sprite.y) <= freezeConfig.radius;
+        const shouldAffect = (spellType === 'freeze' && isEnemy) || (spellType === 'shield' && isAlly);
+        const withinRadius = Phaser.Math.Distance.Between(dragX, dragY, unit.sprite.x, unit.sprite.y) <= (spellType === 'freeze' ? freezeConfig.radius : shieldConfig.radius);
         if (shouldAffect && withinRadius) {
           if (!this.highlightCircles.has(unit)) {
             const circle = this.add.graphics();
@@ -194,28 +235,88 @@ class MainScene extends Phaser.Scene {
     });
   }
 
-  castSpell(pointer) {
-    if (this.spellCooldown) return; // Prevent casting if on cooldown
-    const { x, y } = pointer;
-    this.spellCooldown = true;
-    this.time.delayedCall(this.spellCooldownTime, () => {
-      this.spellCooldown = false;
+  castSpell(spellType, pointer) {
+    if (this.spellCooldowns[spellType]) return; // Prevent casting if on cooldown
+    this.spellCooldowns[spellType] = true;
+    this.time.delayedCall(this.spellCooldownTimes[spellType], () => {
+      this.spellCooldowns[spellType] = false;
     });
+
+    const { x, y } = pointer;
     let spellCast = false;
     this.units.forEach(unit => {
       const isEnemy = unit.team === 'top';
       const isAlly = unit.team === 'bottom';
-      const shouldAffect = (freezeConfig.targetType === 'enemies' && isEnemy) ||
-                           (freezeConfig.targetType === 'allies' && isAlly) ||
-                           (freezeConfig.targetType === 'both');
-      if (shouldAffect && Phaser.Math.Distance.Between(x, y, unit.sprite.x, unit.sprite.y) <= freezeConfig.radius) {
-        unit.freeze();
+      const shouldAffect = (spellType === 'freeze' && isEnemy) || (spellType === 'shield' && isAlly);
+      const withinRadius = Phaser.Math.Distance.Between(x, y, unit.sprite.x, unit.sprite.y) <= (spellType === 'freeze' ? freezeConfig.radius : shieldConfig.radius);
+      if (shouldAffect && withinRadius) {
+        if (spellType === 'freeze') {
+          unit.freeze();
+        } else if (spellType === 'shield') {
+          unit.applyStatusEffect('shield');
+          this.addShieldIcon(unit);
+        }
         spellCast = true;
       }
     });
     if (!spellCast) {
-      console.log('Spell cast on empty area, no units affected.');
+      console.log(`${spellType.charAt(0).toUpperCase() + spellType.slice(1)} cast on empty area, no units affected.`);
     }
+  }
+
+  // Method to add shield icon
+  addShieldIcon(unit) {
+    if (!unit.shieldIcon) {
+      const buffBarY = unit.sprite.y - unit.sprite.displayHeight / 2 - 20; // Position above health bar
+      unit.shieldIcon = this.add.rectangle(unit.sprite.x - unit.sprite.displayWidth / 2, buffBarY, 15, 15, 0xFFD700).setOrigin(0, 0.5);
+      unit.shieldIcon.setDepth(1);
+    }
+  }
+
+  // Method to remove shield icon
+  removeShieldIcon(unit) {
+    if (unit.shieldIcon) {
+      unit.shieldIcon.destroy();
+      unit.shieldIcon = null;
+    }
+  }
+
+  // Modify removeEffect in StatusEffect to remove shield icon
+  removeEffect(unit) {
+    if (this.removeEffect) {
+      this.removeEffect(unit);
+    }
+    if (this.type === 'shield') {
+      this.scene.removeShieldIcon(unit);
+    }
+  }
+}
+
+// Define the action bar and actions
+class ActionBar {
+  constructor(scene) {
+    this.scene = scene;
+    this.actions = [];
+  }
+
+  addAction(action) {
+    this.actions.push(action);
+  }
+
+  setupActions() {
+    this.actions.forEach(action => {
+      action.icon.on('pointerdown', action.onDragStart);
+      this.scene.input.setDraggable(action.icon);
+    });
+  }
+}
+
+class Action {
+  constructor(name, icon, onDragStart, onDragEnd) {
+    this.name = name;
+    this.icon = icon;
+    this.onDragStart = onDragStart;
+    this.onDragEnd = onDragEnd;
   }
 }
 
