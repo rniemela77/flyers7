@@ -79,6 +79,6 @@ export function calculateHpRatio(hp, maxHp) {
   return Phaser.Math.Clamp(hp / maxHp, 0, 1);
 }
 
-export function calculateBarWidth(maxHp, minWidth = 30, maxWidth = 100, maxHpThreshold = 1000) {
+export function calculateBarWidth(maxHp, minWidth = 15, maxWidth = 100, maxHpThreshold = 1000) {
   return Phaser.Math.Interpolation.Linear([minWidth, maxWidth], Math.min(maxHp / maxHpThreshold, 1));
 } 

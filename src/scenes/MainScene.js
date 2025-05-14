@@ -65,7 +65,7 @@ class MainScene extends Phaser.Scene {
         side: 'bottom',
         color: 0x7575FF,
         group: this.bottomGroup,
-        units: { tank: 1, archer: 1, assassin: 2, healer: 1 }
+        units: { tank: 3, archer: 4, assassin: 2, healer: 1 }
       }
     ];
   }
@@ -171,14 +171,14 @@ class MainScene extends Phaser.Scene {
     // Define spells as actions
     const freezeSpell = new Action(
       'freeze',
-      this.add.image(width / 2 - 100, height - 50, 'freeze').setInteractive(),
+      this.add.image(width / 2 - 100, height - 50, 'freeze').setInteractive().setScale(0.1),
       this.startDrag.bind(this, 'freeze'),
       this.castSpell.bind(this, 'freeze')
     );
 
     const shieldSpell = new Action(
       'shield',
-      this.add.image(width / 2 + 100, height - 50, 'shield').setInteractive(),
+      this.add.image(width / 2 + 100, height - 50, 'shield').setInteractive().setScale(0.1),
       this.startDrag.bind(this, 'shield'),
       this.castSpell.bind(this, 'shield')
     );
